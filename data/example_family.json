@@ -1,0 +1,122 @@
+{
+  "people": [
+    {
+      "id": "P001",
+      "given_name": "Al",
+      "surname": "Smith",
+      "gender": "male",
+      "birth_date": "1940-03-15",
+      "birth_place": "Boston, MA"
+    },
+    {
+      "id": "P002",
+      "given_name": "Beth",
+      "surname": "Smith",
+      "gender": "female",
+      "birth_date": "1942-07-22",
+      "birth_place": "Cambridge, MA",
+      "maiden_name": "Jones"
+    },
+    {
+      "id": "P003",
+      "given_name": "Carl",
+      "surname": "Smith",
+      "gender": "male",
+      "birth_date": "1965-01-10",
+      "birth_place": "Boston, MA"
+    },
+    {
+      "id": "P004",
+      "given_name": "Dana",
+      "surname": "Smith",
+      "gender": "female",
+      "birth_date": "1967-11-03",
+      "birth_place": "Newton, MA",
+      "maiden_name": "Lee"
+    },
+    {
+      "id": "P005",
+      "given_name": "Eve",
+      "surname": "Smith",
+      "gender": "female",
+      "birth_date": "1968-05-20",
+      "birth_place": "Boston, MA"
+    },
+    {
+      "id": "P006",
+      "given_name": "Fay",
+      "surname": "Smith",
+      "gender": "female",
+      "birth_date": "1990-09-14",
+      "birth_place": "Brookline, MA"
+    },
+    {
+      "id": "P007",
+      "given_name": "Gus",
+      "surname": "Smith",
+      "gender": "male",
+      "birth_date": "1993-02-28",
+      "birth_place": "Brookline, MA"
+    }
+  ],
+  "relationships": [
+    {"parent_id": "P001", "child_id": "P003"},
+    {"parent_id": "P002", "child_id": "P003"},
+    {"parent_id": "P001", "child_id": "P005"},
+    {"parent_id": "P002", "child_id": "P005"},
+    {"parent_id": "P003", "child_id": "P006"},
+    {"parent_id": "P004", "child_id": "P006"},
+    {"parent_id": "P003", "child_id": "P007"},
+    {"parent_id": "P004", "child_id": "P007"}
+  ],
+  "unions": [
+    {
+      "partner1_id": "P001",
+      "partner2_id": "P002",
+      "union_date": "1963-06-15",
+      "union_place": "Boston, MA"
+    },
+    {
+      "partner1_id": "P003",
+      "partner2_id": "P004",
+      "union_date": "1988-08-20",
+      "union_place": "Newton, MA"
+    }
+  ],
+  "events": [
+    {
+      "person_id": "P001",
+      "event_type": "birth",
+      "date": "1940-03-15",
+      "place": "Boston, MA"
+    },
+    {
+      "person_id": "P002",
+      "event_type": "birth",
+      "date": "1942-07-22",
+      "place": "Cambridge, MA"
+    },
+    {
+      "person_id": "P001",
+      "event_type": "career",
+      "date": "1962-06-01",
+      "description": "Started as engineer at GE"
+    },
+    {
+      "person_id": "P003",
+      "event_type": "education",
+      "date": "1983-09-01",
+      "end_date": "1987-06-01",
+      "place": "MIT",
+      "description": "BS in Computer Science"
+    },
+    {
+      "person_id": "P006",
+      "event_type": "education",
+      "date": "2008-09-01",
+      "end_date": "2012-06-01",
+      "place": "Harvard University",
+      "description": "BA in History"
+    }
+  ]
+}
