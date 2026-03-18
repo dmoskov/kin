@@ -16,7 +16,7 @@ import sys
 sys.path.insert(0, "src")
 
 from models.person import Person, Gender
-from models.relationship import Relationship, RelationshipType, Union
+from models.relationship import Relationship, Union
 from models.event import LifeEvent, EventType
 from models.tree import FamilyTree
 
