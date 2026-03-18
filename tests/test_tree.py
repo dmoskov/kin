@@ -12,9 +12,6 @@ Uses a synthetic 3-generation family for testing:
   ┌───┴───┐
   Kid Fay  Kid Gus
 """
-import sys
-sys.path.insert(0, "src")
-
 from models.person import Person, Gender
 from models.relationship import Relationship, RelationshipType, Union
 from models.event import LifeEvent, EventType
