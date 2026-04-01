@@ -10,4 +10,10 @@ build/
 data/*.json
 data/*.gedcom
 data/*.csv
+data/*.db
+data/*.db-wal
+data/*.db-shm
 data/photos/
+
+# Keep example data tracked
+!data/example_family.json

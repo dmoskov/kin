@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Family Tree</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+</head>
+<body>
+  <header>
+    <div class="header-left">
+      <h1>Family Tree</h1>
+      <span class="badge" id="stats-badge"></span>
+    </div>
+    <nav>
+      <button class="tab active" data-view="tree">Tree</button>
+      <button class="tab" data-view="timeline">Timeline</button>
+      <button class="tab" data-view="map">Map</button>
+      <button class="tab" data-view="relationships">Relationships</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Tree View -->
+    <section id="view-tree" class="view active">
+      <div class="tree-container">
+        <svg id="tree-svg"></svg>
+      </div>
+      <aside id="person-panel" class="panel hidden">
+        <button class="close-btn" id="close-panel">&times;</button>
+        <div id="panel-content"></div>
+      </aside>
+    </section>
+
+    <!-- Timeline View -->
+    <section id="view-timeline" class="view">
+      <div class="timeline-container">
+        <div class="timeline-header">
+          <h2>Family Timeline</h2>
+          <select id="timeline-filter">
+            <option value="all">Everyone</option>
+          </select>
+        </div>
+        <div id="timeline-entries"></div>
+      </div>
+    </section>
+
+    <!-- Map View -->
+    <section id="view-map" class="view">
+      <div class="map-wrapper">
+        <div id="map"></div>
+        <div class="map-controls">
+          <div class="map-filter">
+            <select id="map-person-filter">
+              <option value="all">Everyone</option>
+            </select>
+          </div>
+          <div class="map-slider">
+            <button id="map-play" class="map-play-btn" title="Play animation">&#9654;</button>
+            <span class="slider-label" id="slider-year-start">1870</span>
+            <input type="range" id="map-time-slider" min="1870" max="2025" value="2025" step="1">
+            <span class="slider-label" id="slider-year-end">2025</span>
+          </div>
+          <div class="map-legend">
+            <span class="legend-item"><span class="legend-dot" style="background:var(--event-birth)"></span>Birth</span>
+            <span class="legend-item"><span class="legend-dot" style="background:#e74c3c"></span>Immigration</span>
+            <span class="legend-item"><span class="legend-dot" style="background:var(--event-education)"></span>Education</span>
+            <span class="legend-item"><span class="legend-dot" style="background:var(--event-career)"></span>Career</span>
+            <span class="legend-item"><span class="legend-dot" style="background:var(--event-marriage)"></span>Marriage</span>
+            <span class="legend-item"><span class="legend-dot" style="background:#888"></span>Residence</span>
+            <span class="legend-item"><span class="legend-dot" style="background:var(--event-custom)"></span>Other</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Relationships View -->
+    <section id="view-relationships" class="view">
+      <div class="relationships-container">
+        <h2>Relationship Calculator</h2>
+        <p class="subtitle">Select two people to see how they're related</p>
+        <div class="rel-selectors">
+          <select id="rel-person-a">
+            <option value="">Select Person A</option>
+          </select>
+          <span class="rel-arrow">&#8596;</span>
+          <select id="rel-person-b">
+            <option value="">Select Person B</option>
+          </select>
+        </div>
+        <div id="rel-result" class="rel-result hidden"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
