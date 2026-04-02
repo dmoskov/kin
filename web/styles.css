@@ -308,6 +308,90 @@ main {
 }
 .panel-event-desc { color: var(--text-muted); line-height: 1.4; }
 
+/* ── Person Photo Gallery ──────────────────────────────────── */
+
+.panel-photos {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 12px 0 4px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+.panel-photos::-webkit-scrollbar { height: 4px; }
+.panel-photos::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.panel-photo {
+  flex-shrink: 0;
+  width: 110px;
+  height: 110px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 2px solid var(--border);
+  cursor: pointer;
+  scroll-snap-align: start;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.panel-photo:hover {
+  border-color: var(--accent);
+  transform: scale(1.05);
+}
+
+/* ── Lightbox ──────────────────────────────────────────────── */
+
+#lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lightbox-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+}
+.lightbox-content {
+  position: relative;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.lightbox-content img {
+  max-width: 90vw;
+  max-height: 80vh;
+  object-fit: contain;
+  border-radius: var(--radius);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+}
+.lightbox-caption {
+  margin-top: 12px;
+  color: #ccc;
+  font-size: 14px;
+  text-align: center;
+}
+.lightbox-close {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+.lightbox-close:hover { background: var(--surface-hover); }
+
 /* ── Timeline View ──────────────────────────────────────────── */
 
 .timeline-container {
