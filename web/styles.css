@@ -628,6 +628,16 @@ main {
   border-color: var(--accent);
 }
 
+/* ── Migration arc flow animation ──────────────────────────── */
+
+.arc-flowing {
+  animation: dash-flow 1.2s linear infinite;
+}
+
+@keyframes dash-flow {
+  to { stroke-dashoffset: -20; }
+}
+
 /* ── Leaflet light mode ────────────────────────────────────── */
 
 [data-theme="light"] .leaflet-popup-content-wrapper {
