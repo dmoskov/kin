@@ -15,6 +15,7 @@ Usage:
     python -m cli stats                         # Summary counts
     python -m cli import FILE                   # Import from JSON
     python -m cli export FILE                   # Export to JSON
+    python -m cli serve [--port 8000]           # Start web dashboard
 """
 
 import argparse
@@ -293,6 +294,11 @@ def cmd_sources(args: argparse.Namespace) -> None:
     print(f"\n  Total: {len(sources)} sources")
 
 
+def cmd_serve(args: argparse.Namespace) -> None:
+    from web_server import serve
+    serve(port=args.port)
+
+
 def cmd_import(args: argparse.Namespace) -> None:
     tree = load_tree(args.file)
     repo = TreeRepository()
@@ -431,6 +437,10 @@ def build_parser() -> argparse.ArgumentParser:
     # sources
     sub.add_parser("sources", help="List all registered sources")
 
+    # serve
+    ap13 = sub.add_parser("serve", help="Start the web dashboard server")
+    ap13.add_argument("--port", type=int, default=8000, help="Port to listen on")
+
     return parser
 
 
@@ -451,6 +461,7 @@ COMMANDS = {
     "add-source": cmd_add_source,
     "cite": cmd_cite,
     "sources": cmd_sources,
+    "serve": cmd_serve,
 }
 
 
