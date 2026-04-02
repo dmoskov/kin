@@ -4,9 +4,11 @@ All CREATE TABLE statements live here. The schema mirrors the domain models
 in models/ but is designed for SQLite storage and efficient querying.
 """
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
-SCHEMA_SQL = """
+# ── V1 base tables ──────────────────────────────────────────────────────
+
+SCHEMA_V1 = """
 -- Schema version tracking
 CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER PRIMARY KEY,
@@ -82,3 +84,46 @@ CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
 CREATE INDEX IF NOT EXISTS idx_people_surname ON people(surname);
 CREATE INDEX IF NOT EXISTS idx_people_birth_date ON people(birth_date);
 """
+
+# ── V2 adds sources & citations ─────────────────────────────────────────
+
+SCHEMA_V2 = """
+-- Sources: documents, letters, oral history, public records, etc.
+CREATE TABLE IF NOT EXISTS sources (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    source_type TEXT NOT NULL DEFAULT 'other'
+        CHECK (source_type IN (
+            'document', 'letter', 'oral', 'public', 'direct', 'other'
+        )),
+    author TEXT,
+    date TEXT,
+    description TEXT DEFAULT '',
+    url TEXT
+);
+
+-- Citations: link a specific fact to a source
+CREATE TABLE IF NOT EXISTS citations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+    entity_type TEXT NOT NULL
+        CHECK (entity_type IN ('person', 'relationship', 'union', 'event')),
+    entity_id TEXT NOT NULL,
+    field_name TEXT,               -- optional: 'birth_date', 'surname', etc.
+    excerpt TEXT DEFAULT '',       -- relevant quote from the source
+    confidence TEXT NOT NULL DEFAULT 'confirmed'
+        CHECK (confidence IN ('confirmed', 'probable', 'uncertain', 'conflicting')),
+    notes TEXT DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_citations_source ON citations(source_id);
+CREATE INDEX IF NOT EXISTS idx_citations_entity ON citations(entity_type, entity_id);
+"""
+
+# Combined for fresh installs
+SCHEMA_SQL = SCHEMA_V1 + SCHEMA_V2
+
+# Migration map: version → SQL to apply
+MIGRATIONS = {
+    2: SCHEMA_V2,
+}

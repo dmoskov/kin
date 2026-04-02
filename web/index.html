@@ -15,12 +15,15 @@
       <h1>Family Tree</h1>
       <span class="badge" id="stats-badge"></span>
     </div>
-    <nav>
-      <button class="tab active" data-view="tree">Tree</button>
-      <button class="tab" data-view="timeline">Timeline</button>
-      <button class="tab" data-view="map">Map</button>
-      <button class="tab" data-view="relationships">Relationships</button>
-    </nav>
+    <div style="display:flex;align-items:center;gap:12px">
+      <nav>
+        <button class="tab active" data-view="tree">Tree</button>
+        <button class="tab" data-view="timeline">Timeline</button>
+        <button class="tab" data-view="map">Map</button>
+        <button class="tab" data-view="relationships">Relationships</button>
+      </nav>
+      <button class="theme-toggle" id="theme-toggle" title="Toggle light/dark mode">&#9790;</button>
+    </div>
   </header>
 
   <main>

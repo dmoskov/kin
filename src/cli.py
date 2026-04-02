@@ -25,6 +25,8 @@ from database.repository import TreeRepository
 from models.person import Gender, Person
 from models.relationship import Relationship, RelationshipType, Union
 from models.event import EventType, LifeEvent
+from models.source import Source, SourceType
+from models.citation import Citation, EntityType, Confidence
 from traversal.relationship_calculator import describe_relationship
 from traversal.timeline import person_timeline, family_timeline, format_timeline
 from import_export.json_io import load_tree, save_tree
@@ -146,14 +148,31 @@ def cmd_show(args: argparse.Namespace) -> None:
         print(f"Person not found: {args.person_id}", file=sys.stderr)
         sys.exit(1)
 
+    # Build a map of field → [source_ids] for inline citations
+    person_citations = tree.citations_for(EntityType.PERSON, person.id)
+    field_sources: dict[str, list[str]] = {}
+    general_sources: list[str] = []
+    for c in person_citations:
+        if c.field_name:
+            field_sources.setdefault(c.field_name, []).append(c.source_id)
+        else:
+            general_sources.append(c.source_id)
+
+    def _cite(field: str) -> str:
+        """Return inline citation tag like ' [fan-chart-2016]'."""
+        sids = field_sources.get(field, [])
+        if sids:
+            return f" [{', '.join(sids)}]"
+        return ""
+
     print(f"\n  {person.full_name}")
     print(f"  {'=' * len(person.full_name)}")
     if person.birth_date:
         place = f" in {person.birth_place}" if person.birth_place else ""
-        print(f"  Born: {person.birth_date}{place}")
+        print(f"  Born: {person.birth_date}{place}{_cite('birth_date')}")
     if person.death_date:
         place = f" in {person.death_place}" if person.death_place else ""
-        print(f"  Died: {person.death_date}{place}")
+        print(f"  Died: {person.death_date}{place}{_cite('death_date')}")
     if person.maiden_name:
         print(f"  Maiden name: {person.maiden_name}")
     if person.notes:
@@ -182,6 +201,20 @@ def cmd_show(args: argparse.Namespace) -> None:
             date = e.date or "?"
             desc = e.description or e.event_type.value
             print(f"    {date}  {desc}")
+
+    # Show sources cited
+    all_source_ids = set(general_sources)
+    for sids in field_sources.values():
+        all_source_ids.update(sids)
+    if all_source_ids:
+        print(f"\n  Sources:")
+        for sid in sorted(all_source_ids):
+            src = tree.sources.get(sid)
+            if src:
+                n_cites = sum(1 for c in person_citations if c.source_id == sid)
+                print(f"    [{sid}] {src.name} ({n_cites} citation{'s' if n_cites != 1 else ''})")
+            else:
+                print(f"    [{sid}]")
     print()
 
 
@@ -209,8 +242,55 @@ def cmd_stats(args: argparse.Namespace) -> None:
     print(f"  Relationships: {s['relationships']}")
     print(f"  Unions:        {s['unions']}")
     print(f"  Life events:   {s['events']}")
+    print(f"  Sources:       {s.get('sources', 0)}")
+    print(f"  Citations:     {s.get('citations', 0)}")
     print(f"  Generations:   {gens}")
     print()
+
+
+def cmd_add_source(args: argparse.Namespace) -> None:
+    source = Source(
+        id=args.id,
+        name=args.name,
+        source_type=SourceType(args.type) if args.type else SourceType.OTHER,
+        author=args.author,
+        date=args.date,
+        description=args.description or "",
+        url=args.url,
+    )
+    repo = TreeRepository()
+    repo.save_source(source)
+    print(f"Added source: {source}")
+
+
+def cmd_cite(args: argparse.Namespace) -> None:
+    citation = Citation(
+        source_id=args.source,
+        entity_type=EntityType(args.entity_type),
+        entity_id=args.entity_id,
+        field_name=args.field,
+        excerpt=args.excerpt or "",
+        confidence=Confidence(args.confidence) if args.confidence else Confidence.CONFIRMED,
+        notes=args.notes or "",
+    )
+    repo = TreeRepository()
+    repo.save_citation(citation)
+    scope = f".{args.field}" if args.field else ""
+    print(f"Cited: {args.source} -> {args.entity_type}:{args.entity_id}{scope}")
+
+
+def cmd_sources(args: argparse.Namespace) -> None:
+    repo = TreeRepository()
+    sources = repo.list_sources()
+    if not sources:
+        print("No sources registered. Use 'add-source' to add one.")
+        return
+    for s in sources:
+        cites = repo.citations_by_source(s.id)
+        author = f" by {s.author}" if s.author else ""
+        date = f" ({s.date})" if s.date else ""
+        print(f"  {s.id:<20s} {s.name}{author}{date}  [{len(cites)} citations]")
+    print(f"\n  Total: {len(sources)} sources")
 
 
 def cmd_import(args: argparse.Namespace) -> None:
@@ -315,6 +395,42 @@ def build_parser() -> argparse.ArgumentParser:
     ap10 = sub.add_parser("export", help="Export to JSON file")
     ap10.add_argument("file", help="Output path for JSON file")
 
+    # add-source
+    ap11 = sub.add_parser("add-source", help="Register a source document")
+    ap11.add_argument("--id", required=True, help="Unique ID (e.g., 'golden-book')")
+    ap11.add_argument("--name", required=True, help="Human-readable name")
+    ap11.add_argument(
+        "--type",
+        choices=[t.value for t in SourceType],
+        help="Source type",
+    )
+    ap11.add_argument("--author", help="Author/provider")
+    ap11.add_argument("--date", help="Date of source (free text)")
+    ap11.add_argument("--description", help="Description")
+    ap11.add_argument("--url", help="URL (for public sources)")
+
+    # cite
+    ap12 = sub.add_parser("cite", help="Attach a source citation to an entity")
+    ap12.add_argument("--source", required=True, help="Source ID")
+    ap12.add_argument(
+        "--entity-type",
+        required=True,
+        choices=[t.value for t in EntityType],
+        help="Entity type",
+    )
+    ap12.add_argument("--entity-id", required=True, help="Entity ID (person ID, etc.)")
+    ap12.add_argument("--field", help="Specific field (e.g., 'birth_date')")
+    ap12.add_argument("--excerpt", help="Relevant quote from source")
+    ap12.add_argument(
+        "--confidence",
+        choices=[c.value for c in Confidence],
+        help="Confidence level",
+    )
+    ap12.add_argument("--notes", help="Additional notes")
+
+    # sources
+    sub.add_parser("sources", help="List all registered sources")
+
     return parser
 
 
@@ -332,6 +448,9 @@ COMMANDS = {
     "stats": cmd_stats,
     "import": cmd_import,
     "export": cmd_export,
+    "add-source": cmd_add_source,
+    "cite": cmd_cite,
+    "sources": cmd_sources,
 }
 
 

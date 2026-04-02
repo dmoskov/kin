@@ -1,7 +1,8 @@
 """TreeRepository — CRUD operations mapping domain models to SQLite.
 
 The repository is the bridge between the in-memory domain models (Person,
-Relationship, Union, LifeEvent, FamilyTree) and the SQLite database.
+Relationship, Union, LifeEvent, Source, Citation, FamilyTree) and the
+SQLite database.
 
 Usage:
     from database import TreeRepository, init_db
@@ -19,6 +20,8 @@ from typing import Optional
 from models.person import Gender, Person
 from models.relationship import Relationship, RelationshipType, Union
 from models.event import EventType, LifeEvent
+from models.source import Source, SourceType
+from models.citation import Citation, EntityType, Confidence
 from models.tree import FamilyTree
 
 from .connection import get_connection
@@ -192,6 +195,126 @@ class TreeRepository:
         finally:
             conn.close()
 
+    # ── Sources ─────────────────────────────────────────────────────────
+
+    def save_source(self, source: Source) -> None:
+        """Insert or replace a Source."""
+        conn = self._conn()
+        try:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO sources
+                    (id, name, source_type, author, date, description, url)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    source.id,
+                    source.name,
+                    source.source_type.value,
+                    source.author,
+                    source.date,
+                    source.description,
+                    source.url,
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get_source(self, source_id: str) -> Optional[Source]:
+        """Fetch a single Source by ID."""
+        conn = self._conn()
+        try:
+            row = conn.execute(
+                "SELECT * FROM sources WHERE id = ?", (source_id,)
+            ).fetchone()
+            if row is None:
+                return None
+            return self._row_to_source(row)
+        finally:
+            conn.close()
+
+    def list_sources(self) -> list[Source]:
+        """Fetch all sources, ordered by name."""
+        conn = self._conn()
+        try:
+            rows = conn.execute(
+                "SELECT * FROM sources ORDER BY name"
+            ).fetchall()
+            return [self._row_to_source(r) for r in rows]
+        finally:
+            conn.close()
+
+    # ── Citations ───────────────────────────────────────────────────────
+
+    def save_citation(self, citation: Citation) -> None:
+        """Insert a citation linking a source to an entity."""
+        conn = self._conn()
+        try:
+            conn.execute(
+                """
+                INSERT INTO citations
+                    (source_id, entity_type, entity_id, field_name,
+                     excerpt, confidence, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    citation.source_id,
+                    citation.entity_type.value,
+                    citation.entity_id,
+                    citation.field_name,
+                    citation.excerpt,
+                    citation.confidence.value,
+                    citation.notes,
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def citations_for(
+        self,
+        entity_type: EntityType,
+        entity_id: str,
+        field_name: Optional[str] = None,
+    ) -> list[Citation]:
+        """Fetch all citations for a given entity (optionally filtered by field)."""
+        conn = self._conn()
+        try:
+            if field_name:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM citations
+                    WHERE entity_type = ? AND entity_id = ? AND field_name = ?
+                    ORDER BY id
+                    """,
+                    (entity_type.value, entity_id, field_name),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM citations
+                    WHERE entity_type = ? AND entity_id = ?
+                    ORDER BY id
+                    """,
+                    (entity_type.value, entity_id),
+                ).fetchall()
+            return [self._row_to_citation(r) for r in rows]
+        finally:
+            conn.close()
+
+    def citations_by_source(self, source_id: str) -> list[Citation]:
+        """Fetch all citations from a given source."""
+        conn = self._conn()
+        try:
+            rows = conn.execute(
+                "SELECT * FROM citations WHERE source_id = ? ORDER BY id",
+                (source_id,),
+            ).fetchall()
+            return [self._row_to_citation(r) for r in rows]
+        finally:
+            conn.close()
+
     # ── Bulk operations ─────────────────────────────────────────────────
 
     def save_tree(self, tree: FamilyTree) -> None:
@@ -270,6 +393,43 @@ class TreeRepository:
                     ),
                 )
 
+            for source in tree.sources.values():
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO sources
+                        (id, name, source_type, author, date, description, url)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        source.id,
+                        source.name,
+                        source.source_type.value,
+                        source.author,
+                        source.date,
+                        source.description,
+                        source.url,
+                    ),
+                )
+
+            for citation in tree.citations:
+                conn.execute(
+                    """
+                    INSERT INTO citations
+                        (source_id, entity_type, entity_id, field_name,
+                         excerpt, confidence, notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        citation.source_id,
+                        citation.entity_type.value,
+                        citation.entity_id,
+                        citation.field_name,
+                        citation.excerpt,
+                        citation.confidence.value,
+                        citation.notes,
+                    ),
+                )
+
             conn.commit()
         finally:
             conn.close()
@@ -322,6 +482,20 @@ class TreeRepository:
                     )
                 )
 
+            # Sources (v2 tables may not exist in old DBs)
+            try:
+                for row in conn.execute("SELECT * FROM sources").fetchall():
+                    tree.add_source(self._row_to_source(row))
+            except sqlite3.OperationalError:
+                pass  # v1 database, no sources table
+
+            # Citations
+            try:
+                for row in conn.execute("SELECT * FROM citations").fetchall():
+                    tree.add_citation(self._row_to_citation(row))
+            except sqlite3.OperationalError:
+                pass  # v1 database, no citations table
+
             return tree
         finally:
             conn.close()
@@ -343,6 +517,18 @@ class TreeRepository:
             ).fetchone()["n"]
             counts["living"] = living
             counts["deceased"] = counts["people"] - living
+
+            # Sources and citations (v2)
+            try:
+                counts["sources"] = conn.execute(
+                    "SELECT COUNT(*) as n FROM sources"
+                ).fetchone()["n"]
+                counts["citations"] = conn.execute(
+                    "SELECT COUNT(*) as n FROM citations"
+                ).fetchone()["n"]
+            except sqlite3.OperationalError:
+                counts["sources"] = 0
+                counts["citations"] = 0
 
             return counts
         finally:
@@ -366,4 +552,30 @@ class TreeRepository:
             nicknames=json.loads(row["nicknames"] or "[]"),
             notes=row["notes"] or "",
             photo_paths=json.loads(row["photo_paths"] or "[]"),
+        )
+
+    @staticmethod
+    def _row_to_source(row: sqlite3.Row) -> Source:
+        """Convert a database row to a Source domain object."""
+        return Source(
+            id=row["id"],
+            name=row["name"],
+            source_type=SourceType(row["source_type"]),
+            author=row["author"],
+            date=row["date"],
+            description=row["description"] or "",
+            url=row["url"],
+        )
+
+    @staticmethod
+    def _row_to_citation(row: sqlite3.Row) -> Citation:
+        """Convert a database row to a Citation domain object."""
+        return Citation(
+            source_id=row["source_id"],
+            entity_type=EntityType(row["entity_type"]),
+            entity_id=row["entity_id"],
+            field_name=row["field_name"],
+            excerpt=row["excerpt"] or "",
+            confidence=Confidence(row["confidence"]),
+            notes=row["notes"] or "",
         )

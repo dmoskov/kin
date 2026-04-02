@@ -47,9 +47,10 @@ class TestInit:
         conn.close()
 
     def test_init_records_schema_version(self, db_path):
+        from database.schema import SCHEMA_VERSION
         conn = get_connection(db_path)
         row = conn.execute("SELECT version FROM schema_version").fetchone()
-        assert row["version"] == 1
+        assert row["version"] == SCHEMA_VERSION
         conn.close()
 
     def test_init_is_idempotent(self, db_path):

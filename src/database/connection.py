@@ -1,13 +1,15 @@
 """Database connection management.
 
 Handles SQLite connection creation, path resolution, and initialization.
+Supports schema migrations: on init_db(), any unapplied migrations are
+automatically applied in order.
 """
 
 import os
 import sqlite3
 from pathlib import Path
 
-from .schema import SCHEMA_SQL, SCHEMA_VERSION
+from .schema import SCHEMA_SQL, SCHEMA_VERSION, MIGRATIONS
 
 
 def get_db_path() -> str:
@@ -52,10 +54,26 @@ def get_connection(db_path: str | None = None) -> sqlite3.Connection:
     return conn
 
 
-def init_db(db_path: str | None = None) -> str:
-    """Initialize the database schema.
+def _current_version(conn: sqlite3.Connection) -> int:
+    """Get the current schema version from the database.
 
-    Creates all tables if they don't exist and records the schema version.
+    Returns 0 if the schema_version table doesn't exist yet.
+    """
+    try:
+        row = conn.execute(
+            "SELECT MAX(version) as v FROM schema_version"
+        ).fetchone()
+        return row["v"] or 0
+    except sqlite3.OperationalError:
+        return 0
+
+
+def init_db(db_path: str | None = None) -> str:
+    """Initialize the database schema, applying any pending migrations.
+
+    For fresh databases: creates all tables at the latest version.
+    For existing databases: applies only the migrations needed to reach
+    the current SCHEMA_VERSION.
 
     Args:
         db_path: Path to the database file. If None, uses get_db_path().
@@ -66,7 +84,16 @@ def init_db(db_path: str | None = None) -> str:
     path = db_path or get_db_path()
     conn = get_connection(path)
     try:
-        conn.executescript(SCHEMA_SQL)
+        current = _current_version(conn)
+
+        if current == 0:
+            # Fresh database — apply full schema
+            conn.executescript(SCHEMA_SQL)
+        else:
+            # Existing database — apply only missing migrations
+            for version in sorted(MIGRATIONS.keys()):
+                if version > current:
+                    conn.executescript(MIGRATIONS[version])
 
         # Record schema version if not already present
         existing = conn.execute(

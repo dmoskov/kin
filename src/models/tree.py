@@ -1,13 +1,16 @@
 """FamilyTree — the graph container that ties everything together.
 
-The FamilyTree holds all people, relationships, unions, and events.
-It provides the core graph queries: parents, children, siblings, ancestors, descendants.
+The FamilyTree holds all people, relationships, unions, events, sources,
+and citations. It provides the core graph queries: parents, children,
+siblings, ancestors, descendants.
 """
 from dataclasses import dataclass, field
 from typing import Optional
 from .person import Person
 from .relationship import Relationship, Union
 from .event import LifeEvent
+from .source import Source
+from .citation import Citation, EntityType
 
 
 @dataclass
@@ -16,11 +19,14 @@ class FamilyTree:
 
     People are nodes. Relationships (parent→child) and Unions (partner↔partner) are edges.
     Events are attached to people as metadata.
+    Sources and Citations track provenance of every fact.
     """
     people: dict[str, Person] = field(default_factory=dict)          # id → Person
     relationships: list[Relationship] = field(default_factory=list)  # parent→child edges
     unions: list[Union] = field(default_factory=list)                # partner↔partner
     events: list[LifeEvent] = field(default_factory=list)
+    sources: dict[str, Source] = field(default_factory=dict)         # id → Source
+    citations: list[Citation] = field(default_factory=list)
 
     # --- Mutators ---
 
@@ -35,6 +41,28 @@ class FamilyTree:
 
     def add_event(self, event: LifeEvent) -> None:
         self.events.append(event)
+
+    def add_source(self, source: Source) -> None:
+        self.sources[source.id] = source
+
+    def add_citation(self, citation: Citation) -> None:
+        self.citations.append(citation)
+
+    # --- Citation queries ---
+
+    def citations_for(self, entity_type: EntityType, entity_id: str) -> list[Citation]:
+        """Get all citations for a given entity."""
+        return [
+            c for c in self.citations
+            if c.entity_type == entity_type and c.entity_id == entity_id
+        ]
+
+    def source_ids_for_person(self, person_id: str) -> set[str]:
+        """Get all unique source IDs cited for a person."""
+        return {
+            c.source_id for c in self.citations
+            if c.entity_type == EntityType.PERSON and c.entity_id == person_id
+        }
 
     # --- Core queries ---
 

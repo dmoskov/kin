@@ -2,25 +2,58 @@
    Family Tree Dashboard — Styles
    ═══════════════════════════════════════════════════════════════ */
 
+/* ── Dark mode (default) — lighter, more breathable ─────── */
 :root {
-  --bg: #0f0f13;
-  --surface: #1a1a24;
-  --surface-hover: #22223a;
-  --border: #2a2a3d;
-  --text: #e4e4ed;
-  --text-muted: #8888a0;
-  --accent: #6c7cff;
-  --accent-hover: #8b97ff;
-  --male: #4a90d9;
-  --female: #d94a8c;
+  --bg: #1c1d2e;
+  --surface: #272840;
+  --surface-hover: #32345a;
+  --border: #3e4068;
+  --text: #eaeaf2;
+  --text-muted: #9898b4;
+  --accent: #7585ff;
+  --accent-hover: #95a2ff;
+  --male: #5a9ee6;
+  --female: #e05a98;
   --union: #f5a623;
   --event-birth: #4cd964;
-  --event-career: #6c7cff;
+  --event-career: #7585ff;
   --event-education: #f5a623;
   --event-custom: #b066e0;
   --event-marriage: #ff6b8a;
   --radius: 10px;
   --panel-width: 380px;
+  --node-text: #fff;
+  --node-text-dim: rgba(255,255,255,0.65);
+  --node-text-faint: rgba(255,255,255,0.40);
+  --node-male-bg: #243050;
+  --node-female-bg: #3a2040;
+  color-scheme: dark;
+}
+
+/* ── Light mode ─────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg: #f2f3f7;
+  --surface: #ffffff;
+  --surface-hover: #e8e9f0;
+  --border: #d4d5e0;
+  --text: #1c1d2e;
+  --text-muted: #6a6b82;
+  --accent: #5060e8;
+  --accent-hover: #3d4ed0;
+  --male: #3a78c2;
+  --female: #c23a78;
+  --union: #d48c14;
+  --event-birth: #2ea84d;
+  --event-career: #5060e8;
+  --event-education: #d48c14;
+  --event-custom: #9040c0;
+  --event-marriage: #e04060;
+  --node-text: #1c1d2e;
+  --node-text-dim: rgba(28,29,46,0.65);
+  --node-text-faint: rgba(28,29,46,0.45);
+  --node-male-bg: #dce6f5;
+  --node-female-bg: #f5dce8;
+  color-scheme: light;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -136,21 +169,21 @@ main {
   font-family: 'Inter', sans-serif;
   font-size: 12px;
   font-weight: 600;
-  fill: white;
+  fill: var(--node-text);
   pointer-events: none;
 }
 
 .node-dates {
   font-family: 'Inter', sans-serif;
   font-size: 10px;
-  fill: rgba(255, 255, 255, 0.6);
+  fill: var(--node-text-dim);
   pointer-events: none;
 }
 
 .node-place {
   font-family: 'Inter', sans-serif;
   font-size: 9px;
-  fill: rgba(255, 255, 255, 0.35);
+  fill: var(--node-text-faint);
   pointer-events: none;
   font-style: italic;
 }
@@ -572,6 +605,34 @@ main {
 .leaflet-popup-content .popup-year { color: var(--accent); font-weight: 500; }
 .leaflet-popup-content .popup-person { color: var(--text); }
 .leaflet-popup-close-button { color: var(--text-muted) !important; }
+
+/* ── Theme Toggle ──────────────────────────────────────────── */
+
+.theme-toggle {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 16px;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.theme-toggle:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+/* ── Leaflet light mode ────────────────────────────────────── */
+
+[data-theme="light"] .leaflet-popup-content-wrapper {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12) !important;
+}
 
 /* ── Responsive ─────────────────────────────────────────────── */
 

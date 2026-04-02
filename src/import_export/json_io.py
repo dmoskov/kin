@@ -11,6 +11,8 @@ from typing import Any
 from models.person import Person, Gender
 from models.relationship import Relationship, RelationshipType, Union
 from models.event import LifeEvent, EventType
+from models.source import Source, SourceType
+from models.citation import Citation, EntityType, Confidence
 from models.tree import FamilyTree
 
 
@@ -70,6 +72,30 @@ def load_tree(path: str) -> FamilyTree:
             source=e.get("source"),
         )
         tree.add_event(event)
+
+    for s in data.get("sources", []):
+        source = Source(
+            id=s["id"],
+            name=s["name"],
+            source_type=SourceType(s.get("source_type", "other")),
+            author=s.get("author"),
+            date=s.get("date"),
+            description=s.get("description", ""),
+            url=s.get("url"),
+        )
+        tree.add_source(source)
+
+    for c in data.get("citations", []):
+        citation = Citation(
+            source_id=c["source_id"],
+            entity_type=EntityType(c["entity_type"]),
+            entity_id=c["entity_id"],
+            field_name=c.get("field_name"),
+            excerpt=c.get("excerpt", ""),
+            confidence=Confidence(c.get("confidence", "confirmed")),
+            notes=c.get("notes", ""),
+        )
+        tree.add_citation(citation)
 
     return tree
 
@@ -138,6 +164,38 @@ def _event_to_dict(e: LifeEvent) -> dict[str, Any]:
     return d
 
 
+def _source_to_dict(s: Source) -> dict[str, Any]:
+    d: dict[str, Any] = {
+        "id": s.id,
+        "name": s.name,
+        "source_type": s.source_type.value,
+    }
+    for key in ("author", "date", "url"):
+        val = getattr(s, key)
+        if val is not None:
+            d[key] = val
+    if s.description:
+        d["description"] = s.description
+    return d
+
+
+def _citation_to_dict(c: Citation) -> dict[str, Any]:
+    d: dict[str, Any] = {
+        "source_id": c.source_id,
+        "entity_type": c.entity_type.value,
+        "entity_id": c.entity_id,
+    }
+    if c.field_name:
+        d["field_name"] = c.field_name
+    if c.excerpt:
+        d["excerpt"] = c.excerpt
+    if c.confidence != Confidence.CONFIRMED:
+        d["confidence"] = c.confidence.value
+    if c.notes:
+        d["notes"] = c.notes
+    return d
+
+
 def save_tree(tree: FamilyTree, path: str) -> None:
     """Serialize a FamilyTree to the JSON format."""
     data = {
@@ -145,6 +203,8 @@ def save_tree(tree: FamilyTree, path: str) -> None:
         "relationships": [_rel_to_dict(r) for r in tree.relationships],
         "unions": [_union_to_dict(u) for u in tree.unions],
         "events": [_event_to_dict(e) for e in tree.events],
+        "sources": [_source_to_dict(s) for s in tree.sources.values()],
+        "citations": [_citation_to_dict(c) for c in tree.citations],
     }
     Path(path).write_text(
         json.dumps(data, indent=2, ensure_ascii=False) + "\n",
