@@ -1,20 +1,23 @@
-"""Tiny web server for the family tree dashboard.
+"""Web server for the family tree dashboard.
 
-Serves static files from web/ and provides a single API endpoint
-that returns the family tree data from the SQLite database.
+Flask app that serves static files from web/ and provides API endpoints.
+Works with both SQLite (local dev) and PostgreSQL (production via DATABASE_URL).
 
 Usage:
+    # Local development
     python -m web_server [--port 8000]
 
-Or via the CLI:
+    # Production (via gunicorn)
+    gunicorn web_server:app --bind 0.0.0.0:8000
+
+    # Via the CLI
     python -m cli serve [--port 8000]
 """
 
 import json
-import os
-from functools import partial
-from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
+
+from flask import Flask, jsonify, send_from_directory
 
 from database.connection import init_db
 from database.repository import TreeRepository
@@ -28,8 +31,32 @@ from import_export.json_io import (
 )
 
 
-def _tree_to_json(repo: TreeRepository) -> str:
-    """Load the tree from the DB and serialize to the JSON format the dashboard expects."""
+# ── App factory ────────────────────────────────────────────────────────
+
+WEB_DIR = str(Path(__file__).resolve().parent.parent / "web")
+
+app = Flask(__name__, static_folder=WEB_DIR, static_url_path="")
+
+
+@app.before_request
+def _ensure_db():
+    """Ensure the database is initialized on first request."""
+    if not getattr(app, "_db_initialized", False):
+        init_db()
+        app._db_initialized = True
+
+
+# ── Routes ─────────────────────────────────────────────────────────────
+
+@app.route("/")
+def index():
+    return send_from_directory(WEB_DIR, "index.html")
+
+
+@app.route("/api/data")
+def api_data():
+    """Return the full family tree as JSON (read from DB on each request)."""
+    repo = TreeRepository()
     tree = repo.load_tree()
     data = {
         "people": [_person_to_dict(p) for p in tree.people.values()],
@@ -39,61 +66,23 @@ def _tree_to_json(repo: TreeRepository) -> str:
         "sources": [_source_to_dict(s) for s in tree.sources.values()],
         "citations": [_citation_to_dict(c) for c in tree.citations],
     }
-    return json.dumps(data, ensure_ascii=False)
+    return jsonify(data)
 
 
-class FamilyTreeHandler(SimpleHTTPRequestHandler):
-    """Serve static files from web/ and handle /api/data from the DB."""
-
-    def __init__(self, *args, repo: TreeRepository, **kwargs):
-        self._repo = repo
-        super().__init__(*args, **kwargs)
-
-    def do_GET(self):
-        if self.path == "/api/data":
-            body = _tree_to_json(self._repo).encode("utf-8")
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-        else:
-            super().do_GET()
-
-    def log_message(self, format, *args):
-        # Quieter logging — skip noisy static-file requests
-        if "/api/" in (args[0] if args else ""):
-            super().log_message(format, *args)
-
+# ── Standalone dev server ──────────────────────────────────────────────
 
 def serve(port: int = 8000) -> None:
-    """Start the web server."""
-    # Resolve web/ directory (relative to this file → ../web/)
-    web_dir = str(Path(__file__).resolve().parent.parent / "web")
-    if not Path(web_dir).is_dir():
-        print(f"Error: web directory not found at {web_dir}")
+    """Start the Flask dev server (for local use only)."""
+    if not Path(WEB_DIR).is_dir():
+        print(f"Error: web directory not found at {WEB_DIR}")
         return
-
-    # Ensure DB is initialized
-    init_db()
-    repo = TreeRepository()
-
-    # Change to web/ so SimpleHTTPRequestHandler serves files from there
-    os.chdir(web_dir)
-
-    handler = partial(FamilyTreeHandler, repo=repo)
-    server = HTTPServer(("", port), handler)
 
     print(f"\n  Family Tree Dashboard")
     print(f"  http://localhost:{port}")
     print(f"  API: http://localhost:{port}/api/data")
     print(f"\n  Press Ctrl+C to stop.\n")
 
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("\nShutting down.")
-        server.shutdown()
+    app.run(host="0.0.0.0", port=port, debug=True)
 
 
 if __name__ == "__main__":
