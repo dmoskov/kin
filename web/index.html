@@ -5,14 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Family Tree</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 <body>
   <header>
     <div class="header-left">
-      <h1>Family Tree</h1>
+      <h1 id="family-title">Family Tree</h1>
+      <span class="family-subtitle" id="family-subtitle"></span>
       <span class="badge" id="stats-badge"></span>
     </div>
     <div style="display:flex;align-items:center;gap:12px">
@@ -63,18 +65,28 @@
           </div>
           <div class="map-slider">
             <button id="map-play" class="map-play-btn" title="Play animation">&#9654;</button>
-            <span class="slider-label" id="slider-year-start">1870</span>
-            <input type="range" id="map-time-slider" min="1870" max="2025" value="2025" step="1">
-            <span class="slider-label" id="slider-year-end">2025</span>
+            <span class="slider-label" id="slider-year-start">1650</span>
+            <input type="range" id="map-time-slider" min="1650" max="2026" value="2026" step="1">
+            <span class="slider-label" id="slider-year-end">2026</span>
           </div>
-          <div class="map-legend">
-            <span class="legend-item"><span class="legend-dot" style="background:var(--event-birth)"></span>Birth</span>
-            <span class="legend-item"><span class="legend-dot" style="background:#e74c3c"></span>Immigration</span>
-            <span class="legend-item"><span class="legend-dot" style="background:var(--event-education)"></span>Education</span>
-            <span class="legend-item"><span class="legend-dot" style="background:var(--event-career)"></span>Career</span>
-            <span class="legend-item"><span class="legend-dot" style="background:var(--event-marriage)"></span>Marriage</span>
-            <span class="legend-item"><span class="legend-dot" style="background:#888"></span>Residence</span>
-            <span class="legend-item"><span class="legend-dot" style="background:var(--event-custom)"></span>Other</span>
+          <div class="map-legends">
+            <div class="map-legend">
+              <span class="legend-item"><span class="legend-dot" style="background:var(--event-birth)"></span>Birth</span>
+              <span class="legend-item"><span class="legend-dot" style="background:#888"></span>Death</span>
+              <span class="legend-item"><span class="legend-dot" style="background:#e74c3c"></span>Immigration</span>
+              <span class="legend-item"><span class="legend-dot" style="background:var(--event-education)"></span>Education</span>
+              <span class="legend-item"><span class="legend-dot" style="background:var(--event-career)"></span>Career</span>
+              <span class="legend-item"><span class="legend-dot" style="background:var(--event-marriage)"></span>Marriage</span>
+              <span class="legend-item"><span class="legend-dot" style="background:var(--event-custom)"></span>Other</span>
+            </div>
+            <div class="map-legend era-legend">
+              <span class="legend-label">Era:</span>
+              <span class="legend-item"><span class="legend-dot" style="background:#c9a84c"></span>Colonial</span>
+              <span class="legend-item"><span class="legend-dot" style="background:#6a8fb5"></span>Antebellum</span>
+              <span class="legend-item"><span class="legend-dot" style="background:#c05040"></span>Immigration</span>
+              <span class="legend-item"><span class="legend-dot" style="background:#3ea58e"></span>Mid-Century</span>
+              <span class="legend-item"><span class="legend-dot" style="background:#8b7cff"></span>Modern</span>
+            </div>
           </div>
         </div>
       </div>

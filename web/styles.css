@@ -1,65 +1,68 @@
 /* ═══════════════════════════════════════════════════════════════
    Family Tree Dashboard — Styles
+   Heritage-inspired warm palette, configurable via family-config.json
    ═══════════════════════════════════════════════════════════════ */
 
-/* ── Dark mode (default) — lighter, more breathable ─────── */
+/* ── Dark mode (default) — warm sepia tones ────────────── */
 :root {
-  --bg: #1c1d2e;
-  --surface: #272840;
-  --surface-hover: #32345a;
-  --border: #3e4068;
-  --text: #eaeaf2;
-  --text-muted: #9898b4;
-  --accent: #7585ff;
-  --accent-hover: #95a2ff;
-  --male: #5a9ee6;
-  --female: #e05a98;
-  --union: #f5a623;
-  --event-birth: #4cd964;
-  --event-career: #7585ff;
-  --event-education: #f5a623;
-  --event-custom: #b066e0;
-  --event-marriage: #ff6b8a;
+  --bg: #1a1714;
+  --surface: #262119;
+  --surface-hover: #332b21;
+  --border: #3d362c;
+  --text: #ece5d8;
+  --text-muted: #a09683;
+  --accent: #c4956a;
+  --accent-hover: #d4aa82;
+  --male: #7ca8c4;
+  --female: #c47c9a;
+  --union: #d4a843;
+  --event-birth: #6db37a;
+  --event-career: #c4956a;
+  --event-education: #d4a843;
+  --event-custom: #a87cc4;
+  --event-marriage: #d47c8a;
   --radius: 10px;
   --panel-width: 380px;
-  --node-text: #fff;
-  --node-text-dim: rgba(255,255,255,0.65);
-  --node-text-faint: rgba(255,255,255,0.40);
-  --node-male-bg: #243050;
-  --node-female-bg: #3a2040;
+  --node-text: #ece5d8;
+  --node-text-dim: rgba(236,229,216,0.65);
+  --node-text-faint: rgba(236,229,216,0.40);
+  --node-male-bg: #1e2a30;
+  --node-female-bg: #2a1e28;
+  --header-font: 'Playfair Display', Georgia, serif;
+  --body-font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   color-scheme: dark;
 }
 
-/* ── Light mode ─────────────────────────────────────────── */
+/* ── Light mode — warm parchment tones ─────────────────── */
 [data-theme="light"] {
-  --bg: #f2f3f7;
+  --bg: #f5f0e8;
   --surface: #ffffff;
-  --surface-hover: #e8e9f0;
-  --border: #d4d5e0;
-  --text: #1c1d2e;
-  --text-muted: #6a6b82;
-  --accent: #5060e8;
-  --accent-hover: #3d4ed0;
-  --male: #3a78c2;
-  --female: #c23a78;
-  --union: #d48c14;
-  --event-birth: #2ea84d;
-  --event-career: #5060e8;
-  --event-education: #d48c14;
-  --event-custom: #9040c0;
-  --event-marriage: #e04060;
-  --node-text: #1c1d2e;
-  --node-text-dim: rgba(28,29,46,0.65);
-  --node-text-faint: rgba(28,29,46,0.45);
-  --node-male-bg: #dce6f5;
-  --node-female-bg: #f5dce8;
+  --surface-hover: #ede7db;
+  --border: #d9d0c1;
+  --text: #2c2418;
+  --text-muted: #7a6e5e;
+  --accent: #8b6340;
+  --accent-hover: #704f30;
+  --male: #4a7a9c;
+  --female: #9c4a70;
+  --union: #a0832e;
+  --event-birth: #4a8c54;
+  --event-career: #8b6340;
+  --event-education: #a0832e;
+  --event-custom: #7a4a9c;
+  --event-marriage: #9c4a5a;
+  --node-text: #2c2418;
+  --node-text-dim: rgba(44,36,24,0.65);
+  --node-text-faint: rgba(44,36,24,0.45);
+  --node-male-bg: #dbe6ee;
+  --node-female-bg: #eedbe6;
   color-scheme: light;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--body-font);
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
@@ -86,9 +89,18 @@ header {
 }
 
 h1 {
-  font-size: 20px;
-  font-weight: 600;
+  font-family: var(--header-font);
+  font-size: 22px;
+  font-weight: 700;
   letter-spacing: -0.3px;
+}
+
+.family-subtitle {
+  font-family: var(--header-font);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--text-muted);
+  opacity: 0.8;
 }
 
 .badge {
@@ -231,6 +243,7 @@ main {
 .close-btn:hover { background: var(--surface-hover); color: var(--text); }
 
 .panel-name {
+  font-family: var(--header-font);
   font-size: 22px;
   font-weight: 700;
   margin-bottom: 4px;
@@ -411,7 +424,8 @@ main {
 }
 
 .timeline-header h2 {
-  font-size: 24px;
+  font-family: var(--header-font);
+  font-size: 26px;
   font-weight: 700;
 }
 
@@ -449,6 +463,7 @@ main {
 }
 
 .timeline-entry[data-type="birth"]::before { background: var(--event-birth); }
+.timeline-entry[data-type="death"]::before { background: #888; }
 .timeline-entry[data-type="career"]::before { background: var(--event-career); }
 .timeline-entry[data-type="education"]::before { background: var(--event-education); }
 .timeline-entry[data-type="custom"]::before { background: var(--event-custom); }
@@ -486,6 +501,75 @@ main {
   align-items: center;
 }
 
+/* ── Timeline Photos ───────────────────────────────────────── */
+
+.timeline-entry-inner {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.timeline-photo {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--border);
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.timeline-photo:hover {
+  border-color: var(--accent);
+  transform: scale(1.08);
+}
+
+.timeline-photo-placeholder {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--surface-hover);
+  border: 2px solid var(--border);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+/* ── Heritage Badges ───────────────────────────────────────── */
+
+.heritage-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-top: 6px;
+  line-height: 1;
+  background: rgba(128, 128, 128, 0.15);
+  color: var(--text-muted);
+}
+
+.panel-heritage-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 12px;
+  margin-left: 6px;
+  background: rgba(128, 128, 128, 0.15);
+}
+
 /* ── Relationships View ─────────────────────────────────────── */
 
 .relationships-container {
@@ -497,7 +581,8 @@ main {
 }
 
 .relationships-container h2 {
-  font-size: 24px;
+  font-family: var(--header-font);
+  font-size: 26px;
   font-weight: 700;
   margin-bottom: 8px;
 }
@@ -646,10 +731,30 @@ main {
   border: 2px solid var(--surface);
 }
 
+.map-legends {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
 .map-legend {
   display: flex;
   gap: 12px;
   flex-shrink: 0;
+}
+
+.era-legend {
+  opacity: 0.75;
+}
+
+.legend-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-right: 2px;
 }
 
 .legend-item {
@@ -737,4 +842,5 @@ main {
   .map-controls { flex-direction: column; gap: 10px; padding: 10px 16px; }
   .map-slider { max-width: 100%; width: 100%; }
   .map-legend { flex-wrap: wrap; justify-content: center; }
+  .map-legends { align-items: center; }
 }
