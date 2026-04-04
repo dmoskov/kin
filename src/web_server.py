@@ -17,7 +17,7 @@ Usage:
 import json
 from pathlib import Path
 
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, send_from_directory, abort
 
 from database.connection import init_db
 from database.repository import TreeRepository
@@ -51,6 +51,29 @@ def _ensure_db():
 @app.route("/")
 def index():
     return send_from_directory(WEB_DIR, "index.html")
+
+
+@app.route("/api/config")
+def api_config():
+    """Return the family configuration (theme, heritage, fonts, etc.).
+
+    Reads from web/family-config.json.  Falls back to minimal defaults
+    so the dashboard always works even without a config file.
+    """
+    config_path = Path(WEB_DIR) / "family-config.json"
+    if config_path.exists():
+        return jsonify(json.loads(config_path.read_text()))
+    # Sensible defaults when no config file exists
+    return jsonify({
+        "familyName": "Family Tree",
+        "subtitle": "",
+        "headerFont": "'Inter', sans-serif",
+        "bodyFont": "'Inter', sans-serif",
+        "heritage": [],
+        "palette": {},
+        "timelinePhotos": True,
+        "heritageLabels": False,
+    })
 
 
 @app.route("/api/data")
