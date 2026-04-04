@@ -32,10 +32,6 @@
       <div class="tree-container">
         <svg id="tree-svg"></svg>
       </div>
-      <aside id="person-panel" class="panel hidden">
-        <button class="close-btn" id="close-panel">&times;</button>
-        <div id="panel-content"></div>
-      </aside>
     </section>
 
     <!-- Timeline View -->
@@ -63,9 +59,9 @@
           </div>
           <div class="map-slider">
             <button id="map-play" class="map-play-btn" title="Play animation">&#9654;</button>
-            <span class="slider-label" id="slider-year-start">1870</span>
-            <input type="range" id="map-time-slider" min="1870" max="2025" value="2025" step="1">
-            <span class="slider-label" id="slider-year-end">2025</span>
+            <span class="slider-label" id="slider-year-start">1650</span>
+            <input type="range" id="map-time-slider" min="1650" max="2026" value="2026" step="1">
+            <span class="slider-label" id="slider-year-end">2026</span>
           </div>
           <div class="map-legend">
             <span class="legend-item"><span class="legend-dot" style="background:var(--event-birth)"></span>Birth</span>
@@ -97,7 +93,16 @@
         <div id="rel-result" class="rel-result hidden"></div>
       </div>
     </section>
+
+    <!-- Person Detail Panel (global overlay, works on all views) -->
+    <aside id="person-panel" class="panel hidden">
+      <button class="close-btn" id="close-panel">&times;</button>
+      <div id="panel-content"></div>
+    </aside>
   </main>
+
+  <!-- Hovercard (positioned absolutely, shown on hover over person links) -->
+  <div id="hovercard" class="hovercard hidden"></div>
 
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
