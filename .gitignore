@@ -6,7 +6,11 @@ dist/
 build/
 .venv/
 
-# Real family data — NEVER commit
+# ── Private family content (never commit) ──────────────
+# All personal data lives in private/ — see README.md
+private/
+
+# Runtime data files
 data/*.json
 data/*.gedcom
 data/*.csv
@@ -17,3 +21,14 @@ data/photos/
 
 # Keep example data tracked
 !data/example_family.json
+
+# Private config & photos (symlinked or copied from private/)
+web/family-config.json
+web/photos/
+
+# Family documents
+*.pdf
+*.zip
+
+# Environment
+.env
