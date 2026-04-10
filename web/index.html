@@ -45,9 +45,12 @@
       <div class="timeline-container">
         <div class="timeline-header">
           <h2>Family Timeline</h2>
-          <select id="timeline-filter">
-            <option value="all">Everyone</option>
-          </select>
+          <div class="timeline-controls">
+            <select id="timeline-filter">
+              <option value="all">Everyone</option>
+            </select>
+            <button id="timeline-align-toggle" class="timeline-align-btn" onclick="toggleTimelineAlignment()">Aligned</button>
+          </div>
         </div>
         <div id="timeline-entries"></div>
       </div>
