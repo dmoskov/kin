@@ -227,8 +227,7 @@ class TestStatsV2:
 
 class TestSourceTagParsing:
     def test_parse_single_source(self):
-        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-        from data.migrate_to_v2 import parse_source_tags
+        from import_export.json_io import parse_source_tags
 
         source_ids, cleaned = parse_source_tags(
             "Some biographical info. Source: Golden Book."
@@ -238,7 +237,7 @@ class TestSourceTagParsing:
         assert cleaned == "Some biographical info."
 
     def test_parse_multiple_sources(self):
-        from data.migrate_to_v2 import parse_source_tags
+        from import_export.json_io import parse_source_tags
 
         source_ids, cleaned = parse_source_tags(
             "Wolf's father. Source: Golden Book, Herb's letter, fan chart."
@@ -249,14 +248,14 @@ class TestSourceTagParsing:
         assert len(source_ids) == 3
 
     def test_parse_no_source(self):
-        from data.migrate_to_v2 import parse_source_tags
+        from import_export.json_io import parse_source_tags
 
         source_ids, cleaned = parse_source_tags("Just some notes without a source reference.")
         assert source_ids == []
         assert cleaned == "Just some notes without a source reference."
 
     def test_parse_with_and_connector(self):
-        from data.migrate_to_v2 import parse_source_tags
+        from import_export.json_io import parse_source_tags
 
         source_ids, _ = parse_source_tags(
             "Some info. Source: fan chart and Wikipedia."

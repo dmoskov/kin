@@ -1,0 +1,67 @@
+{
+  "familyName": "Your Family Name",
+  "subtitle": "A subtitle or motto (optional)",
+
+  "centerIdA": "person-id-1",
+  "centerIdB": "person-id-2",
+
+  "headerFont": "'Playfair Display', Georgia, serif",
+  "bodyFont": "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+
+  "heritage": [
+    { "region": "Country A", "color": "#b33a3a", "match": ["Place1", "Place2"] },
+    { "region": "Country B", "color": "#4a7c59", "match": ["Place3", "Place4"] }
+  ],
+
+  "palette": {
+    "dark": {
+      "bg":           "#1a1714",
+      "surface":      "#262119",
+      "surfaceHover": "#332b21",
+      "border":       "#3d362c",
+      "text":         "#ece5d8",
+      "textMuted":    "#a09683",
+      "accent":       "#c4956a",
+      "accentHover":  "#d4aa82",
+      "male":         "#7ca8c4",
+      "female":       "#c47c9a",
+      "union":        "#d4a843",
+      "eventBirth":   "#6db37a",
+      "eventCareer":  "#c4956a",
+      "eventEdu":     "#d4a843",
+      "eventCustom":  "#a87cc4",
+      "eventMarriage":"#d47c8a",
+      "nodeMaleBg":   "#1e2a30",
+      "nodeFemaleBg": "#2a1e28",
+      "nodeText":     "#ece5d8",
+      "nodeTextDim":  "rgba(236,229,216,0.65)",
+      "nodeTextFaint":"rgba(236,229,216,0.40)"
+    },
+    "light": {
+      "bg":           "#f5f0e8",
+      "surface":      "#ffffff",
+      "surfaceHover": "#ede7db",
+      "border":       "#d9d0c1",
+      "text":         "#2c2418",
+      "textMuted":    "#7a6e5e",
+      "accent":       "#8b6340",
+      "accentHover":  "#704f30",
+      "male":         "#4a7a9c",
+      "female":       "#9c4a70",
+      "union":        "#a0832e",
+      "eventBirth":   "#4a8c54",
+      "eventCareer":  "#8b6340",
+      "eventEdu":     "#a0832e",
+      "eventCustom":  "#7a4a9c",
+      "eventMarriage":"#9c4a5a",
+      "nodeMaleBg":   "#dbe6ee",
+      "nodeFemaleBg": "#eedbe6",
+      "nodeText":     "#2c2418",
+      "nodeTextDim":  "rgba(44,36,24,0.65)",
+      "nodeTextFaint":"rgba(44,36,24,0.45)"
+    }
+  },
+
+  "timelinePhotos": true,
+  "heritageLabels": true
+}

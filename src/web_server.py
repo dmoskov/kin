@@ -31,9 +31,11 @@ from import_export.json_io import (
 )
 
 
-# ── App factory ────────────────────────────────────────────────────────
+# ── Paths ──────────────────────────────────────────────────────────────
 
-WEB_DIR = str(Path(__file__).resolve().parent.parent / "web")
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+WEB_DIR = str(PROJECT_ROOT / "web")
+PRIVATE_DIR = PROJECT_ROOT / "private"
 
 app = Flask(__name__, static_folder=WEB_DIR, static_url_path="")
 
@@ -57,12 +59,17 @@ def index():
 def api_config():
     """Return the family configuration (theme, heritage, fonts, etc.).
 
-    Reads from web/family-config.json.  Falls back to minimal defaults
-    so the dashboard always works even without a config file.
+    Looks for config in this order:
+      1. private/config/family-config.json  (personal, gitignored)
+      2. web/family-config.json             (legacy / dev override)
+      3. Built-in defaults
     """
-    config_path = Path(WEB_DIR) / "family-config.json"
-    if config_path.exists():
-        return jsonify(json.loads(config_path.read_text()))
+    for candidate in [
+        PRIVATE_DIR / "config" / "family-config.json",
+        Path(WEB_DIR) / "family-config.json",
+    ]:
+        if candidate.exists():
+            return jsonify(json.loads(candidate.read_text()))
     # Sensible defaults when no config file exists
     return jsonify({
         "familyName": "Family Tree",
@@ -74,6 +81,17 @@ def api_config():
         "timelinePhotos": True,
         "heritageLabels": False,
     })
+
+
+@app.route("/photos/<path:filename>")
+def serve_photo(filename):
+    """Serve photos from private/photos/ or web/photos/ (private takes priority)."""
+    private_photos = PRIVATE_DIR / "photos"
+    web_photos = Path(WEB_DIR) / "photos"
+    for photo_dir in [private_photos, web_photos]:
+        if (photo_dir / filename).exists():
+            return send_from_directory(str(photo_dir), filename)
+    abort(404)
 
 
 @app.route("/api/data")

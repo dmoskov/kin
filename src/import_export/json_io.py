@@ -5,6 +5,7 @@ Includes validation for common data integrity issues.
 """
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -266,3 +267,59 @@ def validate_tree(tree: FamilyTree) -> list[str]:
             warnings.append(f"Union date {u.union_date} before birth of {p2.id}")
 
     return warnings
+
+
+# ── Source-tag parsing ──────────────────────────────────────────────────
+
+# Mapping from common textual source references to canonical source IDs.
+# Extend this dict for your own family's source documents.
+SOURCE_TAG_MAP: dict[str, str] = {
+    "golden book": "golden-book",
+    "golden book questionnaire": "golden-book",
+    "herb's letter": "herb-letter",
+    "herb letter": "herb-letter",
+    "sumner's memoir": "sumner-memoir",
+    "sumner memoir": "sumner-memoir",
+    "fan chart": "fan-chart-2016",
+    "fan chart (may 2016)": "fan-chart-2016",
+    "wikipedia": "wikipedia",
+    "open library": "open-library",
+    "direct submission": "direct-submission",
+}
+
+_SOURCE_PATTERN = re.compile(
+    r"\s*Source:\s*(.+?)\.?\s*$",
+    re.IGNORECASE,
+)
+
+
+def parse_source_tags(notes: str) -> tuple[list[str], str]:
+    """Extract source IDs from notes and return (source_ids, cleaned_notes).
+
+    Looks for "Source: X, Y, Z" at the end of notes.
+    Returns the list of matched source IDs and the notes with the
+    Source line removed.
+    """
+    match = _SOURCE_PATTERN.search(notes)
+    if not match:
+        return [], notes
+
+    raw_sources = match.group(1)
+    cleaned = notes[:match.start()].rstrip()
+
+    # Split on commas, semicolons, or " and "
+    parts = re.split(r"[,;]|\band\b", raw_sources)
+    source_ids = []
+    for part in parts:
+        tag = part.strip().strip(".").lower()
+        # Try exact match first
+        if tag in SOURCE_TAG_MAP:
+            source_ids.append(SOURCE_TAG_MAP[tag])
+        else:
+            # Try substring matching
+            for key, sid in SOURCE_TAG_MAP.items():
+                if key in tag:
+                    source_ids.append(sid)
+                    break
+
+    return list(dict.fromkeys(source_ids)), cleaned  # dedupe preserving order
