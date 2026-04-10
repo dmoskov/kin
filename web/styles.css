@@ -165,6 +165,10 @@ main {
 /* D3 tree styling */
 .node-group { cursor: pointer; }
 
+/* ── Generation bands ───────────────────────────────────────── */
+.gen-band { pointer-events: none; }
+.gen-label { pointer-events: none; user-select: none; }
+
 .node-rect {
   rx: 8;
   ry: 8;
@@ -655,6 +659,94 @@ main {
   border-bottom-color: var(--accent);
 }
 
+/* ── Hovercard ─────────────────────────────────────────────── */
+
+.hovercard {
+  position: fixed;
+  z-index: 100;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  padding: 14px 16px;
+  min-width: 220px;
+  max-width: 320px;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.15s ease;
+}
+.hovercard.hidden { opacity: 0; display: none; }
+
+.hovercard-top {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.hovercard-photo {
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 2px solid var(--border);
+  flex-shrink: 0;
+}
+.hovercard-info { flex: 1; min-width: 0; }
+.hovercard-name {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hovercard-dates {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+.hovercard-place {
+  font-size: 11px;
+  color: var(--accent);
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hovercard-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-top: 4px;
+}
+.hovercard-badge.male { background: rgba(74, 144, 217, 0.2); color: var(--male); }
+.hovercard-badge.female { background: rgba(217, 74, 140, 0.2); color: var(--female); }
+
+/* ── Viewing-As Picker ─────────────────────────────────────── */
+
+.viewing-as {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.viewing-as label { white-space: nowrap; }
+.viewing-as select {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  max-width: 160px;
+}
+
 /* ── Heritage Badges ───────────────────────────────────────── */
 
 .heritage-badge {
@@ -1097,6 +1189,7 @@ main {
   .map-slider { max-width: 100%; width: 100%; }
   .map-legend { flex-wrap: wrap; justify-content: center; }
   .map-legends { align-items: center; }
+  .hovercard { display: none !important; }
 }
 
 @media (max-width: 600px) {

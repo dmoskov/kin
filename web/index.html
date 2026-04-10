@@ -24,6 +24,10 @@
         <button class="tab" data-view="map">Map</button>
         <button class="tab" data-view="relationships">Relationships</button>
       </nav>
+      <div class="viewing-as">
+        <label for="viewing-as-select">Viewing as:</label>
+        <select id="viewing-as-select"></select>
+      </div>
       <button class="theme-toggle" id="theme-toggle" title="Toggle light/dark mode">&#9790;</button>
     </div>
   </header>
@@ -113,6 +117,9 @@
       </div>
     </section>
   </main>
+
+  <!-- Hovercard (positioned absolutely, shown on hover over person links) -->
+  <div id="hovercard" class="hovercard hidden"></div>
 
   <!-- Photo Picker Modal -->
   <div id="photo-picker-overlay" class="photo-picker-overlay hidden">
