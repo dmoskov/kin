@@ -17,9 +17,9 @@ Usage:
 import json
 from pathlib import Path
 
-from flask import Flask, jsonify, send_from_directory, abort
+from flask import Flask, jsonify, request, send_from_directory, abort
 
-from database.connection import init_db
+from database.connection import get_connection, init_db
 from database.repository import TreeRepository
 from import_export.json_io import (
     _citation_to_dict,
@@ -90,6 +90,82 @@ def api_data():
         "citations": [_citation_to_dict(c) for c in tree.citations],
     }
     return jsonify(data)
+
+
+@app.route("/api/photos")
+def api_photos():
+    """Return a list of all photo files in web/photos/."""
+    photos_dir = Path(WEB_DIR) / "photos"
+    if not photos_dir.is_dir():
+        return jsonify([])
+    exts = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+    photos = sorted(
+        f"photos/{f.name}"
+        for f in photos_dir.iterdir()
+        if f.suffix.lower() in exts
+    )
+    return jsonify(photos)
+
+
+@app.route("/api/people/<person_id>/photos", methods=["POST"])
+def api_add_photos(person_id):
+    """Add photos to a person. Body: {"photo_paths": ["photos/foo.jpg"]}"""
+    body = request.get_json(force=True)
+    new_paths = body.get("photo_paths", [])
+    if not new_paths:
+        return jsonify({"error": "photo_paths required"}), 400
+
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT photo_paths FROM people WHERE id = ?", (person_id,)
+        ).fetchone()
+        if not row:
+            return jsonify({"error": "person not found"}), 404
+
+        existing = json.loads(row["photo_paths"] or "[]")
+        merged = list(existing)
+        for p in new_paths:
+            if p not in merged:
+                merged.append(p)
+
+        conn.execute(
+            "UPDATE people SET photo_paths = ?, updated_at = datetime('now') WHERE id = ?",
+            (json.dumps(merged), person_id),
+        )
+        conn.commit()
+        return jsonify({"photo_paths": merged})
+    finally:
+        conn.close()
+
+
+@app.route("/api/people/<person_id>/photos", methods=["DELETE"])
+def api_remove_photo(person_id):
+    """Remove a photo from a person. Body: {"photo_path": "photos/foo.jpg"}"""
+    body = request.get_json(force=True)
+    photo_path = body.get("photo_path", "")
+    if not photo_path:
+        return jsonify({"error": "photo_path required"}), 400
+
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT photo_paths FROM people WHERE id = ?", (person_id,)
+        ).fetchone()
+        if not row:
+            return jsonify({"error": "person not found"}), 404
+
+        existing = json.loads(row["photo_paths"] or "[]")
+        updated = [p for p in existing if p != photo_path]
+
+        conn.execute(
+            "UPDATE people SET photo_paths = ?, updated_at = datetime('now') WHERE id = ?",
+            (json.dumps(updated), person_id),
+        )
+        conn.commit()
+        return jsonify({"photo_paths": updated})
+    finally:
+        conn.close()
 
 
 # ── Standalone dev server ──────────────────────────────────────────────

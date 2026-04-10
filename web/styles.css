@@ -300,6 +300,9 @@ main {
   background: var(--bg);
   border-radius: 6px;
   font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   cursor: pointer;
   transition: background 0.1s;
 }
@@ -322,6 +325,27 @@ main {
 .panel-event-desc { color: var(--text-muted); line-height: 1.4; }
 
 /* ── Person Photo Gallery ──────────────────────────────────── */
+
+.panel-photos-section {
+  padding: 8px 0;
+}
+
+.panel-add-photo-btn {
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  margin-top: 8px;
+  transition: all 0.15s;
+}
+.panel-add-photo-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 
 .panel-photos {
   display: flex;
@@ -632,6 +656,34 @@ main {
   color: var(--text-muted);
 }
 
+.rel-people {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  margin-top: 16px;
+}
+
+.rel-person {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.rel-connector {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 6px 14px;
+  background: var(--bg);
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
 /* ── Map View ───────────────────────────────────────────────── */
 
 .map-wrapper {
@@ -832,6 +884,113 @@ main {
 [data-theme="light"] .leaflet-popup-content-wrapper {
   box-shadow: 0 4px 16px rgba(0,0,0,0.12) !important;
 }
+
+/* ── Person Thumbnails ──────────────────────────────────────── */
+
+.person-thumb {
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1.5px solid var(--border);
+  vertical-align: middle;
+}
+
+.person-thumb-placeholder {
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-weight: 700;
+  color: var(--text);
+  vertical-align: middle;
+}
+.person-thumb-placeholder.male { background: var(--node-male-bg); border: 1.5px solid var(--male); }
+.person-thumb-placeholder.female { background: var(--node-female-bg); border: 1.5px solid var(--female); }
+
+/* ── Photo Picker Modal ────────────────────────────────────── */
+
+.photo-picker-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.photo-picker-overlay.hidden { display: none; }
+
+.photo-picker {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.4);
+  width: 90vw;
+  max-width: 640px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.photo-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.photo-picker-header h3 { font-size: 16px; font-weight: 700; margin: 0; }
+.photo-picker-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 22px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.photo-picker-close:hover { color: var(--text); }
+
+.photo-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 8px;
+  padding: 16px 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.photo-picker-item {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 3px solid transparent;
+  transition: border-color 0.15s, transform 0.1s;
+}
+.photo-picker-item:hover { transform: scale(1.04); }
+.photo-picker-item.selected { border-color: var(--accent); }
+.photo-picker-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.photo-picker-item .check {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.photo-picker-item.selected .check { display: flex; }
 
 /* ── Responsive ─────────────────────────────────────────────── */
 
