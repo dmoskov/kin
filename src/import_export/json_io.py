@@ -39,6 +39,7 @@ def load_tree(path: str) -> FamilyTree:
             nicknames=p.get("nicknames", []),
             notes=p.get("notes", ""),
             photo_paths=p.get("photo_paths", []),
+            email=p.get("email"),
         )
         tree.add_person(person)
 
@@ -124,6 +125,8 @@ def _person_to_dict(p: Person) -> dict[str, Any]:
         d["notes"] = p.notes
     if p.photo_paths:
         d["photo_paths"] = p.photo_paths
+    if p.email:
+        d["email"] = p.email
     return d
 
 

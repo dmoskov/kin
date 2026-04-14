@@ -44,6 +44,7 @@ class Person:
     nicknames: list[str] = field(default_factory=list)
     notes: str = ""
     photo_paths: list[str] = field(default_factory=list)
+    email: Optional[str] = None
 
     @property
     def full_name(self) -> str:

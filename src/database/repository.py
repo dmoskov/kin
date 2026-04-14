@@ -95,6 +95,7 @@ class TreeRepository:
             json.dumps(person.nicknames),
             person.notes,
             json.dumps(person.photo_paths),
+            person.email,
         )
         try:
             if _is_pg():
@@ -102,23 +103,24 @@ class TreeRepository:
                     INSERT INTO people
                         (id, given_name, surname, gender, birth_date, birth_place,
                          death_date, death_place, maiden_name, nicknames, notes,
-                         photo_paths, updated_at)
-                    VALUES ({_ph(12)}, NOW())
+                         photo_paths, email, updated_at)
+                    VALUES ({_ph(13)}, NOW())
                     ON CONFLICT (id) DO UPDATE SET
                         given_name=EXCLUDED.given_name, surname=EXCLUDED.surname,
                         gender=EXCLUDED.gender, birth_date=EXCLUDED.birth_date,
                         birth_place=EXCLUDED.birth_place, death_date=EXCLUDED.death_date,
                         death_place=EXCLUDED.death_place, maiden_name=EXCLUDED.maiden_name,
                         nicknames=EXCLUDED.nicknames, notes=EXCLUDED.notes,
-                        photo_paths=EXCLUDED.photo_paths, updated_at=NOW()
+                        photo_paths=EXCLUDED.photo_paths, email=EXCLUDED.email,
+                        updated_at=NOW()
                 """, params)
             else:
                 _execute(conn, f"""
                     INSERT OR REPLACE INTO people
                         (id, given_name, surname, gender, birth_date, birth_place,
                          death_date, death_place, maiden_name, nicknames, notes,
-                         photo_paths, updated_at)
-                    VALUES ({_ph(12)}, datetime('now'))
+                         photo_paths, email, updated_at)
+                    VALUES ({_ph(13)}, datetime('now'))
                 """, params)
             conn.commit()
         finally:
@@ -360,30 +362,31 @@ class TreeRepository:
                     person.gender.value, person.birth_date, person.birth_place,
                     person.death_date, person.death_place, person.maiden_name,
                     json.dumps(person.nicknames), person.notes,
-                    json.dumps(person.photo_paths),
+                    json.dumps(person.photo_paths), person.email,
                 )
                 if _is_pg():
                     _execute(conn, f"""
                         INSERT INTO people
                             (id, given_name, surname, gender, birth_date, birth_place,
                              death_date, death_place, maiden_name, nicknames, notes,
-                             photo_paths, updated_at)
-                        VALUES ({_ph(12)}, NOW())
+                             photo_paths, email, updated_at)
+                        VALUES ({_ph(13)}, NOW())
                         ON CONFLICT (id) DO UPDATE SET
                             given_name=EXCLUDED.given_name, surname=EXCLUDED.surname,
                             gender=EXCLUDED.gender, birth_date=EXCLUDED.birth_date,
                             birth_place=EXCLUDED.birth_place, death_date=EXCLUDED.death_date,
                             death_place=EXCLUDED.death_place, maiden_name=EXCLUDED.maiden_name,
                             nicknames=EXCLUDED.nicknames, notes=EXCLUDED.notes,
-                            photo_paths=EXCLUDED.photo_paths, updated_at=NOW()
+                            photo_paths=EXCLUDED.photo_paths, email=EXCLUDED.email,
+                            updated_at=NOW()
                     """, params)
                 else:
                     _execute(conn, f"""
                         INSERT OR REPLACE INTO people
                             (id, given_name, surname, gender, birth_date, birth_place,
                              death_date, death_place, maiden_name, nicknames, notes,
-                             photo_paths, updated_at)
-                        VALUES ({_ph(12)}, datetime('now'))
+                             photo_paths, email, updated_at)
+                        VALUES ({_ph(13)}, datetime('now'))
                     """, params)
 
             for rel in tree.relationships:
@@ -562,6 +565,19 @@ class TreeRepository:
 
     # ── Internal helpers ────────────────────────────────────────────────
 
+    def get_person_by_email(self, email: str) -> Optional[Person]:
+        """Fetch a single Person by email address."""
+        conn = self._conn()
+        try:
+            row = _fetchone(
+                conn,
+                f"SELECT * FROM people WHERE email = {_ph()}",
+                (email,),
+            )
+            return self._row_to_person(row) if row else None
+        finally:
+            conn.close()
+
     @staticmethod
     def _row_to_person(row: dict) -> Person:
         return Person(
@@ -577,6 +593,7 @@ class TreeRepository:
             nicknames=json.loads(row["nicknames"] or "[]"),
             notes=row["notes"] or "",
             photo_paths=json.loads(row["photo_paths"] or "[]"),
+            email=row.get("email"),
         )
 
     @staticmethod

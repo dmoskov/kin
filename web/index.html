@@ -24,9 +24,24 @@
         <button class="tab" data-view="map">Map</button>
         <button class="tab" data-view="relationships">Relationships</button>
       </nav>
-      <div class="viewing-as">
-        <label for="viewing-as-select">Viewing as:</label>
-        <select id="viewing-as-select"></select>
+      <div class="auth-section">
+        <!-- Logged-in state -->
+        <div id="auth-logged-in" class="hidden" style="display:none">
+          <span class="auth-user-name" id="auth-user-name"></span>
+          <div class="viewing-as">
+            <label for="viewing-as-select">Viewing as:</label>
+            <select id="viewing-as-select"></select>
+          </div>
+          <button class="auth-logout-btn" id="auth-logout-btn" title="Sign out">Sign out</button>
+        </div>
+        <!-- Logged-out state -->
+        <div id="auth-logged-out">
+          <div class="viewing-as">
+            <label for="viewing-as-select-anon">Viewing as:</label>
+            <select id="viewing-as-select-anon"></select>
+          </div>
+          <div id="google-signin-btn"></div>
+        </div>
       </div>
       <button class="theme-toggle" id="theme-toggle" title="Toggle light/dark mode">&#9790;</button>
     </div>
@@ -132,6 +147,7 @@
     </div>
   </div>
 
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="app.js"></script>

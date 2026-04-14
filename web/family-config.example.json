@@ -63,5 +63,7 @@
   },
 
   "timelinePhotos": true,
-  "heritageLabels": true
+  "heritageLabels": true,
+
+  "googleClientId": ""
 }

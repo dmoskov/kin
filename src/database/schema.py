@@ -5,7 +5,7 @@ The schema mirrors the domain models in models/ and is designed for
 efficient querying.
 """
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # ═══════════════════════════════════════════════════════════════════════
 # SQLite schema (local dev / tests)
@@ -113,10 +113,22 @@ CREATE INDEX IF NOT EXISTS idx_citations_source ON citations(source_id);
 CREATE INDEX IF NOT EXISTS idx_citations_entity ON citations(entity_type, entity_id);
 """
 
-SCHEMA_SQL = SCHEMA_V1 + SCHEMA_V2
+SCHEMA_V3 = """
+ALTER TABLE people ADD COLUMN email TEXT;
+"""
+
+# Known email addresses to seed after V3 migration
+SEED_EMAILS = {
+    "dustin": "REDACTED_EMAIL",
+    "tree-member-1": "REDACTED_EMAIL",
+    "cari": "REDACTED_EMAIL",
+}
+
+SCHEMA_SQL = SCHEMA_V1 + SCHEMA_V2 + SCHEMA_V3
 
 MIGRATIONS = {
     2: SCHEMA_V2,
+    3: SCHEMA_V3,
 }
 
 
@@ -226,8 +238,14 @@ CREATE INDEX IF NOT EXISTS idx_citations_source ON citations(source_id);
 CREATE INDEX IF NOT EXISTS idx_citations_entity ON citations(entity_type, entity_id);
 """
 
-PG_SCHEMA_SQL = PG_SCHEMA_V1 + PG_SCHEMA_V2
+PG_SCHEMA_V3 = """
+ALTER TABLE people ADD COLUMN IF NOT EXISTS email TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_people_email ON people(email) WHERE email IS NOT NULL;
+"""
+
+PG_SCHEMA_SQL = PG_SCHEMA_V1 + PG_SCHEMA_V2 + PG_SCHEMA_V3
 
 PG_MIGRATIONS = {
     2: PG_SCHEMA_V2,
+    3: PG_SCHEMA_V3,
 }

@@ -15,12 +15,18 @@ Usage:
 """
 
 import json
+import logging
+import os
 from pathlib import Path
+from urllib.request import urlopen
+from urllib.error import URLError
 
-from flask import Flask, jsonify, request, send_from_directory, abort
+from flask import Flask, jsonify, request, send_from_directory, abort, session
 
 from database.connection import get_connection, init_db
 from database.repository import TreeRepository
+
+logger = logging.getLogger(__name__)
 from import_export.json_io import (
     _citation_to_dict,
     _event_to_dict,
@@ -38,6 +44,7 @@ WEB_DIR = str(PROJECT_ROOT / "web")
 PRIVATE_DIR = PROJECT_ROOT / "private"
 
 app = Flask(__name__, static_folder=WEB_DIR, static_url_path="")
+app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-in-production")
 
 
 @app.before_request
@@ -112,17 +119,18 @@ def api_data():
 
 @app.route("/api/photos")
 def api_photos():
-    """Return a list of all photo files in web/photos/."""
-    photos_dir = Path(WEB_DIR) / "photos"
-    if not photos_dir.is_dir():
-        return jsonify([])
+    """Return a list of all photo files from private/photos/ and web/photos/."""
     exts = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
-    photos = sorted(
-        f"photos/{f.name}"
-        for f in photos_dir.iterdir()
-        if f.suffix.lower() in exts
-    )
-    return jsonify(photos)
+    seen = set()
+    photos = []
+    for photo_dir in [PRIVATE_DIR / "photos", Path(WEB_DIR) / "photos"]:
+        if not photo_dir.is_dir():
+            continue
+        for f in photo_dir.iterdir():
+            if f.suffix.lower() in exts and f.name not in seen:
+                seen.add(f.name)
+                photos.append(f"photos/{f.name}")
+    return jsonify(sorted(photos))
 
 
 @app.route("/api/people/<person_id>/photos", methods=["POST"])
@@ -182,6 +190,148 @@ def api_remove_photo(person_id):
         )
         conn.commit()
         return jsonify({"photo_paths": updated})
+    finally:
+        conn.close()
+
+
+# ── Authentication ─────────────────────────────────────────────────────
+
+def _get_google_client_id() -> str | None:
+    """Get the Google Client ID from env or config file."""
+    client_id = os.environ.get("GOOGLE_CLIENT_ID")
+    if client_id:
+        return client_id
+    # Fall back to family-config.json
+    for candidate in [
+        PRIVATE_DIR / "config" / "family-config.json",
+        Path(WEB_DIR) / "family-config.json",
+    ]:
+        if candidate.exists():
+            config = json.loads(candidate.read_text())
+            if config.get("googleClientId"):
+                return config["googleClientId"]
+    return None
+
+
+GOOGLE_TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo"
+
+
+def _verify_id_token(credential: str) -> dict | None:
+    """Verify a Google ID token via the tokeninfo endpoint.
+
+    Returns the token payload dict on success, or None on failure.
+    Matches the pattern used in the Sutro dashboard.
+    """
+    try:
+        url = f"{GOOGLE_TOKENINFO_URL}?id_token={credential}"
+        with urlopen(url, timeout=5) as resp:
+            if resp.status != 200:
+                return None
+            return json.loads(resp.read())
+    except (URLError, ValueError, OSError) as e:
+        logger.warning("tokeninfo request failed: %s", e)
+        return None
+
+
+@app.route("/api/auth/google", methods=["POST"])
+def api_auth_google():
+    """Authenticate with a Google ID token.
+
+    Body: {"credential": "<google id_token>"}
+    Returns: {"person_id": "...", "name": "...", "email": "..."}
+    """
+    body = request.get_json(force=True)
+    credential = body.get("credential", "")
+    if not credential:
+        return jsonify({"error": "credential required"}), 400
+
+    # Verify token with Google
+    payload = _verify_id_token(credential)
+    if not payload:
+        return jsonify({"error": "Invalid Google token"}), 401
+
+    email = (payload.get("email") or "").lower()
+    if not email or payload.get("email_verified") != "true":
+        return jsonify({"error": "Email not verified"}), 401
+
+    # Validate audience matches our client ID
+    client_id = _get_google_client_id()
+    if client_id:
+        aud = payload.get("aud", "")
+        if aud != client_id:
+            logger.warning("Token aud %s does not match expected client_id", aud)
+            return jsonify({"error": "Token audience mismatch"}), 401
+
+    # Look up the person by email
+    repo = TreeRepository()
+    person = repo.get_person_by_email(email)
+    if not person:
+        return jsonify({
+            "error": "No matching person record for this email",
+            "email": email,
+        }), 403
+
+    # Set session
+    session["person_id"] = person.id
+    session["email"] = email
+    session["name"] = person.full_name
+
+    return jsonify({
+        "person_id": person.id,
+        "name": person.full_name,
+        "email": email,
+    })
+
+
+@app.route("/api/auth/me")
+def api_auth_me():
+    """Return the current logged-in user, or 401."""
+    if "person_id" not in session:
+        return jsonify({"error": "not authenticated"}), 401
+    return jsonify({
+        "person_id": session["person_id"],
+        "name": session.get("name", ""),
+        "email": session.get("email", ""),
+    })
+
+
+@app.route("/api/auth/logout", methods=["POST"])
+def api_auth_logout():
+    """Clear the session."""
+    session.clear()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/people/<person_id>/email", methods=["PUT"])
+def api_set_email(person_id):
+    """Set the email for a person. Body: {"email": "user@example.com"}
+
+    Only the admin (admin) can set emails for other people.
+    Any logged-in user can clear their own email.
+    """
+    # Simple admin check — only Dustin can assign emails
+    admin_id = session.get("person_id")
+    if admin_id != "dustin":
+        return jsonify({"error": "admin only"}), 403
+
+    body = request.get_json(force=True)
+    email = body.get("email", "").strip().lower() or None
+
+    conn = get_connection()
+    try:
+        if os.environ.get("DATABASE_URL"):
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE people SET email = %s WHERE id = %s",
+                (email, person_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE people SET email = ? WHERE id = ?",
+                (email, person_id),
+            )
+        conn.commit()
+        return jsonify({"email": email, "person_id": person_id})
     finally:
         conn.close()
 
