@@ -122,6 +122,9 @@ SEED_EMAILS = {
     "dustin": "REDACTED_EMAIL",
     "tree-member-1": "REDACTED_EMAIL",
     "cari": "REDACTED_EMAIL",
+    "tree-member-2": "REDACTED_EMAIL",
+    "tree-member-3": "REDACTED_EMAIL",
+    "tree-member-4": "REDACTED_EMAIL",
 }
 
 SCHEMA_SQL = SCHEMA_V1 + SCHEMA_V2 + SCHEMA_V3
