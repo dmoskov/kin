@@ -44,6 +44,7 @@ class Person:
     nicknames: list[str] = field(default_factory=list)
     notes: str = ""
     photo_paths: list[str] = field(default_factory=list)
+    photo_captions: dict[str, str] = field(default_factory=dict)
     email: Optional[str] = None
 
     @property

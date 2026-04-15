@@ -5,7 +5,7 @@ The schema mirrors the domain models in models/ and is designed for
 efficient querying.
 """
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # ═══════════════════════════════════════════════════════════════════════
 # SQLite schema (local dev / tests)
@@ -127,11 +127,16 @@ SEED_EMAILS = {
     "tree-member-4": "REDACTED_EMAIL",
 }
 
-SCHEMA_SQL = SCHEMA_V1 + SCHEMA_V2 + SCHEMA_V3
+SCHEMA_V4 = """
+ALTER TABLE people ADD COLUMN photo_captions TEXT DEFAULT '{}';
+"""
+
+SCHEMA_SQL = SCHEMA_V1 + SCHEMA_V2 + SCHEMA_V3 + SCHEMA_V4
 
 MIGRATIONS = {
     2: SCHEMA_V2,
     3: SCHEMA_V3,
+    4: SCHEMA_V4,
 }
 
 
@@ -246,9 +251,14 @@ ALTER TABLE people ADD COLUMN IF NOT EXISTS email TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_people_email ON people(email) WHERE email IS NOT NULL;
 """
 
-PG_SCHEMA_SQL = PG_SCHEMA_V1 + PG_SCHEMA_V2 + PG_SCHEMA_V3
+PG_SCHEMA_V4 = """
+ALTER TABLE people ADD COLUMN IF NOT EXISTS photo_captions TEXT DEFAULT '{}';
+"""
+
+PG_SCHEMA_SQL = PG_SCHEMA_V1 + PG_SCHEMA_V2 + PG_SCHEMA_V3 + PG_SCHEMA_V4
 
 PG_MIGRATIONS = {
     2: PG_SCHEMA_V2,
     3: PG_SCHEMA_V3,
+    4: PG_SCHEMA_V4,
 }

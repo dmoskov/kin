@@ -151,12 +151,25 @@
   <div id="photo-picker-overlay" class="photo-picker-overlay hidden">
     <div class="photo-picker">
       <div class="photo-picker-header">
-        <h3 id="photo-picker-title">Assign Photos</h3>
+        <h3 id="photo-picker-title">Manage Photos</h3>
         <button class="photo-picker-close" id="photo-picker-close">&times;</button>
+      </div>
+      <div class="photo-upload-zone" id="photo-upload-zone">
+        <div class="upload-zone-content">
+          <span class="upload-icon">&#128247;</span>
+          <span>Drop photos here or <label for="photo-file-input" class="upload-browse-link">browse</label></span>
+        </div>
+        <input type="file" id="photo-file-input" multiple accept="image/*" style="display:none" />
+        <div class="upload-progress hidden" id="upload-progress">
+          <span id="upload-progress-text">Uploading...</span>
+        </div>
       </div>
       <div class="photo-picker-grid" id="photo-picker-grid"></div>
     </div>
   </div>
+
+  <!-- Toast notification -->
+  <div id="toast" class="toast hidden"></div>
 
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://d3js.org/d3.v7.min.js"></script>

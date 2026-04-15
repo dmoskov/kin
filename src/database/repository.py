@@ -95,6 +95,7 @@ class TreeRepository:
             json.dumps(person.nicknames),
             person.notes,
             json.dumps(person.photo_paths),
+            json.dumps(person.photo_captions),
             person.email,
         )
         try:
@@ -103,24 +104,24 @@ class TreeRepository:
                     INSERT INTO people
                         (id, given_name, surname, gender, birth_date, birth_place,
                          death_date, death_place, maiden_name, nicknames, notes,
-                         photo_paths, email, updated_at)
-                    VALUES ({_ph(13)}, NOW())
+                         photo_paths, photo_captions, email, updated_at)
+                    VALUES ({_ph(14)}, NOW())
                     ON CONFLICT (id) DO UPDATE SET
                         given_name=EXCLUDED.given_name, surname=EXCLUDED.surname,
                         gender=EXCLUDED.gender, birth_date=EXCLUDED.birth_date,
                         birth_place=EXCLUDED.birth_place, death_date=EXCLUDED.death_date,
                         death_place=EXCLUDED.death_place, maiden_name=EXCLUDED.maiden_name,
                         nicknames=EXCLUDED.nicknames, notes=EXCLUDED.notes,
-                        photo_paths=EXCLUDED.photo_paths, email=EXCLUDED.email,
-                        updated_at=NOW()
+                        photo_paths=EXCLUDED.photo_paths, photo_captions=EXCLUDED.photo_captions,
+                        email=EXCLUDED.email, updated_at=NOW()
                 """, params)
             else:
                 _execute(conn, f"""
                     INSERT OR REPLACE INTO people
                         (id, given_name, surname, gender, birth_date, birth_place,
                          death_date, death_place, maiden_name, nicknames, notes,
-                         photo_paths, email, updated_at)
-                    VALUES ({_ph(13)}, datetime('now'))
+                         photo_paths, photo_captions, email, updated_at)
+                    VALUES ({_ph(14)}, datetime('now'))
                 """, params)
             conn.commit()
         finally:
@@ -362,31 +363,32 @@ class TreeRepository:
                     person.gender.value, person.birth_date, person.birth_place,
                     person.death_date, person.death_place, person.maiden_name,
                     json.dumps(person.nicknames), person.notes,
-                    json.dumps(person.photo_paths), person.email,
+                    json.dumps(person.photo_paths), json.dumps(person.photo_captions),
+                    person.email,
                 )
                 if _is_pg():
                     _execute(conn, f"""
                         INSERT INTO people
                             (id, given_name, surname, gender, birth_date, birth_place,
                              death_date, death_place, maiden_name, nicknames, notes,
-                             photo_paths, email, updated_at)
-                        VALUES ({_ph(13)}, NOW())
+                             photo_paths, photo_captions, email, updated_at)
+                        VALUES ({_ph(14)}, NOW())
                         ON CONFLICT (id) DO UPDATE SET
                             given_name=EXCLUDED.given_name, surname=EXCLUDED.surname,
                             gender=EXCLUDED.gender, birth_date=EXCLUDED.birth_date,
                             birth_place=EXCLUDED.birth_place, death_date=EXCLUDED.death_date,
                             death_place=EXCLUDED.death_place, maiden_name=EXCLUDED.maiden_name,
                             nicknames=EXCLUDED.nicknames, notes=EXCLUDED.notes,
-                            photo_paths=EXCLUDED.photo_paths, email=EXCLUDED.email,
-                            updated_at=NOW()
+                            photo_paths=EXCLUDED.photo_paths, photo_captions=EXCLUDED.photo_captions,
+                            email=EXCLUDED.email, updated_at=NOW()
                     """, params)
                 else:
                     _execute(conn, f"""
                         INSERT OR REPLACE INTO people
                             (id, given_name, surname, gender, birth_date, birth_place,
                              death_date, death_place, maiden_name, nicknames, notes,
-                             photo_paths, email, updated_at)
-                        VALUES ({_ph(13)}, datetime('now'))
+                             photo_paths, photo_captions, email, updated_at)
+                        VALUES ({_ph(14)}, datetime('now'))
                     """, params)
 
             for rel in tree.relationships:
@@ -593,6 +595,7 @@ class TreeRepository:
             nicknames=json.loads(row["nicknames"] or "[]"),
             notes=row["notes"] or "",
             photo_paths=json.loads(row["photo_paths"] or "[]"),
+            photo_captions=json.loads(row.get("photo_captions") or "{}"),
             email=row.get("email"),
         )
 

@@ -17,6 +17,8 @@ Usage:
 import json
 import logging
 import os
+import re
+import time
 from pathlib import Path
 from urllib.request import urlopen
 from urllib.error import URLError
@@ -45,6 +47,7 @@ PRIVATE_DIR = PROJECT_ROOT / "private"
 
 app = Flask(__name__, static_folder=WEB_DIR, static_url_path="")
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-in-production")
+app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # 10 MB upload limit
 
 
 @app.before_request
@@ -190,6 +193,79 @@ def api_remove_photo(person_id):
         )
         conn.commit()
         return jsonify({"photo_paths": updated})
+    finally:
+        conn.close()
+
+
+ALLOWED_PHOTO_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+
+
+def _sanitize_filename(name: str) -> str:
+    """Turn a filename into a safe slug with timestamp prefix."""
+    stem = Path(name).stem
+    ext = Path(name).suffix.lower()
+    slug = re.sub(r"[^a-z0-9]+", "-", stem.lower()).strip("-")[:80]
+    ts = int(time.time())
+    return f"{ts}-{slug}{ext}"
+
+
+@app.route("/api/photos/upload", methods=["POST"])
+def api_upload_photo():
+    """Upload a photo file. Returns {"path": "photos/..."}."""
+    if "photo" not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+
+    f = request.files["photo"]
+    if not f.filename:
+        return jsonify({"error": "Empty filename"}), 400
+
+    ext = Path(f.filename).suffix.lower()
+    if ext not in ALLOWED_PHOTO_EXTS:
+        return jsonify({"error": f"Invalid file type: {ext}"}), 400
+
+    safe_name = _sanitize_filename(f.filename)
+    photo_dir = PRIVATE_DIR / "photos"
+    photo_dir.mkdir(parents=True, exist_ok=True)
+
+    dest = photo_dir / safe_name
+    f.save(str(dest))
+
+    return jsonify({"path": f"photos/{safe_name}"})
+
+
+@app.route("/api/people/<person_id>/photo-caption", methods=["PUT"])
+def api_set_photo_caption(person_id):
+    """Set caption for a photo on a person.
+
+    Body: {"photo_path": "photos/foo.jpg", "caption": "Easter 1987"}
+    """
+    body = request.get_json(force=True)
+    photo_path = body.get("photo_path", "")
+    caption = body.get("caption", "").strip()
+
+    if not photo_path:
+        return jsonify({"error": "photo_path required"}), 400
+
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT photo_captions FROM people WHERE id = ?", (person_id,)
+        ).fetchone()
+        if not row:
+            return jsonify({"error": "person not found"}), 404
+
+        captions = json.loads(row["photo_captions"] or "{}")
+        if caption:
+            captions[photo_path] = caption
+        else:
+            captions.pop(photo_path, None)
+
+        conn.execute(
+            "UPDATE people SET photo_captions = ?, updated_at = datetime('now') WHERE id = ?",
+            (json.dumps(captions), person_id),
+        )
+        conn.commit()
+        return jsonify({"photo_captions": captions})
     finally:
         conn.close()
 
