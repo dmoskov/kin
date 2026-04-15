@@ -275,11 +275,13 @@ def api_auth_google():
     session["person_id"] = person.id
     session["email"] = email
     session["name"] = person.full_name
+    session["picture"] = payload.get("picture", "")
 
     return jsonify({
         "person_id": person.id,
         "name": person.full_name,
         "email": email,
+        "picture": payload.get("picture", ""),
     })
 
 
@@ -292,6 +294,7 @@ def api_auth_me():
         "person_id": session["person_id"],
         "name": session.get("name", ""),
         "email": session.get("email", ""),
+        "picture": session.get("picture", ""),
     })
 
 

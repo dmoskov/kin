@@ -757,33 +757,145 @@ main {
   display: flex;
   align-items: center;
   gap: 10px;
+  position: relative;
 }
 #auth-logged-in {
+  position: relative;
+}
+
+/* ── User Pill (logged-in identity chip) ───────────────────── */
+
+.user-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 12px 4px 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+  color: var(--text);
+}
+.user-pill:hover {
+  border-color: var(--accent);
+  background: var(--surface-hover);
+}
+.user-pill-photo {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--border);
+}
+.user-pill-name {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.user-pill-arrow {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-left: -2px;
+}
+
+/* ── User Menu (dropdown) ──────────────────────────────────── */
+
+.user-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  min-width: 240px;
+  z-index: 200;
+  padding: 8px 0;
+  animation: menuFadeIn 0.12s ease;
+}
+.user-menu.hidden { display: none; }
+
+@keyframes menuFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.user-menu-header {
   display: flex;
   align-items: center;
   gap: 10px;
+  padding: 10px 16px;
 }
-.auth-user-name {
-  font-size: 12px;
-  color: var(--accent);
-  font-weight: 600;
-  white-space: nowrap;
+.user-menu-photo {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--border);
+  flex-shrink: 0;
 }
-.auth-logout-btn {
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  font-size: 11px;
-  padding: 3px 10px;
-  border-radius: var(--radius);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.15s;
-}
-.auth-logout-btn:hover {
-  border-color: var(--accent);
+.user-menu-name {
+  font-size: 14px;
+  font-weight: 700;
   color: var(--text);
 }
+.user-menu-email {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 170px;
+}
+.user-menu-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+.user-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  color: var(--text);
+}
+.user-menu-item label {
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.user-menu-item select {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+}
+.user-menu-logout {
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text-muted);
+  transition: all 0.15s;
+  justify-content: flex-start;
+}
+.user-menu-logout:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
 #google-signin-btn {
   min-width: 100px;
 }

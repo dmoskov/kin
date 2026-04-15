@@ -25,21 +25,32 @@
         <button class="tab" data-view="relationships">Relationships</button>
       </nav>
       <div class="auth-section">
-        <!-- Logged-in state -->
-        <div id="auth-logged-in" class="hidden" style="display:none">
-          <span class="auth-user-name" id="auth-user-name"></span>
-          <div class="viewing-as">
-            <label for="viewing-as-select">Viewing as:</label>
-            <select id="viewing-as-select"></select>
+        <!-- Logged-in state: user pill with dropdown menu -->
+        <div id="auth-logged-in" style="display:none">
+          <button class="user-pill" id="user-pill">
+            <img class="user-pill-photo" id="user-pill-photo" src="" alt="" />
+            <span class="user-pill-name" id="user-pill-name"></span>
+            <span class="user-pill-arrow">&#9662;</span>
+          </button>
+          <div class="user-menu hidden" id="user-menu">
+            <div class="user-menu-header">
+              <img class="user-menu-photo" id="user-menu-photo" src="" alt="" />
+              <div>
+                <div class="user-menu-name" id="user-menu-name"></div>
+                <div class="user-menu-email" id="user-menu-email"></div>
+              </div>
+            </div>
+            <div class="user-menu-divider"></div>
+            <div class="user-menu-item">
+              <label for="viewing-as-select">Viewing tree as:</label>
+              <select id="viewing-as-select"></select>
+            </div>
+            <div class="user-menu-divider"></div>
+            <button class="user-menu-item user-menu-logout" id="auth-logout-btn">Sign out</button>
           </div>
-          <button class="auth-logout-btn" id="auth-logout-btn" title="Sign out">Sign out</button>
         </div>
-        <!-- Logged-out state -->
+        <!-- Logged-out state: just the sign-in button -->
         <div id="auth-logged-out">
-          <div class="viewing-as">
-            <label for="viewing-as-select-anon">Viewing as:</label>
-            <select id="viewing-as-select-anon"></select>
-          </div>
           <div id="google-signin-btn"></div>
         </div>
       </div>
