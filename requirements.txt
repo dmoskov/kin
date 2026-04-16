@@ -1,3 +1,5 @@
 flask==3.1.*
 gunicorn==23.*
 psycopg2-binary==2.9.*
+anthropic>=0.40
+pdfplumber>=0.11

@@ -270,6 +270,308 @@ def api_set_photo_caption(person_id):
         conn.close()
 
 
+# ── Document Upload & AI Parsing ───────────────────────────────────────
+
+import uuid
+
+ALLOWED_DOC_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".pdf"}
+
+
+@app.route("/api/documents/upload", methods=["POST"])
+def api_upload_document():
+    """Upload a document for AI parsing.
+
+    Returns: {"document_id": "...", "filename": "...", "status": "uploaded"}
+    """
+    if "file" not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+
+    f = request.files["file"]
+    if not f.filename:
+        return jsonify({"error": "Empty filename"}), 400
+
+    ext = Path(f.filename).suffix.lower()
+    if ext not in ALLOWED_DOC_EXTS:
+        return jsonify({"error": f"Unsupported file type: {ext}. Use images or PDF."}), 400
+
+    doc_id = str(uuid.uuid4())[:12]
+    safe_name = _sanitize_filename(f.filename)
+    doc_dir = PRIVATE_DIR / "documents"
+    doc_dir.mkdir(parents=True, exist_ok=True)
+
+    dest = doc_dir / safe_name
+    f.save(str(dest))
+
+    # Record in DB
+    file_type = "pdf" if ext == ".pdf" else "image"
+    uploaded_by = session.get("person_id")
+
+    conn = get_connection()
+    try:
+        conn.execute(
+            "INSERT INTO documents (id, filename, file_path, file_type, uploaded_by) VALUES (?, ?, ?, ?, ?)",
+            (doc_id, f.filename, f"documents/{safe_name}", file_type, uploaded_by),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({
+        "document_id": doc_id,
+        "filename": f.filename,
+        "file_type": file_type,
+        "status": "uploaded",
+    })
+
+
+@app.route("/api/documents/<doc_id>/parse", methods=["POST"])
+def api_parse_document(doc_id):
+    """Trigger AI parsing of a document. Returns proposed changes for review."""
+    conn = get_connection()
+    try:
+        row = conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
+        if not row:
+            return jsonify({"error": "Document not found"}), 404
+
+        file_path = str(PRIVATE_DIR / row["file_path"])
+        if not Path(file_path).exists():
+            return jsonify({"error": "Document file not found on disk"}), 404
+
+        # Update status to parsing
+        conn.execute(
+            "UPDATE documents SET status = 'parsing' WHERE id = ?", (doc_id,)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    # Get existing people for matching
+    repo = TreeRepository()
+    tree = repo.load_tree()
+    existing_people = [
+        {
+            "id": p.id,
+            "given_name": p.given_name,
+            "surname": p.surname,
+            "birth_date": p.birth_date,
+            "death_date": p.death_date,
+            "maiden_name": p.maiden_name,
+            "gender": p.gender.value,
+        }
+        for p in tree.people.values()
+    ]
+
+    # Run AI parsing
+    try:
+        from intelligence.document_parser import parse_document
+        result = parse_document(
+            file_path=file_path,
+            existing_people=existing_people,
+            document_filename=row["filename"],
+        )
+    except Exception as e:
+        logger.error("Document parsing failed: %s", e)
+        conn = get_connection()
+        try:
+            conn.execute(
+                "UPDATE documents SET status = 'error', parsed_data = ? WHERE id = ?",
+                (json.dumps({"error": str(e)}), doc_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return jsonify({"error": f"Parsing failed: {e}"}), 500
+
+    # Check for error in result
+    if "error" in result:
+        conn = get_connection()
+        try:
+            conn.execute(
+                "UPDATE documents SET status = 'error', parsed_data = ? WHERE id = ?",
+                (json.dumps(result), doc_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return jsonify(result), 500
+
+    # Save parsed data and update status
+    conn = get_connection()
+    try:
+        conn.execute(
+            "UPDATE documents SET status = 'parsed', parsed_data = ? WHERE id = ?",
+            (json.dumps(result), doc_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({
+        "document_id": doc_id,
+        "status": "parsed",
+        "proposed_changes": result,
+    })
+
+
+@app.route("/api/documents/<doc_id>/apply", methods=["POST"])
+def api_apply_document(doc_id):
+    """Apply reviewed/edited changes from a parsed document to the database.
+
+    Body: The proposed_changes JSON (possibly edited by user in the review modal).
+    """
+    changes = request.get_json(force=True)
+
+    conn = get_connection()
+    try:
+        row = conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
+        if not row:
+            return jsonify({"error": "Document not found"}), 404
+    finally:
+        conn.close()
+
+    repo = TreeRepository()
+    applied = {"people": 0, "relationships": 0, "events": 0, "unions": 0}
+
+    # Create a Source for this document
+    from models.source import Source, SourceType
+    source = Source(
+        id=f"doc-{doc_id}",
+        name=row["filename"],
+        source_type=SourceType.DOCUMENT,
+        description=changes.get("summary", "Uploaded document"),
+    )
+    repo.save_source(source)
+
+    # Apply people
+    from models.person import Person, Gender
+    for p_data in changes.get("people", []):
+        person_id = p_data.get("id", "")
+        if not person_id or not p_data.get("given_name"):
+            continue
+
+        # Check if person exists
+        existing = repo.get_person(person_id)
+        if existing:
+            # Update fields that are currently empty
+            changed = False
+            for field in ("birth_date", "birth_place", "death_date", "death_place", "maiden_name"):
+                new_val = p_data.get(field)
+                if new_val and not getattr(existing, field):
+                    setattr(existing, field, new_val)
+                    changed = True
+            if p_data.get("notes") and not existing.notes:
+                existing.notes = p_data["notes"]
+                changed = True
+            if changed:
+                repo.save_person(existing)
+                applied["people"] += 1
+        elif p_data.get("is_new"):
+            # Create new person
+            gender_val = p_data.get("gender", "unknown")
+            try:
+                gender = Gender(gender_val)
+            except ValueError:
+                gender = Gender.UNKNOWN
+
+            person = Person(
+                id=person_id,
+                given_name=p_data["given_name"],
+                surname=p_data.get("surname", ""),
+                gender=gender,
+                birth_date=p_data.get("birth_date"),
+                birth_place=p_data.get("birth_place"),
+                death_date=p_data.get("death_date"),
+                death_place=p_data.get("death_place"),
+                maiden_name=p_data.get("maiden_name"),
+                notes=p_data.get("notes", ""),
+            )
+            repo.save_person(person)
+            applied["people"] += 1
+
+    # Apply relationships
+    from models.relationship import Relationship, RelationshipType
+    for r_data in changes.get("relationships", []):
+        parent_id = r_data.get("parent_id", "")
+        child_id = r_data.get("child_id", "")
+        if not parent_id or not child_id:
+            continue
+        try:
+            rel_type = RelationshipType(r_data.get("rel_type", "biological"))
+        except ValueError:
+            rel_type = RelationshipType.BIOLOGICAL
+        rel = Relationship(parent_id=parent_id, child_id=child_id, rel_type=rel_type)
+        try:
+            repo.save_relationship(rel)
+            applied["relationships"] += 1
+        except Exception as e:
+            logger.warning("Could not save relationship %s→%s: %s", parent_id, child_id, e)
+
+    # Apply events
+    from models.event import LifeEvent, EventType
+    for e_data in changes.get("events", []):
+        person_id = e_data.get("person_id", "")
+        if not person_id:
+            continue
+        try:
+            event_type = EventType(e_data.get("event_type", "custom"))
+        except ValueError:
+            event_type = EventType.CUSTOM
+        event = LifeEvent(
+            person_id=person_id,
+            event_type=event_type,
+            date=e_data.get("date"),
+            end_date=e_data.get("end_date"),
+            place=e_data.get("place"),
+            description=e_data.get("description", ""),
+            source=f"doc-{doc_id}",
+        )
+        try:
+            repo.save_event(event)
+            applied["events"] += 1
+        except Exception as e:
+            logger.warning("Could not save event for %s: %s", person_id, e)
+
+    # Apply unions
+    from models.relationship import Union
+    for u_data in changes.get("unions", []):
+        p1 = u_data.get("partner1_id", "")
+        p2 = u_data.get("partner2_id", "")
+        if not p1 or not p2:
+            continue
+        union = Union(
+            partner1_id=p1,
+            partner2_id=p2,
+            union_date=u_data.get("union_date"),
+            union_place=u_data.get("union_place"),
+        )
+        try:
+            repo.save_union(union)
+            applied["unions"] += 1
+        except Exception as e:
+            logger.warning("Could not save union %s + %s: %s", p1, p2, e)
+
+    # Update document status
+    conn = get_connection()
+    try:
+        conn.execute(
+            "UPDATE documents SET status = 'applied' WHERE id = ?", (doc_id,)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({"status": "applied", "applied": applied})
+
+
+@app.route("/documents/<path:filename>")
+def serve_document(filename):
+    """Serve uploaded documents from private/documents/."""
+    doc_dir = PRIVATE_DIR / "documents"
+    if (doc_dir / filename).exists():
+        return send_from_directory(str(doc_dir), filename)
+    abort(404)
+
+
 # ── Authentication ─────────────────────────────────────────────────────
 
 def _get_google_client_id() -> str | None:

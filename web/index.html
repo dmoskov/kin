@@ -54,6 +54,7 @@
           <div id="google-signin-btn"></div>
         </div>
       </div>
+      <button class="doc-upload-btn" id="doc-upload-btn" title="Upload a document for AI parsing">&#128196; Upload Doc</button>
       <button class="theme-toggle" id="theme-toggle" title="Toggle light/dark mode">&#9790;</button>
     </div>
   </header>
@@ -170,6 +171,44 @@
 
   <!-- Toast notification -->
   <div id="toast" class="toast hidden"></div>
+
+  <!-- Document Upload Modal -->
+  <div id="doc-upload-overlay" class="modal-overlay hidden">
+    <div class="doc-upload-modal">
+      <div class="modal-header">
+        <h3>Upload Document</h3>
+        <button class="modal-close" id="doc-upload-close">&times;</button>
+      </div>
+      <p class="modal-desc">Upload a family document (photo, scan, PDF) and AI will extract family tree information for your review.</p>
+      <div class="doc-drop-zone" id="doc-drop-zone">
+        <div class="upload-zone-content">
+          <span class="upload-icon">&#128196;</span>
+          <span>Drop a document here or <label for="doc-file-input" class="upload-browse-link">browse</label></span>
+        </div>
+        <input type="file" id="doc-file-input" accept="image/*,.pdf" style="display:none" />
+      </div>
+      <div id="doc-upload-status" class="doc-upload-status hidden">
+        <div class="spinner"></div>
+        <span id="doc-status-text">Uploading...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Document Review Modal -->
+  <div id="doc-review-overlay" class="modal-overlay hidden">
+    <div class="doc-review-modal">
+      <div class="modal-header">
+        <h3 id="doc-review-title">Review Extracted Data</h3>
+        <button class="modal-close" id="doc-review-close">&times;</button>
+      </div>
+      <div id="doc-review-summary" class="doc-review-summary"></div>
+      <div id="doc-review-body" class="doc-review-body"></div>
+      <div class="doc-review-actions">
+        <button class="btn-secondary" id="doc-review-cancel">Cancel</button>
+        <button class="btn-primary" id="doc-review-apply">Apply Changes</button>
+      </div>
+    </div>
+  </div>
 
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://d3js.org/d3.v7.min.js"></script>
