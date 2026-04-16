@@ -117,15 +117,6 @@ SCHEMA_V3 = """
 ALTER TABLE people ADD COLUMN email TEXT;
 """
 
-# Known email addresses to seed after V3 migration
-SEED_EMAILS = {
-    "dustin": "REDACTED_EMAIL",
-    "tree-member-1": "REDACTED_EMAIL",
-    "cari": "REDACTED_EMAIL",
-    "tree-member-2": "REDACTED_EMAIL",
-    "tree-member-3": "REDACTED_EMAIL",
-    "tree-member-4": "REDACTED_EMAIL",
-}
 
 SCHEMA_V4 = """
 ALTER TABLE people ADD COLUMN photo_captions TEXT DEFAULT '{}';

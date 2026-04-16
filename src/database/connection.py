@@ -20,7 +20,6 @@ from .schema import (
     SCHEMA_SQL,
     SCHEMA_VERSION,
     MIGRATIONS,
-    SEED_EMAILS,
 )
 
 
@@ -123,24 +122,7 @@ def init_db(db_path: str | None = None) -> str:
     return _init_sqlite(db_path)
 
 
-def _seed_emails(conn: Any, is_pg: bool = False) -> None:
-    """Seed known email addresses into the people table."""
-    ph = "%s" if is_pg else "?"
-    for person_id, email in SEED_EMAILS.items():
-        try:
-            if is_pg:
-                cur = conn.cursor()
-                cur.execute(
-                    f"UPDATE people SET email = {ph} WHERE id = {ph} AND email IS NULL",
-                    (email, person_id),
-                )
-            else:
-                conn.execute(
-                    f"UPDATE people SET email = {ph} WHERE id = {ph} AND email IS NULL",
-                    (email, person_id),
-                )
-        except Exception:
-            pass  # Person may not exist in this DB
+
 
 
 def _init_sqlite(db_path: str | None = None) -> str:
@@ -155,10 +137,6 @@ def _init_sqlite(db_path: str | None = None) -> str:
             for version in sorted(MIGRATIONS.keys()):
                 if version > current:
                     conn.executescript(MIGRATIONS[version])
-
-        # Seed known emails after V3 migration
-        if current < 3:
-            _seed_emails(conn)
 
         existing = conn.execute(
             "SELECT version FROM schema_version WHERE version = ?",
@@ -189,10 +167,6 @@ def _init_pg() -> str:
             for version in sorted(PG_MIGRATIONS.keys()):
                 if version > current:
                     cur.execute(PG_MIGRATIONS[version])
-
-        # Seed known emails after V3 migration
-        if current < 3:
-            _seed_emails(conn, is_pg=True)
 
         cur.execute(
             "SELECT version FROM schema_version WHERE version = %s",
