@@ -5,6 +5,13 @@
   "centerIdA": "person-id-1",
   "centerIdB": "person-id-2",
 
+  "lanes": [
+    { "id": "paternal-grandfather", "label": "Smith",  "rootIds": ["john-smith-1900"], "color": "var(--male)" },
+    { "id": "paternal-grandmother", "label": "Jones",  "rootIds": ["mary-jones-1902"], "color": "var(--event-custom)" },
+    { "id": "maternal-grandfather", "label": "Brown",  "rootIds": ["bob-brown-1898"],  "color": "var(--event-education)" },
+    { "id": "maternal-grandmother", "label": "Wilson", "rootIds": ["sue-wilson-1901"], "color": "var(--event-birth)" }
+  ],
+
   "headerFont": "'Playfair Display', Georgia, serif",
   "bodyFont": "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
 
