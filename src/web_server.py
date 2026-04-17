@@ -104,6 +104,21 @@ def serve_photo(filename):
     abort(404)
 
 
+@app.route("/api/geocode", methods=["POST"])
+def api_geocode():
+    """Geocode a list of place strings via Nominatim (with DB cache).
+
+    Body: JSON array of place strings.
+    Returns: {place: [lat, lng]} for every place that resolved.
+    """
+    from geocoder import geocode_places
+    places = request.get_json(silent=True) or []
+    if not isinstance(places, list):
+        return jsonify({"error": "expected a JSON array"}), 400
+    coords = geocode_places(places)
+    return jsonify({p: list(c) for p, c in coords.items() if c is not None})
+
+
 @app.route("/api/data")
 def api_data():
     """Return the full family tree as JSON (read from DB on each request)."""

@@ -5,7 +5,7 @@ The schema mirrors the domain models in models/ and is designed for
 efficient querying.
 """
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 # ═══════════════════════════════════════════════════════════════════════
 # SQLite schema (local dev / tests)
@@ -136,13 +136,23 @@ CREATE TABLE IF NOT EXISTS documents (
 );
 """
 
-SCHEMA_SQL = SCHEMA_V1 + SCHEMA_V2 + SCHEMA_V3 + SCHEMA_V4 + SCHEMA_V5
+SCHEMA_V6 = """
+CREATE TABLE IF NOT EXISTS geocode_cache (
+    place TEXT PRIMARY KEY,
+    lat   REAL,
+    lng   REAL,
+    fetched_at TEXT DEFAULT (datetime('now'))
+);
+"""
+
+SCHEMA_SQL = SCHEMA_V1 + SCHEMA_V2 + SCHEMA_V3 + SCHEMA_V4 + SCHEMA_V5 + SCHEMA_V6
 
 MIGRATIONS = {
     2: SCHEMA_V2,
     3: SCHEMA_V3,
     4: SCHEMA_V4,
     5: SCHEMA_V5,
+    6: SCHEMA_V6,
 }
 
 
@@ -275,11 +285,21 @@ CREATE TABLE IF NOT EXISTS documents (
 );
 """
 
-PG_SCHEMA_SQL = PG_SCHEMA_V1 + PG_SCHEMA_V2 + PG_SCHEMA_V3 + PG_SCHEMA_V4 + PG_SCHEMA_V5
+PG_SCHEMA_V6 = """
+CREATE TABLE IF NOT EXISTS geocode_cache (
+    place TEXT PRIMARY KEY,
+    lat   DOUBLE PRECISION,
+    lng   DOUBLE PRECISION,
+    fetched_at TIMESTAMP DEFAULT NOW()
+);
+"""
+
+PG_SCHEMA_SQL = PG_SCHEMA_V1 + PG_SCHEMA_V2 + PG_SCHEMA_V3 + PG_SCHEMA_V4 + PG_SCHEMA_V5 + PG_SCHEMA_V6
 
 PG_MIGRATIONS = {
     2: PG_SCHEMA_V2,
     3: PG_SCHEMA_V3,
     4: PG_SCHEMA_V4,
     5: PG_SCHEMA_V5,
+    6: PG_SCHEMA_V6,
 }
