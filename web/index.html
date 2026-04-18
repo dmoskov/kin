@@ -25,6 +25,9 @@
         <button class="tab" data-view="relationships">Relationships</button>
       </nav>
       <div class="auth-section">
+        <!-- Both start hidden and applyAuth() reveals whichever is correct
+             after checkAuth() completes, to avoid a flicker of "Sign in"
+             when the user is already logged in. -->
         <!-- Logged-in state: user pill with dropdown menu -->
         <div id="auth-logged-in" style="display:none">
           <button class="user-pill" id="user-pill">
@@ -49,9 +52,14 @@
             <button class="user-menu-item user-menu-logout" id="auth-logout-btn">Sign out</button>
           </div>
         </div>
-        <!-- Logged-out state: just the sign-in button -->
-        <div id="auth-logged-out">
+        <!-- Logged-out state: Google button + fallback when the SDK or
+             client ID isn't available. -->
+        <div id="auth-logged-out" style="display:none">
           <div id="google-signin-btn"></div>
+          <div id="auth-signin-unavailable" class="auth-unavailable" style="display:none" title="Configure GOOGLE_CLIENT_ID on the server to enable sign-in">
+            <span class="auth-unavailable-icon" aria-hidden="true">&#128274;</span>
+            <span>Sign-in unavailable</span>
+          </div>
         </div>
       </div>
       <button class="doc-upload-btn" id="doc-upload-btn" title="Upload a document for AI parsing">&#128196; Upload Doc</button>

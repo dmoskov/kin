@@ -10,7 +10,8 @@ An interactive genealogy app — model your family history, visualize relationsh
 - **Timeline** — chronological view of births, deaths, immigration, careers, education
 - **Relationship calculator** — "How are these two people related?"
 - **Heritage map** — immigration flows colored by region of origin
-- **Photo gallery** — attach photos to people and see them in context
+- **Photo gallery** — upload photos in the browser, attach them to people, add captions
+- **Document parsing** — upload a birth certificate / obituary / photo and have the AI extract people, dates, and relationships for review before applying
 - **GEDCOM import** — load data from standard genealogy software
 - **Theming** — full dark/light mode with customizable color palettes
 
@@ -135,11 +136,56 @@ If you have data from Ancestry, MyHeritage, or other genealogy software:
 python3 -m cli import path/to/export.ged
 ```
 
-### 4. Add photos (optional)
+### 4. Add photos and documents from the browser
 
-Place photos in `private/photos/`. The web server automatically serves them at `/photos/<filename>`.
+Once the dashboard is running at `http://localhost:8000`, you can upload content
+directly from the UI — no scripts or `scp` required. Anything you upload lands
+under `private/photos/` or `private/documents/` (both gitignored).
 
-To link photos to people, create a photo-attachment script in `private/data/` (see the seed scripts for the pattern of adding photo references).
+#### Attaching photos to a person
+
+1. Click a person in the tree or timeline to open their side panel.
+2. Click **Photos → + Manage Photos**. The photo picker opens.
+3. Upload new photos by either:
+   - **Clicking** the "Click or drag photos here" zone and choosing files, or
+   - **Dragging and dropping** one or more images onto the zone.
+4. Each uploaded photo is auto-assigned to the current person and appears with a
+   green check.
+5. Click any existing photo tile to **toggle** whether it's attached to this person
+   (the same photo can be attached to multiple people).
+6. Click an attached photo's caption field to add a caption like "Easter 1987".
+   Captions save automatically on blur or when you press Enter.
+
+Supported image types: **JPG, JPEG, PNG, WEBP, GIF**. Maximum size per file:
+**8 MB** (configurable via the `MAX_PHOTO_BYTES` env var). Files whose contents
+don't match their extension (e.g. an `.exe` renamed to `.jpg`) are rejected.
+
+Error messages from the server — invalid type, too large, empty file, etc. —
+are surfaced as red toasts in the bottom-right corner.
+
+#### AI document parsing
+
+For birth certificates, obituaries, family photos with caption text, or similar
+records, the **Documents** panel can OCR the file and propose changes:
+
+1. Click **📄 Upload Document** in the top toolbar.
+2. Drop or select an image (JPG/PNG/WEBP/GIF) or PDF. Max **15 MB**
+   (`MAX_DOC_BYTES`).
+3. Once uploaded, click **Parse with AI**. The server runs the document through
+   an LLM and returns proposed people / relationships / events.
+4. Review the proposed changes in the modal — you can edit any field, mark
+   proposed people as "existing" (matched to someone in the tree) or "new",
+   then **Apply** to write them into the database.
+
+Uploaded documents are stored in `private/documents/` and tracked in the
+`documents` table with status `uploaded → parsing → parsed → applied`. Nothing
+is written to the tree until you click Apply.
+
+#### Scripted photo attachment (still supported)
+
+If you'd rather attach photos in bulk from a seed script, drop them into
+`private/photos/` and reference them by path in a Person's `photo_paths`
+list. See the seed scripts for the pattern.
 
 ### 5. Start exploring
 
@@ -219,6 +265,18 @@ See `deploy/` for scripts to deploy on an EC2 instance with nginx + gunicorn.
 docker build -t family-tree .
 docker run -p 8000:8000 -v $(pwd)/private:/app/private family-tree
 ```
+
+### Environment variables
+
+| Variable           | Purpose                                                | Default              |
+| ------------------ | ------------------------------------------------------ | -------------------- |
+| `DATABASE_URL`     | Postgres DSN. If unset, falls back to local SQLite.    | _(SQLite)_           |
+| `FAMILY_TREE_DB`   | SQLite path override (local dev only).                 | `data/family.db`     |
+| `SECRET_KEY`       | Flask session key — set in production.                 | `dev-secret-...`     |
+| `MAX_PHOTO_BYTES`  | Per-file cap for `/api/photos/upload`.                 | `8388608` (8 MB)     |
+| `MAX_DOC_BYTES`    | Per-file cap for `/api/documents/upload`.              | `15728640` (15 MB)   |
+| `GOOGLE_CLIENT_ID` | Enables Google Sign-In on the dashboard.               | _(sign-in disabled)_ |
+| `ANTHROPIC_API_KEY`| Enables **Parse with AI** for uploaded documents.      | _(parsing disabled)_ |
 
 ## License
 

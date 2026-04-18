@@ -19,6 +19,7 @@ import logging
 import os
 import re
 import time
+import uuid
 from pathlib import Path
 from urllib.request import urlopen
 from urllib.error import URLError
@@ -26,7 +27,7 @@ from urllib.error import URLError
 from flask import Flask, jsonify, request, send_from_directory, abort, session
 
 from database.connection import get_connection, init_db
-from database.repository import TreeRepository
+from database.repository import TreeRepository, _execute, _fetchone, _now, _ph
 
 logger = logging.getLogger(__name__)
 from import_export.json_io import (
@@ -47,7 +48,23 @@ PRIVATE_DIR = PROJECT_ROOT / "private"
 
 app = Flask(__name__, static_folder=WEB_DIR, static_url_path="")
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-in-production")
-app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # 10 MB upload limit
+
+# Upload size limits. MAX_CONTENT_LENGTH is enforced by Flask at the WSGI
+# layer (before we see the request). MAX_PHOTO_BYTES / MAX_DOC_BYTES are
+# enforced explicitly inside the upload handlers so we can return a clean
+# JSON error with a helpful message.
+MAX_PHOTO_BYTES = int(os.environ.get("MAX_PHOTO_BYTES", 8 * 1024 * 1024))   # 8 MB
+MAX_DOC_BYTES = int(os.environ.get("MAX_DOC_BYTES", 15 * 1024 * 1024))     # 15 MB
+app.config["MAX_CONTENT_LENGTH"] = max(MAX_PHOTO_BYTES, MAX_DOC_BYTES) + 1024 * 1024
+
+
+@app.errorhandler(413)
+def _handle_too_large(_err):
+    """Return JSON (not HTML) for oversize uploads."""
+    return jsonify({
+        "error": "File is too large",
+        "code": "too_large",
+    }), 413
 
 
 @app.before_request
@@ -153,97 +170,214 @@ def api_photos():
 
 @app.route("/api/people/<person_id>/photos", methods=["POST"])
 def api_add_photos(person_id):
-    """Add photos to a person. Body: {"photo_paths": ["photos/foo.jpg"]}"""
-    body = request.get_json(force=True)
+    """Add photos to a person. Body: {"photo_paths": ["photos/foo.jpg"]}
+
+    Idempotent: paths already on the person are silently skipped.
+
+    Uses TreeRepository so it works on both SQLite (local) and PostgreSQL
+    (production). Previously this endpoint issued raw SQL with SQLite-only
+    placeholders, which silently failed against PostgreSQL.
+    """
+    body = request.get_json(force=True) or {}
     new_paths = body.get("photo_paths", [])
     if not new_paths:
-        return jsonify({"error": "photo_paths required"}), 400
+        return jsonify({"error": "photo_paths required", "code": "missing_field"}), 400
+    if not isinstance(new_paths, list):
+        return jsonify({"error": "photo_paths must be a list", "code": "bad_type"}), 400
 
-    conn = get_connection()
-    try:
-        row = conn.execute(
-            "SELECT photo_paths FROM people WHERE id = ?", (person_id,)
-        ).fetchone()
-        if not row:
-            return jsonify({"error": "person not found"}), 404
+    repo = TreeRepository()
+    person = repo.get_person(person_id)
+    if not person:
+        return jsonify({"error": "person not found", "code": "not_found"}), 404
 
-        existing = json.loads(row["photo_paths"] or "[]")
-        merged = list(existing)
-        for p in new_paths:
-            if p not in merged:
-                merged.append(p)
+    merged = list(person.photo_paths)
+    for p in new_paths:
+        if not isinstance(p, str) or not p:
+            continue
+        if p not in merged:
+            merged.append(p)
 
-        conn.execute(
-            "UPDATE people SET photo_paths = ?, updated_at = datetime('now') WHERE id = ?",
-            (json.dumps(merged), person_id),
-        )
-        conn.commit()
-        return jsonify({"photo_paths": merged})
-    finally:
-        conn.close()
+    person.photo_paths = merged
+    repo.save_person(person)
+    return jsonify({"photo_paths": merged})
 
 
 @app.route("/api/people/<person_id>/photos", methods=["DELETE"])
 def api_remove_photo(person_id):
-    """Remove a photo from a person. Body: {"photo_path": "photos/foo.jpg"}"""
-    body = request.get_json(force=True)
+    """Remove a photo from a person. Body: {"photo_path": "photos/foo.jpg"}
+
+    Uses TreeRepository so it works on both SQLite and PostgreSQL.
+    """
+    body = request.get_json(force=True) or {}
     photo_path = body.get("photo_path", "")
     if not photo_path:
-        return jsonify({"error": "photo_path required"}), 400
+        return jsonify({"error": "photo_path required", "code": "missing_field"}), 400
 
-    conn = get_connection()
-    try:
-        row = conn.execute(
-            "SELECT photo_paths FROM people WHERE id = ?", (person_id,)
-        ).fetchone()
-        if not row:
-            return jsonify({"error": "person not found"}), 404
+    repo = TreeRepository()
+    person = repo.get_person(person_id)
+    if not person:
+        return jsonify({"error": "person not found", "code": "not_found"}), 404
 
-        existing = json.loads(row["photo_paths"] or "[]")
-        updated = [p for p in existing if p != photo_path]
+    updated = [p for p in person.photo_paths if p != photo_path]
+    # Also drop any caption associated with the removed photo.
+    captions = dict(person.photo_captions)
+    captions.pop(photo_path, None)
 
-        conn.execute(
-            "UPDATE people SET photo_paths = ?, updated_at = datetime('now') WHERE id = ?",
-            (json.dumps(updated), person_id),
-        )
-        conn.commit()
-        return jsonify({"photo_paths": updated})
-    finally:
-        conn.close()
+    person.photo_paths = updated
+    person.photo_captions = captions
+    repo.save_person(person)
+    return jsonify({"photo_paths": updated})
 
 
 ALLOWED_PHOTO_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 
 
 def _sanitize_filename(name: str) -> str:
-    """Turn a filename into a safe slug with timestamp prefix."""
-    stem = Path(name).stem
-    ext = Path(name).suffix.lower()
+    """Turn a filename into a safe slug with timestamp prefix.
+
+    Hardened against:
+      - path traversal (``../``)
+      - NUL bytes
+      - empty stems after slugification (falls back to ``upload``)
+      - mixed-case / non-ASCII extensions
+    """
+    # Strip any directory components an attacker may have embedded.
+    raw = Path(name.replace("\x00", "")).name
+    stem = Path(raw).stem
+    ext = Path(raw).suffix.lower()
     slug = re.sub(r"[^a-z0-9]+", "-", stem.lower()).strip("-")[:80]
+    if not slug:
+        slug = "upload"
     ts = int(time.time())
     return f"{ts}-{slug}{ext}"
 
 
+def _measure_file_size(file_storage) -> int:
+    """Return the byte size of a Werkzeug ``FileStorage`` without reading
+    the whole thing into memory. Leaves the stream positioned at the start.
+    """
+    stream = file_storage.stream
+    try:
+        stream.seek(0, os.SEEK_END)
+        size = stream.tell()
+    finally:
+        stream.seek(0)
+    return size
+
+
+def _atomic_save(file_storage, dest: Path) -> None:
+    """Save a FileStorage to ``dest`` atomically via a ``.part`` tempfile.
+
+    On success, ``dest`` exists and contains the full payload. On failure,
+    the partial file is cleaned up and ``dest`` is not created.
+    """
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_suffix(dest.suffix + ".part")
+    try:
+        file_storage.save(str(tmp))
+        os.replace(str(tmp), str(dest))
+    except Exception:
+        try:
+            if tmp.exists():
+                tmp.unlink()
+        except OSError:
+            pass
+        raise
+
+
+def _looks_like_image(path: Path, ext: str) -> bool:
+    """Return True if the file's magic bytes match the declared extension.
+
+    Implemented by inspecting the header bytes directly so we don't depend
+    on ``imghdr`` (removed in Python 3.13+).
+    """
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(16)
+    except OSError:
+        return False
+
+    if ext in (".jpg", ".jpeg"):
+        # JPEGs begin with FF D8 FF. All variants (JFIF, Exif, raw) share
+        # this prefix.
+        return head[:3] == b"\xff\xd8\xff"
+    if ext == ".png":
+        return head[:8] == b"\x89PNG\r\n\x1a\n"
+    if ext == ".gif":
+        return head[:6] in (b"GIF87a", b"GIF89a")
+    if ext == ".webp":
+        # WebP is RIFF<size>WEBP in the first 12 bytes.
+        return head[:4] == b"RIFF" and head[8:12] == b"WEBP"
+    return False
+
+
+def _looks_like_pdf(path: Path) -> bool:
+    try:
+        with open(path, "rb") as fh:
+            return fh.read(5) == b"%PDF-"
+    except OSError:
+        return False
+
+
 @app.route("/api/photos/upload", methods=["POST"])
 def api_upload_photo():
-    """Upload a photo file. Returns {"path": "photos/..."}."""
+    """Upload a photo file. Returns ``{"path": "photos/..."}``.
+
+    Hardened:
+      - Rejects empty/missing filenames.
+      - Rejects disallowed extensions.
+      - Rejects zero-byte uploads.
+      - Rejects uploads larger than ``MAX_PHOTO_BYTES``.
+      - Rejects files whose magic bytes don't match the declared extension.
+      - Writes atomically via ``.part`` rename so listings never see a
+        half-written file.
+    """
     if "photo" not in request.files:
-        return jsonify({"error": "No file provided"}), 400
+        return jsonify({"error": "No file provided", "code": "missing_file"}), 400
 
     f = request.files["photo"]
     if not f.filename:
-        return jsonify({"error": "Empty filename"}), 400
+        return jsonify({"error": "Empty filename", "code": "empty_filename"}), 400
 
     ext = Path(f.filename).suffix.lower()
     if ext not in ALLOWED_PHOTO_EXTS:
-        return jsonify({"error": f"Invalid file type: {ext}"}), 400
+        return jsonify({
+            "error": f"Invalid file type: {ext or '(none)'}. Allowed: "
+                     + ", ".join(sorted(ALLOWED_PHOTO_EXTS)),
+            "code": "invalid_type",
+        }), 400
+
+    size = _measure_file_size(f)
+    if size == 0:
+        return jsonify({"error": "Empty file", "code": "empty"}), 400
+    if size > MAX_PHOTO_BYTES:
+        mb = MAX_PHOTO_BYTES // (1024 * 1024)
+        return jsonify({
+            "error": f"File too large (max {mb} MB)",
+            "code": "too_large",
+        }), 413
 
     safe_name = _sanitize_filename(f.filename)
     photo_dir = PRIVATE_DIR / "photos"
-    photo_dir.mkdir(parents=True, exist_ok=True)
-
     dest = photo_dir / safe_name
-    f.save(str(dest))
+
+    try:
+        _atomic_save(f, dest)
+    except OSError as e:
+        logger.error("photo save failed: %s", e)
+        return jsonify({"error": "Could not save file", "code": "io_error"}), 500
+
+    if not _looks_like_image(dest, ext):
+        # Delete the file — the bytes don't match the declared type, so
+        # we don't want it sitting on disk or in listings.
+        try:
+            dest.unlink()
+        except OSError:
+            pass
+        return jsonify({
+            "error": "File contents do not match its extension",
+            "code": "bad_content",
+        }), 400
 
     return jsonify({"path": f"photos/{safe_name}"})
 
@@ -253,81 +387,156 @@ def api_set_photo_caption(person_id):
     """Set caption for a photo on a person.
 
     Body: {"photo_path": "photos/foo.jpg", "caption": "Easter 1987"}
+
+    An empty caption removes the caption entry. Uses TreeRepository so it
+    works on both SQLite and PostgreSQL.
     """
-    body = request.get_json(force=True)
+    body = request.get_json(force=True) or {}
     photo_path = body.get("photo_path", "")
-    caption = body.get("caption", "").strip()
+    caption = (body.get("caption") or "").strip()
 
     if not photo_path:
-        return jsonify({"error": "photo_path required"}), 400
+        return jsonify({"error": "photo_path required", "code": "missing_field"}), 400
 
-    conn = get_connection()
-    try:
-        row = conn.execute(
-            "SELECT photo_captions FROM people WHERE id = ?", (person_id,)
-        ).fetchone()
-        if not row:
-            return jsonify({"error": "person not found"}), 404
+    repo = TreeRepository()
+    person = repo.get_person(person_id)
+    if not person:
+        return jsonify({"error": "person not found", "code": "not_found"}), 404
 
-        captions = json.loads(row["photo_captions"] or "{}")
-        if caption:
-            captions[photo_path] = caption
-        else:
-            captions.pop(photo_path, None)
+    captions = dict(person.photo_captions)
+    if caption:
+        captions[photo_path] = caption
+    else:
+        captions.pop(photo_path, None)
 
-        conn.execute(
-            "UPDATE people SET photo_captions = ?, updated_at = datetime('now') WHERE id = ?",
-            (json.dumps(captions), person_id),
-        )
-        conn.commit()
-        return jsonify({"photo_captions": captions})
-    finally:
-        conn.close()
+    person.photo_captions = captions
+    repo.save_person(person)
+    return jsonify({"photo_captions": captions})
 
 
 # ── Document Upload & AI Parsing ───────────────────────────────────────
 
-import uuid
-
 ALLOWED_DOC_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".pdf"}
+
+
+def _update_document(doc_id: str, *, status: str | None = None, parsed_data: dict | None = None) -> None:
+    """Portable helper that updates a documents row on either backend."""
+    sets = []
+    params: list = []
+    if status is not None:
+        sets.append(f"status = {_ph()}")
+        params.append(status)
+    if parsed_data is not None:
+        sets.append(f"parsed_data = {_ph()}")
+        params.append(json.dumps(parsed_data))
+    if not sets:
+        return
+    params.append(doc_id)
+    sql = f"UPDATE documents SET {', '.join(sets)} WHERE id = {_ph()}"
+    conn = get_connection()
+    try:
+        _execute(conn, sql, tuple(params))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _get_document(doc_id: str) -> dict | None:
+    conn = get_connection()
+    try:
+        return _fetchone(
+            conn,
+            f"SELECT * FROM documents WHERE id = {_ph()}",
+            (doc_id,),
+        )
+    finally:
+        conn.close()
 
 
 @app.route("/api/documents/upload", methods=["POST"])
 def api_upload_document():
     """Upload a document for AI parsing.
 
-    Returns: {"document_id": "...", "filename": "...", "status": "uploaded"}
+    Returns ``{"document_id": "...", "filename": "...", "status": "uploaded"}``.
+
+    Hardened in the same ways as ``/api/photos/upload`` (size cap, magic-byte
+    check, atomic write) plus transactional cleanup: if the DB insert fails,
+    the saved file is removed so we don't leave orphans on disk.
     """
     if "file" not in request.files:
-        return jsonify({"error": "No file provided"}), 400
+        return jsonify({"error": "No file provided", "code": "missing_file"}), 400
 
     f = request.files["file"]
     if not f.filename:
-        return jsonify({"error": "Empty filename"}), 400
+        return jsonify({"error": "Empty filename", "code": "empty_filename"}), 400
 
     ext = Path(f.filename).suffix.lower()
     if ext not in ALLOWED_DOC_EXTS:
-        return jsonify({"error": f"Unsupported file type: {ext}. Use images or PDF."}), 400
+        return jsonify({
+            "error": f"Unsupported file type: {ext or '(none)'}. Use images or PDF.",
+            "code": "invalid_type",
+        }), 400
+
+    size = _measure_file_size(f)
+    if size == 0:
+        return jsonify({"error": "Empty file", "code": "empty"}), 400
+    if size > MAX_DOC_BYTES:
+        mb = MAX_DOC_BYTES // (1024 * 1024)
+        return jsonify({
+            "error": f"File too large (max {mb} MB)",
+            "code": "too_large",
+        }), 413
 
     doc_id = str(uuid.uuid4())[:12]
     safe_name = _sanitize_filename(f.filename)
     doc_dir = PRIVATE_DIR / "documents"
-    doc_dir.mkdir(parents=True, exist_ok=True)
-
     dest = doc_dir / safe_name
-    f.save(str(dest))
 
-    # Record in DB
-    file_type = "pdf" if ext == ".pdf" else "image"
+    try:
+        _atomic_save(f, dest)
+    except OSError as e:
+        logger.error("document save failed: %s", e)
+        return jsonify({"error": "Could not save file", "code": "io_error"}), 500
+
+    # Magic-byte check post-save
+    is_pdf = ext == ".pdf"
+    ok = _looks_like_pdf(dest) if is_pdf else _looks_like_image(dest, ext)
+    if not ok:
+        try:
+            dest.unlink()
+        except OSError:
+            pass
+        return jsonify({
+            "error": "File contents do not match its extension",
+            "code": "bad_content",
+        }), 400
+
+    file_type = "pdf" if is_pdf else "image"
     uploaded_by = session.get("person_id")
 
     conn = get_connection()
     try:
-        conn.execute(
-            "INSERT INTO documents (id, filename, file_path, file_type, uploaded_by) VALUES (?, ?, ?, ?, ?)",
-            (doc_id, f.filename, f"documents/{safe_name}", file_type, uploaded_by),
-        )
-        conn.commit()
+        try:
+            _execute(
+                conn,
+                f"INSERT INTO documents (id, filename, file_path, file_type, uploaded_by) "
+                f"VALUES ({_ph(5)})",
+                (doc_id, f.filename, f"documents/{safe_name}", file_type, uploaded_by),
+            )
+            conn.commit()
+        except Exception as e:
+            # Transactional cleanup: if the DB insert fails, don't leave
+            # the file sitting on disk with no tracking row.
+            try:
+                if dest.exists():
+                    dest.unlink()
+            except OSError:
+                pass
+            logger.error("document DB insert failed: %s", e)
+            return jsonify({
+                "error": "Could not record document",
+                "code": "db_error",
+            }), 500
     finally:
         conn.close()
 
@@ -342,23 +551,15 @@ def api_upload_document():
 @app.route("/api/documents/<doc_id>/parse", methods=["POST"])
 def api_parse_document(doc_id):
     """Trigger AI parsing of a document. Returns proposed changes for review."""
-    conn = get_connection()
-    try:
-        row = conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
-        if not row:
-            return jsonify({"error": "Document not found"}), 404
+    row = _get_document(doc_id)
+    if not row:
+        return jsonify({"error": "Document not found", "code": "not_found"}), 404
 
-        file_path = str(PRIVATE_DIR / row["file_path"])
-        if not Path(file_path).exists():
-            return jsonify({"error": "Document file not found on disk"}), 404
+    file_path = str(PRIVATE_DIR / row["file_path"])
+    if not Path(file_path).exists():
+        return jsonify({"error": "Document file not found on disk", "code": "missing_file"}), 404
 
-        # Update status to parsing
-        conn.execute(
-            "UPDATE documents SET status = 'parsing' WHERE id = ?", (doc_id,)
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    _update_document(doc_id, status="parsing")
 
     # Get existing people for matching
     repo = TreeRepository()
@@ -386,40 +587,15 @@ def api_parse_document(doc_id):
         )
     except Exception as e:
         logger.error("Document parsing failed: %s", e)
-        conn = get_connection()
-        try:
-            conn.execute(
-                "UPDATE documents SET status = 'error', parsed_data = ? WHERE id = ?",
-                (json.dumps({"error": str(e)}), doc_id),
-            )
-            conn.commit()
-        finally:
-            conn.close()
-        return jsonify({"error": f"Parsing failed: {e}"}), 500
+        _update_document(doc_id, status="error", parsed_data={"error": str(e)})
+        return jsonify({"error": f"Parsing failed: {e}", "code": "parse_failed"}), 500
 
     # Check for error in result
     if "error" in result:
-        conn = get_connection()
-        try:
-            conn.execute(
-                "UPDATE documents SET status = 'error', parsed_data = ? WHERE id = ?",
-                (json.dumps(result), doc_id),
-            )
-            conn.commit()
-        finally:
-            conn.close()
+        _update_document(doc_id, status="error", parsed_data=result)
         return jsonify(result), 500
 
-    # Save parsed data and update status
-    conn = get_connection()
-    try:
-        conn.execute(
-            "UPDATE documents SET status = 'parsed', parsed_data = ? WHERE id = ?",
-            (json.dumps(result), doc_id),
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    _update_document(doc_id, status="parsed", parsed_data=result)
 
     return jsonify({
         "document_id": doc_id,
@@ -434,15 +610,11 @@ def api_apply_document(doc_id):
 
     Body: The proposed_changes JSON (possibly edited by user in the review modal).
     """
-    changes = request.get_json(force=True)
+    changes = request.get_json(force=True) or {}
 
-    conn = get_connection()
-    try:
-        row = conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
-        if not row:
-            return jsonify({"error": "Document not found"}), 404
-    finally:
-        conn.close()
+    row = _get_document(doc_id)
+    if not row:
+        return jsonify({"error": "Document not found", "code": "not_found"}), 404
 
     repo = TreeRepository()
     applied = {"people": 0, "relationships": 0, "events": 0, "unions": 0}
@@ -566,14 +738,7 @@ def api_apply_document(doc_id):
             logger.warning("Could not save union %s + %s: %s", p1, p2, e)
 
     # Update document status
-    conn = get_connection()
-    try:
-        conn.execute(
-            "UPDATE documents SET status = 'applied' WHERE id = ?", (doc_id,)
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    _update_document(doc_id, status="applied")
 
     return jsonify({"status": "applied", "applied": applied})
 
@@ -710,22 +875,16 @@ def api_set_email(person_id):
     if admin_id != "dustin":
         return jsonify({"error": "admin only"}), 403
 
-    body = request.get_json(force=True)
+    body = request.get_json(force=True) or {}
     email = body.get("email", "").strip().lower() or None
 
     conn = get_connection()
     try:
-        if os.environ.get("DATABASE_URL"):
-            cur = conn.cursor()
-            cur.execute(
-                "UPDATE people SET email = %s WHERE id = %s",
-                (email, person_id),
-            )
-        else:
-            conn.execute(
-                "UPDATE people SET email = ? WHERE id = ?",
-                (email, person_id),
-            )
+        _execute(
+            conn,
+            f"UPDATE people SET email = {_ph()} WHERE id = {_ph()}",
+            (email, person_id),
+        )
         conn.commit()
         return jsonify({"email": email, "person_id": person_id})
     finally:

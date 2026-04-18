@@ -924,6 +924,27 @@ main {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-height: 32px;
+}
+
+/* Fallback when the Google SDK isn't available (no client ID, blocked,
+   still loading, etc.) — so the slot isn't just blank. */
+.auth-unavailable {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: help;
+  user-select: none;
+}
+.auth-unavailable-icon {
+  font-size: 11px;
+  opacity: 0.7;
 }
 
 /* ── Heritage Badges ───────────────────────────────────────── */
