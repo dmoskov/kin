@@ -1818,6 +1818,126 @@ main {
 
 /* ── Responsive ─────────────────────────────────────────────── */
 
+.panel-edit-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  margin-top: 8px;
+  display: block;
+  transition: all 0.15s;
+}
+
+.panel-edit-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.panel-add-relative-btns {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.panel-add-relative-btn {
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.panel-add-relative-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.add-relative-form {
+  margin-top: 12px;
+}
+
+.add-relative-form.hidden { display: none; }
+
+.add-relative-form-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.add-relative-row {
+  display: flex;
+  gap: 8px;
+}
+
+.add-relative-input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  min-width: 0;
+}
+
+.add-relative-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.add-relative-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.add-relative-submit {
+  background: var(--accent);
+  border: none;
+  color: var(--bg);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 16px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.add-relative-submit:hover { background: var(--accent-hover); }
+
+.add-relative-cancel {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 13px;
+  padding: 7px 16px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.add-relative-cancel:hover {
+  border-color: var(--text-muted);
+  color: var(--text);
+}
+
+.add-relative-error {
+  color: #e05555;
+  font-size: 12px;
+}
+
+.add-relative-error.hidden { display: none; }
+
 @media (max-width: 900px) {
   .timeline-row { grid-template-columns: repeat(2, 1fr) !important; }
   .timeline-row > :nth-child(2n) { border-right: none; }

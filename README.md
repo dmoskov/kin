@@ -10,6 +10,7 @@ An interactive genealogy app — model your family history, visualize relationsh
 - **Timeline** — chronological view of births, deaths, immigration, careers, education
 - **Relationship calculator** — "How are these two people related?"
 - **Heritage map** — immigration flows colored by region of origin
+- **In-browser editing** — add parents, siblings, children, and partners directly from the tree; edit a person's name, dates, and places without touching a seed script
 - **Photo gallery** — upload photos in the browser, attach them to people, add captions
 - **Document parsing** — upload a birth certificate / obituary / photo and have the AI extract people, dates, and relationships for review before applying
 - **GEDCOM import** — load data from standard genealogy software
@@ -187,7 +188,35 @@ If you'd rather attach photos in bulk from a seed script, drop them into
 `private/photos/` and reference them by path in a Person's `photo_paths`
 list. See the seed scripts for the pattern.
 
-### 5. Start exploring
+### 5. Manage people from the browser
+
+You can add new people, edit existing details, and wire up relationships directly
+from the tree — no seed scripts required.
+
+#### Adding a relative
+
+1. Click any person in the tree to open their side panel.
+2. Scroll to **Add Relative** and click **+ Parent**, **+ Sibling**, **+ Child**,
+   or **+ Partner**.
+3. Fill in the name, gender, birth year, and (optionally) death year, then click
+   **Add [Relative type]**.
+4. The new person is saved to the database and the tree re-renders immediately.
+
+For siblings, the new person is automatically linked to all of the focused
+person's existing parents. If the focused person has no parents yet, the sibling
+is created without parent links (you can add parents later).
+
+#### Editing a person
+
+1. Click a person in the tree to open their side panel.
+2. Click **Edit** (below their name and gender badge).
+3. Update any fields — first name, last name, gender, birth date, birth place,
+   death date, death place — then click **Save**.
+
+Dates accept partial formats: `1987`, `1987-05`, and `1987-05-12` are all valid.
+Leave a field blank (or clear it) to remove the value.
+
+### 6. Start exploring
 
 ```bash
 python3 -m cli serve          # Web dashboard at http://localhost:8000

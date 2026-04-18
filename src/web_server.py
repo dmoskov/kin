@@ -348,6 +348,64 @@ def api_delete_person(person_id):
     return ("", 204)
 
 
+@app.route("/api/relationships", methods=["POST"])
+def api_create_relationship():
+    """Create a parent-child relationship.
+
+    Body: {"parent_id": "...", "child_id": "..."}
+
+    Returns 201 on success, 400 for missing fields, 404 if either person
+    doesn't exist.
+    """
+    from models.relationship import Relationship, RelationshipType
+    body = request.get_json(silent=True) or {}
+    parent_id = (body.get("parent_id") or "").strip()
+    child_id = (body.get("child_id") or "").strip()
+    if not parent_id or not child_id:
+        return jsonify({"error": "parent_id and child_id are required", "code": "bad_request"}), 400
+    if parent_id == child_id:
+        return jsonify({"error": "parent_id and child_id must differ", "code": "bad_request"}), 400
+
+    repo = TreeRepository()
+    if repo.get_person(parent_id) is None:
+        return jsonify({"error": f"person not found: {parent_id}", "code": "not_found"}), 404
+    if repo.get_person(child_id) is None:
+        return jsonify({"error": f"person not found: {child_id}", "code": "not_found"}), 404
+
+    rel = Relationship(parent_id=parent_id, child_id=child_id, rel_type=RelationshipType.BIOLOGICAL)
+    repo.save_relationship(rel)
+    return jsonify({"parent_id": parent_id, "child_id": child_id}), 201
+
+
+@app.route("/api/unions", methods=["POST"])
+def api_create_union():
+    """Create a partnership/union between two people.
+
+    Body: {"partner1_id": "...", "partner2_id": "..."}
+
+    Returns 201 on success, 400 for missing fields, 404 if either person
+    doesn't exist.
+    """
+    from models.relationship import Union
+    body = request.get_json(silent=True) or {}
+    p1 = (body.get("partner1_id") or "").strip()
+    p2 = (body.get("partner2_id") or "").strip()
+    if not p1 or not p2:
+        return jsonify({"error": "partner1_id and partner2_id are required", "code": "bad_request"}), 400
+    if p1 == p2:
+        return jsonify({"error": "partner1_id and partner2_id must differ", "code": "bad_request"}), 400
+
+    repo = TreeRepository()
+    if repo.get_person(p1) is None:
+        return jsonify({"error": f"person not found: {p1}", "code": "not_found"}), 404
+    if repo.get_person(p2) is None:
+        return jsonify({"error": f"person not found: {p2}", "code": "not_found"}), 404
+
+    union = Union(partner1_id=p1, partner2_id=p2)
+    repo.save_union(union)
+    return jsonify({"partner1_id": p1, "partner2_id": p2}), 201
+
+
 @app.route("/api/photos")
 def api_photos():
     """Return a list of all photo files from private/photos/ and web/photos/."""
