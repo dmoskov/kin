@@ -71,6 +71,17 @@
     <!-- Tree View -->
     <section id="view-tree" class="view active">
       <div class="tree-container">
+        <div id="focus-banner" class="focus-banner hidden">
+          <span class="focus-banner-label">Focused on: <strong id="focus-banner-name"></strong></span>
+          <select id="focus-depth-select" class="focus-depth-select">
+            <option value="1">Immediate family</option>
+            <option value="2">+ Grandparents &amp; in-laws</option>
+            <option value="3">+ Aunts, uncles &amp; cousins</option>
+            <option value="4">+ Great-grandparents &amp; 2nd cousins</option>
+            <option value="all">Everyone</option>
+          </select>
+          <button class="focus-clear-btn" onclick="clearFocus()">Clear focus</button>
+        </div>
         <svg id="tree-svg"></svg>
       </div>
       <aside id="person-panel" class="panel hidden">
@@ -140,13 +151,15 @@
         <h2>Relationship Calculator</h2>
         <p class="subtitle">Select two people to see how they're related</p>
         <div class="rel-selectors">
-          <select id="rel-person-a">
-            <option value="">Select Person A</option>
-          </select>
+          <div class="person-picker" id="picker-a">
+            <input type="text" class="picker-search" placeholder="Search Person A…" autocomplete="off" spellcheck="false" />
+            <div class="picker-list" id="picker-a-list"></div>
+          </div>
           <span class="rel-arrow">&#8596;</span>
-          <select id="rel-person-b">
-            <option value="">Select Person B</option>
-          </select>
+          <div class="person-picker" id="picker-b">
+            <input type="text" class="picker-search" placeholder="Search Person B…" autocomplete="off" spellcheck="false" />
+            <div class="picker-list" id="picker-b-list"></div>
+          </div>
         </div>
         <div id="rel-result" class="rel-result hidden"></div>
       </div>

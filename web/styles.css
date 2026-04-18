@@ -162,6 +162,53 @@ main {
   height: 100%;
 }
 
+/* ── Focus Banner ───────────────────────────────────────────── */
+.focus-banner {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 6px 14px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.focus-banner.hidden { display: none; }
+.focus-banner-label { color: var(--text); }
+.focus-banner-label strong { color: var(--accent); }
+.focus-depth-select {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.focus-clear-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.focus-clear-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* D3 tree styling */
 .node-group { cursor: pointer; }
 
@@ -269,6 +316,24 @@ main {
 }
 .panel-gender.male { background: rgba(74, 144, 217, 0.2); color: var(--male); }
 .panel-gender.female { background: rgba(217, 74, 140, 0.2); color: var(--female); }
+
+.panel-focus-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  margin-top: 8px;
+  display: block;
+  transition: all 0.15s;
+}
+.panel-focus-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 
 .panel-section { margin-top: 20px; }
 .panel-section h3 {
@@ -1005,19 +1070,79 @@ main {
 
 .rel-selectors {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 16px;
   justify-content: center;
   margin-bottom: 32px;
 }
 
-.rel-selectors select {
-  min-width: 200px;
+.person-picker {
+  display: flex;
+  flex-direction: column;
+  width: 220px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.picker-search {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  padding: 9px 12px;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.picker-search::placeholder {
+  color: var(--text-muted);
+}
+
+.picker-search:focus {
+  border-bottom-color: var(--accent);
+}
+
+.picker-list {
+  max-height: 240px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.picker-item {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.1s;
+}
+
+.picker-item:hover {
+  background: var(--surface-hover);
+}
+
+.picker-item-selected {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.picker-item-selected::after {
+  content: " ✓";
+  opacity: 0.8;
 }
 
 .rel-arrow {
   font-size: 24px;
   color: var(--text-muted);
+  margin-top: 10px;
+  flex-shrink: 0;
 }
 
 .rel-result {
