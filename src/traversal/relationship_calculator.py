@@ -129,83 +129,136 @@ def _direct_descendant_label(generations: int, descendant_gender: str) -> str:
     return f"{prefix}grandchild"
 
 
-def describe_relationship(tree: FamilyTree, id_a: str, id_b: str) -> str:
-    """Return the English relationship label of person B *relative to* person A.
-
-    Examples (read as "B is A's ___"):
-      - describe_relationship(tree, parent_id, child_id) → 'son' / 'daughter' / 'child'
-      - describe_relationship(tree, child_id, parent_id) → 'father' / 'mother' / 'parent'
-      - describe_relationship(tree, uncle_id, niece_id) → 'niece' / 'nephew'
-
-    Returns 'self' when id_a == id_b, and 'no relation found' when there is
-    no common ancestor.
-    """
-    if id_a == id_b:
-        return "self"
-
+def _blood_label(tree: FamilyTree, id_a: str, id_b: str) -> str | None:
+    """Return the blood-only relationship label of B relative to A, or None."""
     common = find_common_ancestors(tree, id_a, id_b)
     if not common:
-        return "no relation found"
+        return None
 
-    # Use the closest common ancestor (lowest total distance).
     _ancestor_id, dist_a, dist_b = common[0]
-
     person_b = tree.get_person(id_b)
     gender_b = person_b.gender.value if person_b else "unknown"
 
-    # --- Direct line (one distance is 0) ---
     if dist_a == 0:
-        # A is the ancestor → B is A's descendant
         return _direct_descendant_label(dist_b, gender_b)
     if dist_b == 0:
-        # B is the ancestor → B is A's ancestor
         return _direct_ancestor_label(dist_a, gender_b)
 
-    # --- Siblings (both at distance 1 from common ancestor) ---
     if dist_a == 1 and dist_b == 1:
-        if gender_b == "male":
-            return "brother"
-        if gender_b == "female":
-            return "sister"
-        return "sibling"
+        return "brother" if gender_b == "male" else "sister" if gender_b == "female" else "sibling"
 
-    # --- Uncle/aunt or niece/nephew ---
     if dist_a == 1 and dist_b == 2:
-        # B is child of A's sibling → B is A's niece/nephew
-        if gender_b == "male":
-            return "nephew"
-        if gender_b == "female":
-            return "niece"
-        return "niece/nephew"
+        return "nephew" if gender_b == "male" else "niece" if gender_b == "female" else "niece/nephew"
     if dist_a == 2 and dist_b == 1:
-        # A is child of B's sibling → B is A's uncle/aunt
-        if gender_b == "male":
-            return "uncle"
-        if gender_b == "female":
-            return "aunt"
-        return "uncle/aunt"
+        return "uncle" if gender_b == "male" else "aunt" if gender_b == "female" else "uncle/aunt"
 
-    # --- Great-uncle / great-aunt / grand-niece / grand-nephew ---
     if dist_b == 1 and dist_a > 2:
         prefix = _greats(dist_a - 2)
-        if gender_b == "male":
-            return f"{prefix}grand-uncle"
-        if gender_b == "female":
-            return f"{prefix}grand-aunt"
-        return f"{prefix}grand-uncle/aunt"
+        return f"{prefix}grand-uncle" if gender_b == "male" else f"{prefix}grand-aunt" if gender_b == "female" else f"{prefix}grand-uncle/aunt"
     if dist_a == 1 and dist_b > 2:
         prefix = _greats(dist_b - 2)
-        if gender_b == "male":
-            return f"{prefix}grand-nephew"
-        if gender_b == "female":
-            return f"{prefix}grand-niece"
-        return f"{prefix}grand-niece/nephew"
+        return f"{prefix}grand-nephew" if gender_b == "male" else f"{prefix}grand-niece" if gender_b == "female" else f"{prefix}grand-niece/nephew"
 
-    # --- Cousins ---
-    # degree = min(dist_a, dist_b) - 1, removed = |dist_a - dist_b|
     degree = min(dist_a, dist_b) - 1
     removed = abs(dist_a - dist_b)
     label = f"{_ordinal(degree)} cousin"
     if removed > 0:
         label += f" {_times_removed(removed)}"
     return label
+
+
+_IN_LAW_MAP = {
+    "father": "father-in-law", "mother": "mother-in-law", "parent": "parent-in-law",
+    "brother": "brother-in-law", "sister": "sister-in-law", "sibling": "sibling-in-law",
+    "grandfather": "grandfather-in-law", "grandmother": "grandmother-in-law", "grandparent": "grandparent-in-law",
+    "uncle": "uncle-in-law", "aunt": "aunt-in-law", "uncle/aunt": "uncle/aunt-in-law",
+    "nephew": "nephew-in-law", "niece": "niece-in-law", "niece/nephew": "niece/nephew-in-law",
+}
+
+
+def _to_in_law(lbl: str) -> str | None:
+    if lbl in _IN_LAW_MAP:
+        return _IN_LAW_MAP[lbl]
+    if "cousin" in lbl:
+        return lbl + "-in-law"
+    import re
+    if re.search(r"great-.*grand(father|mother|parent)", lbl):
+        return lbl + "-in-law"
+    return None
+
+
+def _reverse_in_law(lbl: str, gender_b: str) -> str | None:
+    """B is the spouse of someone who is A's [lbl] → what is B to A?"""
+    if lbl in ("son", "daughter", "child"):
+        return "son-in-law" if gender_b == "male" else "daughter-in-law" if gender_b == "female" else "child-in-law"
+    if lbl in ("brother", "sister", "sibling"):
+        return "brother-in-law" if gender_b == "male" else "sister-in-law" if gender_b == "female" else "sibling-in-law"
+    if lbl in ("grandson", "granddaughter", "grandchild"):
+        return "grandson-in-law" if gender_b == "male" else "granddaughter-in-law" if gender_b == "female" else "grandchild-in-law"
+    return None
+
+
+def _spouse_word(gender: str) -> str:
+    """Return the word for how a person of *gender* refers to their spouse.
+
+    A male person's spouse is his 'wife'; a female person's spouse is her 'husband'.
+    """
+    return "wife" if gender == "male" else "husband" if gender == "female" else "spouse"
+
+
+def describe_relationship(tree: FamilyTree, id_a: str, id_b: str) -> str:
+    """Return the English relationship label of person B *relative to* person A.
+
+    Covers blood relations, direct spouses, and in-law relationships (parent-in-law,
+    child-in-law, sibling-in-law, and co-in-law e.g. "wife's sister's husband").
+
+    Returns 'self' when id_a == id_b, and 'no relation found' when no path exists.
+    """
+    if id_a == id_b:
+        return "self"
+
+    # 1. Blood relation
+    blood = _blood_label(tree, id_a, id_b)
+    if blood:
+        return blood
+
+    person_a = tree.get_person(id_a)
+    person_b = tree.get_person(id_b)
+    gender_a = person_a.gender.value if person_a else "unknown"
+    gender_b = person_b.gender.value if person_b else "unknown"
+
+    spouses_a = [p.id for p in tree.partners_of(id_a)]
+    spouses_b = [p.id for p in tree.partners_of(id_b)]
+
+    # 2. Direct spouse
+    if id_b in spouses_a:
+        return "husband" if gender_b == "male" else "wife" if gender_b == "female" else "spouse"
+
+    # 3. B is A's spouse's blood relative → in-law
+    for s_a in spouses_a:
+        lbl = _blood_label(tree, s_a, id_b)
+        if lbl:
+            in_law = _to_in_law(lbl)
+            if in_law:
+                return in_law
+
+    # 4. A is B's spouse's blood relative → reverse in-law
+    for s_b in spouses_b:
+        lbl = _blood_label(tree, id_a, s_b)
+        if lbl:
+            in_law = _reverse_in_law(lbl, gender_b)
+            if in_law:
+                return in_law
+
+    # 5. A's spouse's blood relative is B's spouse → co-in-law
+    for s_a in spouses_a:
+        for s_b in spouses_b:
+            lbl = _blood_label(tree, s_a, s_b)
+            if lbl:
+                # w_a: how A refers to their own spouse (male→"wife", female→"husband")
+                w_a = _spouse_word(gender_a)
+                # w_b: what B is called in their marriage (male→"husband", female→"wife")
+                w_b = "husband" if gender_b == "male" else "wife" if gender_b == "female" else "spouse"
+                return f"{w_a}'s {lbl}'s {w_b}"
+
+    return "no relation found"

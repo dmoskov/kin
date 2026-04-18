@@ -208,7 +208,74 @@ def test_first_cousin_once_removed():
     assert describe_relationship(tree, "iris", "fay") == "first cousin once removed"
 
 
-def test_no_relation():
-    """Eve has no blood relation to Dana (Eve married into the family)."""
+def test_spouse():
     tree = _build_test_tree()
-    assert describe_relationship(tree, "eve", "dana") == "no relation found"
+    assert describe_relationship(tree, "carl", "eve") == "wife"
+    assert describe_relationship(tree, "eve", "carl") == "husband"
+    assert describe_relationship(tree, "al", "beth") == "wife"
+    assert describe_relationship(tree, "beth", "al") == "husband"
+
+
+def test_sibling_in_law():
+    tree = _build_test_tree()
+    # Eve married Carl; Dana is Carl's sister → Eve and Dana are siblings-in-law
+    assert describe_relationship(tree, "eve", "dana") == "sister-in-law"
+    assert describe_relationship(tree, "dana", "eve") == "sister-in-law"
+
+
+def test_parent_in_law():
+    tree = _build_test_tree()
+    # Eve married Carl; Al and Beth are Carl's parents → Eve's in-laws
+    assert describe_relationship(tree, "eve", "al") == "father-in-law"
+    assert describe_relationship(tree, "eve", "beth") == "mother-in-law"
+
+
+def test_child_in_law():
+    tree = _build_test_tree()
+    # Eve married Carl; Al is Carl's father → Al is Eve's father-in-law,
+    # and Eve is Al's daughter-in-law
+    assert describe_relationship(tree, "al", "eve") == "daughter-in-law"
+    assert describe_relationship(tree, "beth", "eve") == "daughter-in-law"
+
+
+def test_co_in_law():
+    """Carl married Eve; Eve's brother Ned married Rosa → Carl and Rosa are co-in-laws."""
+    tree = _build_test_tree()
+    ned = Person(
+        id="ned", given_name="Ned", surname="Taylor",
+        gender=Gender.MALE, birth_date="1963-05-01",
+    )
+    rosa = Person(
+        id="rosa", given_name="Rosa", surname="Taylor",
+        gender=Gender.FEMALE, birth_date="1964-08-15",
+    )
+    tree.add_person(ned)
+    tree.add_person(rosa)
+    tree.add_union(Union(partner1_id="ned", partner2_id="rosa"))
+    # Make Ned Eve's sibling by giving them a shared parent
+    shared_parent = Person(
+        id="taylor-sr", given_name="Tom", surname="Taylor",
+        gender=Gender.MALE, birth_date="1935-01-01",
+    )
+    tree.add_person(shared_parent)
+    tree.add_relationship(Relationship(parent_id="taylor-sr", child_id="eve"))
+    tree.add_relationship(Relationship(parent_id="taylor-sr", child_id="ned"))
+    # Carl (male) → wife Eve → Eve's brother Ned → Ned's wife Rosa
+    assert describe_relationship(tree, "carl", "rosa") == "wife's brother's wife"
+    # Rosa (female) → husband Ned → Ned's sister Eve → Eve's husband Carl
+    assert describe_relationship(tree, "rosa", "carl") == "husband's sister's husband"
+
+
+def test_no_relation():
+    """A stranger with no blood or marriage connection returns 'no relation found'."""
+    tree = _build_test_tree()
+    stranger = Person(
+        id="stranger",
+        given_name="Zoe",
+        surname="Unknown",
+        gender=Gender.FEMALE,
+        birth_date="1990-01-01",
+    )
+    tree.add_person(stranger)
+    assert describe_relationship(tree, "al", "stranger") == "no relation found"
+    assert describe_relationship(tree, "fay", "stranger") == "no relation found"
