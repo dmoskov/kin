@@ -305,6 +305,7 @@ docker run -p 8000:8000 -v $(pwd)/private:/app/private family-tree
 | `MAX_PHOTO_BYTES`  | Per-file cap for `/api/photos/upload`.                 | `8388608` (8 MB)     |
 | `MAX_DOC_BYTES`    | Per-file cap for `/api/documents/upload`.              | `15728640` (15 MB)   |
 | `GOOGLE_CLIENT_ID` | Enables Google Sign-In on the dashboard.               | _(sign-in disabled)_ |
+| `EDITORS`          | Comma-separated Gmail addresses with edit access. Anyone not listed can view but not edit. Editors may sign in even without a person record in the tree. Example: `alice@gmail.com,bob@gmail.com` | _(unset — editing unrestricted)_ |
 | `ANTHROPIC_API_KEY`| Enables **Parse with AI** for uploaded documents.      | _(parsing disabled)_ |
 
 ## License

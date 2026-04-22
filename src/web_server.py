@@ -24,6 +24,8 @@ from pathlib import Path
 from urllib.request import urlopen
 from urllib.error import URLError
 
+from functools import wraps
+
 from flask import Flask, jsonify, request, send_from_directory, abort, session
 
 from database.connection import get_connection, init_db
@@ -58,6 +60,15 @@ MAX_PHOTO_BYTES = int(os.environ.get("MAX_PHOTO_BYTES", 8 * 1024 * 1024))   # 8 
 MAX_DOC_BYTES = int(os.environ.get("MAX_DOC_BYTES", 15 * 1024 * 1024))     # 15 MB
 app.config["MAX_CONTENT_LENGTH"] = max(MAX_PHOTO_BYTES, MAX_DOC_BYTES) + 1024 * 1024
 
+# Comma-separated list of Gmail addresses that may write to the tree.
+# Anyone not on this list can view but not edit.
+# Example: EDITORS=alice@gmail.com,bob@gmail.com
+EDITORS: set[str] = {
+    e.strip().lower()
+    for e in os.environ.get("EDITORS", "").split(",")
+    if e.strip()
+}
+
 
 @app.errorhandler(413)
 def _handle_too_large(_err):
@@ -76,6 +87,22 @@ def _ensure_db():
         app._db_initialized = True
 
 
+# ── Auth helpers ───────────────────────────────────────────────────────
+
+def require_editor(f):
+    """Reject non-editors when an EDITORS list is configured.
+
+    If EDITORS is not set, the original open-access behaviour is preserved
+    so existing deployments are not broken.
+    """
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if EDITORS and not session.get("is_editor"):
+            return jsonify({"error": "editor access required", "code": "forbidden"}), 403
+        return f(*args, **kwargs)
+    return wrapper
+
+
 # ── Routes ─────────────────────────────────────────────────────────────
 
 @app.route("/")
@@ -92,12 +119,18 @@ def api_config():
       2. web/family-config.json             (legacy / dev override)
       3. Built-in defaults
     """
+    editors_enabled = bool(EDITORS)
+    editors_misconfigured = editors_enabled and not _get_google_client_id()
+
     for candidate in [
         PRIVATE_DIR / "config" / "family-config.json",
         Path(WEB_DIR) / "family-config.json",
     ]:
         if candidate.exists():
-            return jsonify(json.loads(candidate.read_text()))
+            config = json.loads(candidate.read_text())
+            config["editorsEnabled"] = editors_enabled
+            config["editorsMisconfigured"] = editors_misconfigured
+            return jsonify(config)
     # Sensible defaults when no config file exists
     return jsonify({
         "familyName": "Family Tree",
@@ -108,6 +141,8 @@ def api_config():
         "palette": {},
         "timelinePhotos": True,
         "heritageLabels": False,
+        "editorsEnabled": editors_enabled,
+        "editorsMisconfigured": editors_misconfigured,
     })
 
 
@@ -250,6 +285,7 @@ def _coerce_person_payload(body: dict, *, partial: bool) -> tuple[dict, str | No
 
 
 @app.route("/api/people", methods=["POST"])
+@require_editor
 def api_create_person():
     """Create a new person.
 
@@ -298,6 +334,7 @@ def api_create_person():
 
 
 @app.route("/api/people/<person_id>", methods=["PUT", "PATCH"])
+@require_editor
 def api_update_person(person_id):
     """Update an existing person. Partial updates are supported.
 
@@ -330,6 +367,7 @@ def api_update_person(person_id):
 
 
 @app.route("/api/people/<person_id>", methods=["DELETE"])
+@require_editor
 def api_delete_person(person_id):
     """Delete a person. Cascades to their relationships, unions, events,
     and citations via FK ON DELETE CASCADE (see schema).
@@ -349,6 +387,7 @@ def api_delete_person(person_id):
 
 
 @app.route("/api/relationships", methods=["POST"])
+@require_editor
 def api_create_relationship():
     """Create a parent-child relationship.
 
@@ -378,6 +417,7 @@ def api_create_relationship():
 
 
 @app.route("/api/unions", methods=["POST"])
+@require_editor
 def api_create_union():
     """Create a partnership/union between two people.
 
@@ -423,6 +463,7 @@ def api_photos():
 
 
 @app.route("/api/people/<person_id>/photos", methods=["POST"])
+@require_editor
 def api_add_photos(person_id):
     """Add photos to a person. Body: {"photo_paths": ["photos/foo.jpg"]}
 
@@ -457,6 +498,7 @@ def api_add_photos(person_id):
 
 
 @app.route("/api/people/<person_id>/photos", methods=["DELETE"])
+@require_editor
 def api_remove_photo(person_id):
     """Remove a photo from a person. Body: {"photo_path": "photos/foo.jpg"}
 
@@ -574,6 +616,7 @@ def _looks_like_pdf(path: Path) -> bool:
 
 
 @app.route("/api/photos/upload", methods=["POST"])
+@require_editor
 def api_upload_photo():
     """Upload a photo file. Returns ``{"path": "photos/..."}``.
 
@@ -637,6 +680,7 @@ def api_upload_photo():
 
 
 @app.route("/api/people/<person_id>/photo-caption", methods=["PUT"])
+@require_editor
 def api_set_photo_caption(person_id):
     """Set caption for a photo on a person.
 
@@ -708,6 +752,7 @@ def _get_document(doc_id: str) -> dict | None:
 
 
 @app.route("/api/documents/upload", methods=["POST"])
+@require_editor
 def api_upload_document():
     """Upload a document for AI parsing.
 
@@ -803,6 +848,7 @@ def api_upload_document():
 
 
 @app.route("/api/documents/<doc_id>/parse", methods=["POST"])
+@require_editor
 def api_parse_document(doc_id):
     """Trigger AI parsing of a document. Returns proposed changes for review."""
     row = _get_document(doc_id)
@@ -859,6 +905,7 @@ def api_parse_document(doc_id):
 
 
 @app.route("/api/documents/<doc_id>/apply", methods=["POST"])
+@require_editor
 def api_apply_document(doc_id):
     """Apply reviewed/edited changes from a parsed document to the database.
 
@@ -1074,26 +1121,36 @@ def api_auth_google():
             logger.warning("Token aud %s does not match expected client_id", aud)
             return jsonify({"error": "Token audience mismatch"}), 401
 
-    # Look up the person by email
+    # When no EDITORS list is configured everyone is treated as an editor
+    # (preserves the original open-access behaviour).
+    is_editor = (not EDITORS) or (email in EDITORS)
+
+    # Editors can sign in even without a person record in the tree.
+    # Non-editors must have a matching person record (existing behaviour).
     repo = TreeRepository()
     person = repo.get_person_by_email(email)
-    if not person:
+    if not person and not is_editor:
         return jsonify({
             "error": "No matching person record for this email",
             "email": email,
         }), 403
 
+    person_id = person.id if person else f"editor:{email}"
+    full_name = person.full_name if person else payload.get("name", email)
+
     # Set session
-    session["person_id"] = person.id
+    session["person_id"] = person_id
     session["email"] = email
-    session["name"] = person.full_name
+    session["name"] = full_name
     session["picture"] = payload.get("picture", "")
+    session["is_editor"] = is_editor
 
     return jsonify({
-        "person_id": person.id,
-        "name": person.full_name,
+        "person_id": person_id,
+        "name": full_name,
         "email": email,
         "picture": payload.get("picture", ""),
+        "is_editor": is_editor,
     })
 
 
@@ -1107,6 +1164,7 @@ def api_auth_me():
         "name": session.get("name", ""),
         "email": session.get("email", ""),
         "picture": session.get("picture", ""),
+        "is_editor": session.get("is_editor", False),
     })
 
 
