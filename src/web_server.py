@@ -33,6 +33,7 @@ from database.repository import TreeRepository, _execute, _fetchone, _now, _ph
 from models.person import Gender, Person
 
 logger = logging.getLogger(__name__)
+from import_export.gedcom_import import parse_gedcom
 from import_export.json_io import (
     _citation_to_dict,
     _event_to_dict,
@@ -749,6 +750,74 @@ def _get_document(doc_id: str) -> dict | None:
         )
     finally:
         conn.close()
+
+
+@app.route("/api/import/gedcom", methods=["POST"])
+@require_editor
+def api_import_gedcom():
+    """Import a GEDCOM (.ged) file into the database.
+
+    Returns summary stats: people, unions, relationships, events imported.
+    """
+    if "file" not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+
+    f = request.files["file"]
+    if not f.filename:
+        return jsonify({"error": "Empty filename"}), 400
+
+    ext = Path(f.filename).suffix.lower()
+    if ext not in (".ged", ".gedcom"):
+        return jsonify({"error": f"Expected a .ged file, got {ext or '(none)'}"}), 400
+
+    # Save to a temp file for parsing
+    import tempfile
+    tmp = tempfile.NamedTemporaryFile(suffix=".ged", delete=False)
+    try:
+        f.save(tmp.name)
+        tree = parse_gedcom(tmp.name)
+    except Exception as e:
+        logger.error("GEDCOM parse failed: %s", e)
+        return jsonify({"error": f"Failed to parse GEDCOM file: {e}"}), 400
+    finally:
+        try:
+            Path(tmp.name).unlink()
+        except OSError:
+            pass
+
+    # Persist everything via the repository
+    repo = TreeRepository()
+    stats = {"people": 0, "unions": 0, "relationships": 0, "events": 0, "skipped": []}
+
+    for person in tree.people.values():
+        try:
+            repo.save_person(person)
+            stats["people"] += 1
+        except Exception as e:
+            stats["skipped"].append(f"Person {person.id}: {e}")
+
+    for union in tree.unions:
+        try:
+            repo.save_union(union)
+            stats["unions"] += 1
+        except Exception as e:
+            stats["skipped"].append(f"Union: {e}")
+
+    for rel in tree.relationships:
+        try:
+            repo.save_relationship(rel)
+            stats["relationships"] += 1
+        except Exception as e:
+            stats["skipped"].append(f"Relationship: {e}")
+
+    for event in tree.events:
+        try:
+            repo.save_event(event)
+            stats["events"] += 1
+        except Exception as e:
+            stats["skipped"].append(f"Event: {e}")
+
+    return jsonify(stats)
 
 
 @app.route("/api/documents/upload", methods=["POST"])
