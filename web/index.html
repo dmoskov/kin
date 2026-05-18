@@ -62,6 +62,7 @@
           </div>
         </div>
       </div>
+      <button class="doc-upload-btn" id="gedcom-import-btn" title="Import a GEDCOM file from genealogy software">&#128229; Import GEDCOM</button>
       <button class="doc-upload-btn" id="doc-upload-btn" title="Upload a document for AI parsing">&#128196; Upload Doc</button>
       <button class="theme-toggle" id="theme-toggle" title="Toggle light/dark mode">&#9790;</button>
     </div>
@@ -227,6 +228,106 @@
       <div class="doc-review-actions">
         <button class="btn-secondary" id="doc-review-cancel">Cancel</button>
         <button class="btn-primary" id="doc-review-apply">Apply Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GEDCOM Import Modal -->
+  <div id="gedcom-overlay" class="modal-overlay hidden">
+    <div class="doc-upload-modal">
+      <div class="modal-header">
+        <h3>Import GEDCOM File</h3>
+        <button class="modal-close" id="gedcom-close">&times;</button>
+      </div>
+      <p class="modal-desc">Upload a .ged file exported from Ancestry, FamilySearch, MyHeritage, Gramps, or other genealogy software.</p>
+      <div class="doc-drop-zone" id="gedcom-drop-zone">
+        <div class="upload-zone-content">
+          <span class="upload-icon">&#128229;</span>
+          <span>Drop a .ged file here or <label for="gedcom-file-input" class="upload-browse-link">browse</label></span>
+        </div>
+        <input type="file" id="gedcom-file-input" accept=".ged,.gedcom" style="display:none" />
+      </div>
+      <div id="gedcom-status" class="doc-upload-status hidden">
+        <div class="spinner"></div>
+        <span id="gedcom-status-text">Importing...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Onboarding Overlay (shown when tree is empty) -->
+  <div id="onboarding-overlay" class="modal-overlay hidden">
+    <div class="onboarding-card">
+      <h2 class="onboarding-title">Welcome to your Family Tree</h2>
+      <p class="onboarding-subtitle">Let's get started by adding your first family members.</p>
+
+      <div class="onboarding-steps">
+        <div class="onboarding-step-indicators">
+          <span class="step-dot active" data-step="1">1</span>
+          <span class="step-dot" data-step="2">2</span>
+          <span class="step-dot" data-step="3">3</span>
+        </div>
+
+        <!-- Step 1: Add yourself -->
+        <div class="onboarding-step active" id="onboard-step-1">
+          <h3>Step 1: Add yourself</h3>
+          <div class="onboard-form">
+            <input type="text" id="onboard-given" placeholder="First name" required />
+            <input type="text" id="onboard-surname" placeholder="Last name" />
+            <select id="onboard-gender">
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="unknown">Other / Prefer not to say</option>
+            </select>
+            <input type="text" id="onboard-birth" placeholder="Birth year (e.g. 1990)" />
+          </div>
+          <div class="onboard-actions">
+            <button class="btn-primary" id="onboard-next-1">Next &rarr;</button>
+          </div>
+        </div>
+
+        <!-- Step 2: Add partner -->
+        <div class="onboarding-step" id="onboard-step-2">
+          <h3>Step 2: Add your partner <span class="onboard-optional">(optional)</span></h3>
+          <div class="onboard-form">
+            <input type="text" id="onboard-partner-given" placeholder="First name" />
+            <input type="text" id="onboard-partner-surname" placeholder="Last name" />
+            <select id="onboard-partner-gender">
+              <option value="female">Female</option>
+              <option value="male">Male</option>
+              <option value="unknown">Other / Prefer not to say</option>
+            </select>
+            <input type="text" id="onboard-partner-birth" placeholder="Birth year (e.g. 1991)" />
+          </div>
+          <div class="onboard-actions">
+            <button class="btn-secondary" id="onboard-skip-2">Skip</button>
+            <button class="btn-primary" id="onboard-next-2">Next &rarr;</button>
+          </div>
+        </div>
+
+        <!-- Step 3: Add a parent -->
+        <div class="onboarding-step" id="onboard-step-3">
+          <h3>Step 3: Add a parent <span class="onboard-optional">(optional)</span></h3>
+          <div class="onboard-form">
+            <input type="text" id="onboard-parent-given" placeholder="First name" />
+            <input type="text" id="onboard-parent-surname" placeholder="Last name" />
+            <select id="onboard-parent-gender">
+              <option value="male">Male (father)</option>
+              <option value="female">Female (mother)</option>
+              <option value="unknown">Other / Prefer not to say</option>
+            </select>
+            <input type="text" id="onboard-parent-birth" placeholder="Birth year (e.g. 1960)" />
+          </div>
+          <div class="onboard-actions">
+            <button class="btn-secondary" id="onboard-skip-3">Skip</button>
+            <button class="btn-primary" id="onboard-finish">Finish &check;</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="onboarding-divider"><span>or</span></div>
+      <div class="onboarding-alt-actions">
+        <button class="btn-secondary" id="onboard-import-gedcom">&#128229; Import a GEDCOM file</button>
+        <button class="btn-secondary" id="onboard-skip-all">Start with an empty tree</button>
       </div>
     </div>
   </div>

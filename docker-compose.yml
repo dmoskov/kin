@@ -1,0 +1,16 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./private:/app/private
+    environment:
+      - FAMILY_TREE_DB=/app/private/data/family.db
+      # Optional — uncomment and fill in as needed:
+      # - DATABASE_URL=postgresql://user:pass@host:5432/familytree
+      # - GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+      # - EDITORS=alice@gmail.com,bob@gmail.com
+      # - ANTHROPIC_API_KEY=sk-ant-...
+      # - SECRET_KEY=change-me-in-production
+    restart: unless-stopped

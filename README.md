@@ -18,20 +18,35 @@ An interactive genealogy app — model your family history, visualize relationsh
 
 ## Quick Start
 
+### Option A: Docker (recommended)
+
 ```bash
-# Clone and set up
+git clone https://github.com/dmoskov/family-tree.git
+cd family-tree
+docker compose up
+# Open http://localhost:8000
+```
+
+That's it — the app starts with an empty tree and walks you through adding your first family members.
+
+### Option B: Local Python
+
+```bash
 git clone https://github.com/dmoskov/family-tree.git
 cd family-tree
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 pip install -e .
 
-# Seed with example data (Longfellow descendants — public historical data)
-python3 data/seed_longfellow.py
-
 # Start the web dashboard
 python3 -m cli serve
 # Open http://localhost:8000
+```
+
+You can also seed with example data to see a populated tree:
+
+```bash
+python3 data/seed_longfellow.py  # Longfellow descendants — public historical data
 ```
 
 ## Adding Your Own Family
@@ -290,7 +305,10 @@ private/             # YOUR family data (gitignored)
 See `deploy/` for scripts to deploy on an EC2 instance with nginx + gunicorn.
 
 ```bash
-# Build and run with Docker
+# Quick start with Docker Compose
+docker compose up
+
+# Or build and run manually
 docker build -t family-tree .
 docker run -p 8000:8000 -v $(pwd)/private:/app/private family-tree
 ```
