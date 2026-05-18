@@ -72,5 +72,6 @@
   "timelinePhotos": true,
   "heritageLabels": true,
 
-  "googleClientId": ""
+  "googleClientId": "",
+  "googlePhotosEnabled": true
 }
