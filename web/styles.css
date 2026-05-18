@@ -182,7 +182,7 @@ main {
 }
 .focus-banner.hidden { display: none; }
 .focus-banner-label { color: var(--text); }
-.focus-banner-label strong { color: var(--accent); }
+.focus-banner-label strong { color: var(--accent); display: inline-flex; align-items: center; gap: 4px; vertical-align: middle; }
 .focus-depth-select {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -302,6 +302,9 @@ main {
   font-size: 22px;
   font-weight: 700;
   margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .panel-gender {
@@ -724,7 +727,11 @@ main {
   font-size: 13px;
   font-weight: 600;
   margin-bottom: 2px;
-  line-height: 1.3;
+  line-height: 1.6;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
 }
 
 .timeline-content p {
@@ -746,6 +753,10 @@ main {
   color: inherit;
   text-decoration: none;
   border-bottom: 1px dotted var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  vertical-align: middle;
 }
 .person-link:hover {
   color: var(--accent);
@@ -1122,6 +1133,9 @@ main {
   overflow: hidden;
   text-overflow: ellipsis;
   transition: background 0.1s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .picker-item:hover {
