@@ -1504,6 +1504,29 @@ main {
 }
 .photo-picker-item.selected .check { display: flex; }
 
+.google-photos-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: fit-content;
+}
+.google-photos-btn:hover {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+}
+.google-photos-btn svg { flex-shrink: 0; }
+.google-photos-btn.hidden { display: none; }
+
 /* Caption input inside photo grid items */
 .photo-caption-input {
   width: 100%;

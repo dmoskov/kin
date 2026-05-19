@@ -680,6 +680,123 @@ def api_upload_photo():
     return jsonify({"path": f"photos/{safe_name}"})
 
 
+@app.route("/api/people/<person_id>/google-photos", methods=["POST"])
+@require_editor
+def api_import_google_photos(person_id):
+    """Download photos from Google Photos URLs and attach them to a person.
+
+    Body: {"items": [{"url": "https://...", "filename": "IMG_1234.jpg"}, ...]}
+
+    Each URL is fetched server-side, saved to private/photos/, validated, and
+    attached to the person. This lets everyone view the photo without needing
+    the uploader's Google account.
+
+    Returns: {"photo_paths": [...], "downloaded": N, "errors": [...]}
+    """
+    body = request.get_json(force=True) or {}
+    items = body.get("items", [])
+    if not items or not isinstance(items, list):
+        return jsonify({"error": "items[] required", "code": "missing_field"}), 400
+    if len(items) > 50:
+        return jsonify({"error": "Too many items (max 50)", "code": "too_many"}), 400
+
+    repo = TreeRepository()
+    person = repo.get_person(person_id)
+    if not person:
+        return jsonify({"error": "person not found", "code": "not_found"}), 404
+
+    photo_dir = PRIVATE_DIR / "photos"
+    photo_dir.mkdir(parents=True, exist_ok=True)
+    merged = list(person.photo_paths)
+    downloaded = 0
+    errors = []
+
+    for item in items:
+        url = item.get("url", "")
+        filename = item.get("filename", "photo.jpg")
+        if not url:
+            errors.append({"filename": filename, "error": "missing URL"})
+            continue
+
+        # Validate the URL is from Google domains
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        if parsed.scheme != "https" or not parsed.hostname:
+            errors.append({"filename": filename, "error": "invalid URL"})
+            continue
+        allowed_hosts = (
+            "lh3.googleusercontent.com",
+            "lh4.googleusercontent.com",
+            "lh5.googleusercontent.com",
+            "lh6.googleusercontent.com",
+            ".googleusercontent.com",
+            ".ggpht.com",
+            ".googleapis.com",
+        )
+        host_ok = any(
+            parsed.hostname == h or parsed.hostname.endswith(h)
+            for h in allowed_hosts
+        )
+        if not host_ok:
+            errors.append({"filename": filename, "error": "URL not from Google"})
+            continue
+
+        safe_name = _sanitize_filename(filename)
+        ext = Path(safe_name).suffix.lower()
+        if ext not in ALLOWED_PHOTO_EXTS:
+            safe_name = Path(safe_name).stem + ".jpg"
+            ext = ".jpg"
+
+        dest = photo_dir / safe_name
+        try:
+            import urllib.request as _urlreq
+            r = _urlreq.Request(url)
+            r.add_header("User-Agent", "FamilyTree/1.0")
+            with _urlreq.urlopen(r, timeout=30) as resp:
+                data = resp.read(MAX_PHOTO_BYTES + 1)
+                if len(data) > MAX_PHOTO_BYTES:
+                    errors.append({"filename": filename, "error": "file too large"})
+                    continue
+                if len(data) == 0:
+                    errors.append({"filename": filename, "error": "empty file"})
+                    continue
+            # Write atomically
+            tmp = dest.with_suffix(dest.suffix + ".part")
+            try:
+                tmp.write_bytes(data)
+                os.replace(str(tmp), str(dest))
+            except Exception:
+                try:
+                    tmp.unlink(missing_ok=True)
+                except OSError:
+                    pass
+                raise
+
+            if not _looks_like_image(dest, ext):
+                try:
+                    dest.unlink()
+                except OSError:
+                    pass
+                errors.append({"filename": filename, "error": "not a valid image"})
+                continue
+
+            photo_path = f"photos/{safe_name}"
+            if photo_path not in merged:
+                merged.append(photo_path)
+            downloaded += 1
+
+        except (URLError, OSError, TimeoutError) as e:
+            errors.append({"filename": filename, "error": str(e)})
+            continue
+
+    person.photo_paths = merged
+    repo.save_person(person)
+    result = {"photo_paths": merged, "downloaded": downloaded}
+    if errors:
+        result["errors"] = errors
+    return jsonify(result)
+
+
 @app.route("/api/people/<person_id>/photo-caption", methods=["PUT"])
 @require_editor
 def api_set_photo_caption(person_id):
