@@ -31,6 +31,7 @@ from flask import Flask, jsonify, request, send_from_directory, abort, session
 from database.connection import get_connection, init_db
 from database.repository import TreeRepository, _execute, _fetchone, _now, _ph
 from models.person import Gender, Person
+from storage import photo_storage
 
 logger = logging.getLogger(__name__)
 from import_export.gedcom_import import parse_gedcom
@@ -149,13 +150,15 @@ def api_config():
 
 @app.route("/photos/<path:filename>")
 def serve_photo(filename):
-    """Serve photos from private/photos/ or web/photos/ (private takes priority)."""
-    private_photos = PRIVATE_DIR / "photos"
-    web_photos = Path(WEB_DIR) / "photos"
-    for photo_dir in [private_photos, web_photos]:
-        if (photo_dir / filename).exists():
-            return send_from_directory(str(photo_dir), filename)
-    abort(404)
+    """Serve photos from S3 (if configured) or local disk."""
+    from flask import Response
+    data = photo_storage.get(filename)
+    if data is None:
+        abort(404)
+    import mimetypes
+    content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    return Response(data, content_type=content_type,
+                    headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.route("/api/geocode", methods=["POST"])
@@ -449,18 +452,9 @@ def api_create_union():
 
 @app.route("/api/photos")
 def api_photos():
-    """Return a list of all photo files from private/photos/ and web/photos/."""
-    exts = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
-    seen = set()
-    photos = []
-    for photo_dir in [PRIVATE_DIR / "photos", Path(WEB_DIR) / "photos"]:
-        if not photo_dir.is_dir():
-            continue
-        for f in photo_dir.iterdir():
-            if f.suffix.lower() in exts and f.name not in seen:
-                seen.add(f.name)
-                photos.append(f"photos/{f.name}")
-    return jsonify(sorted(photos))
+    """Return a list of all photo files (from S3 or local disk)."""
+    names = photo_storage.list_all()
+    return jsonify([f"photos/{n}" for n in names])
 
 
 @app.route("/api/people/<person_id>/photos", methods=["POST"])
@@ -656,26 +650,32 @@ def api_upload_photo():
         }), 413
 
     safe_name = _sanitize_filename(f.filename)
-    photo_dir = PRIVATE_DIR / "photos"
-    dest = photo_dir / safe_name
 
+    # Read file bytes for validation and storage
+    file_data = f.read()
+
+    # Validate magic bytes by writing to a temp file
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+        tmp.write(file_data)
+        tmp_path = Path(tmp.name)
     try:
-        _atomic_save(f, dest)
-    except OSError as e:
-        logger.error("photo save failed: %s", e)
-        return jsonify({"error": "Could not save file", "code": "io_error"}), 500
-
-    if not _looks_like_image(dest, ext):
-        # Delete the file — the bytes don't match the declared type, so
-        # we don't want it sitting on disk or in listings.
+        if not _looks_like_image(tmp_path, ext):
+            return jsonify({
+                "error": "File contents do not match its extension",
+                "code": "bad_content",
+            }), 400
+    finally:
         try:
-            dest.unlink()
+            tmp_path.unlink()
         except OSError:
             pass
-        return jsonify({
-            "error": "File contents do not match its extension",
-            "code": "bad_content",
-        }), 400
+
+    try:
+        photo_storage.put(safe_name, file_data)
+    except Exception as e:
+        logger.error("photo save failed: %s", e)
+        return jsonify({"error": "Could not save file", "code": "io_error"}), 500
 
     return jsonify({"path": f"photos/{safe_name}"})
 
@@ -705,8 +705,6 @@ def api_import_google_photos(person_id):
     if not person:
         return jsonify({"error": "person not found", "code": "not_found"}), 404
 
-    photo_dir = PRIVATE_DIR / "photos"
-    photo_dir.mkdir(parents=True, exist_ok=True)
     merged = list(person.photo_paths)
     downloaded = 0
     errors = []
@@ -748,7 +746,6 @@ def api_import_google_photos(person_id):
             safe_name = Path(safe_name).stem + ".jpg"
             ext = ".jpg"
 
-        dest = photo_dir / safe_name
         try:
             req = __import__("urllib.request", fromlist=["urlopen", "Request"])
             r = req.Request(url)
@@ -761,26 +758,23 @@ def api_import_google_photos(person_id):
                 if len(data) == 0:
                     errors.append({"filename": filename, "error": "empty file"})
                     continue
-            # Write atomically
-            tmp = dest.with_suffix(dest.suffix + ".part")
+
+            # Validate image magic bytes via temp file
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+                tmp.write(data)
+                tmp_path = Path(tmp.name)
             try:
-                tmp.write_bytes(data)
-                os.replace(str(tmp), str(dest))
-            except Exception:
+                if not _looks_like_image(tmp_path, ext):
+                    errors.append({"filename": filename, "error": "not a valid image"})
+                    continue
+            finally:
                 try:
-                    tmp.unlink(missing_ok=True)
+                    tmp_path.unlink()
                 except OSError:
                     pass
-                raise
 
-            if not _looks_like_image(dest, ext):
-                try:
-                    dest.unlink()
-                except OSError:
-                    pass
-                errors.append({"filename": filename, "error": "not a valid image"})
-                continue
-
+            photo_storage.put(safe_name, data)
             photo_path = f"photos/{safe_name}"
             if photo_path not in merged:
                 merged.append(photo_path)
