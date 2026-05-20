@@ -24,6 +24,10 @@
         <button class="tab" data-view="map">Map</button>
         <button class="tab" data-view="relationships">Relationships</button>
       </nav>
+      <div class="viewing-as-section">
+        <label class="viewing-as-label" for="viewing-as-global">Viewing as</label>
+        <select id="viewing-as-global" class="viewing-as-global-select"></select>
+      </div>
       <div class="auth-section">
         <!-- Both start hidden and applyAuth() reveals whichever is correct
              after checkAuth() completes, to avoid a flicker of "Sign in"
