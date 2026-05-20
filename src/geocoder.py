@@ -6,11 +6,16 @@ hammer Nominatim with repeat failures.
 """
 
 import json
+import os
 import time
 import urllib.parse
 import urllib.request
 
 from database.connection import get_connection
+
+
+def _is_pg() -> bool:
+    return bool(os.environ.get("DATABASE_URL"))
 
 _USER_AGENT = "family-tree-app/1.0 (https://github.com/dmoskov/family-tree)"
 _NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
@@ -45,13 +50,16 @@ def geocode_places(places: list[str]) -> dict[str, tuple[float, float]]:
 def _load_cache(places: list[str]) -> dict[str, tuple[float, float]]:
     if not places:
         return {}
-    placeholders = ",".join("?" * len(places))
+    pg = _is_pg()
+    ph = ",".join("%s" if pg else "?" for _ in places)
     conn = get_connection()
     try:
-        rows = conn.execute(
-            f"SELECT place, lat, lng FROM geocode_cache WHERE place IN ({placeholders})",
-            places,
-        ).fetchall()
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT place, lat, lng FROM geocode_cache WHERE place IN ({ph})",
+            places if pg else places,
+        )
+        rows = cur.fetchall()
     finally:
         conn.close()
 
@@ -70,12 +78,22 @@ def _load_cache(places: list[str]) -> dict[str, tuple[float, float]]:
 
 def _save_cache(place: str, coords: tuple[float, float] | None) -> None:
     lat, lng = (coords[0], coords[1]) if coords else (None, None)
+    pg = _is_pg()
     conn = get_connection()
     try:
-        conn.execute(
-            "INSERT OR REPLACE INTO geocode_cache (place, lat, lng) VALUES (?, ?, ?)",
-            (place, lat, lng),
-        )
+        cur = conn.cursor()
+        if pg:
+            cur.execute(
+                "INSERT INTO geocode_cache (place, lat, lng) VALUES (%s, %s, %s) "
+                "ON CONFLICT (place) DO UPDATE SET lat = EXCLUDED.lat, lng = EXCLUDED.lng, "
+                "fetched_at = NOW()",
+                (place, lat, lng),
+            )
+        else:
+            cur.execute(
+                "INSERT OR REPLACE INTO geocode_cache (place, lat, lng) VALUES (?, ?, ?)",
+                (place, lat, lng),
+            )
         conn.commit()
     finally:
         conn.close()
