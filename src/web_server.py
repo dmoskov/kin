@@ -744,15 +744,16 @@ def api_import_google_photos(person_id):
         safe_name = _sanitize_filename(filename)
         ext = Path(safe_name).suffix.lower()
         if ext not in ALLOWED_PHOTO_EXTS:
+            # Default to .jpg for Google Photos URLs
             safe_name = Path(safe_name).stem + ".jpg"
             ext = ".jpg"
 
         dest = photo_dir / safe_name
         try:
-            import urllib.request as _urlreq
-            r = _urlreq.Request(url)
+            req = __import__("urllib.request", fromlist=["urlopen", "Request"])
+            r = req.Request(url)
             r.add_header("User-Agent", "FamilyTree/1.0")
-            with _urlreq.urlopen(r, timeout=30) as resp:
+            with req.urlopen(r, timeout=30) as resp:
                 data = resp.read(MAX_PHOTO_BYTES + 1)
                 if len(data) > MAX_PHOTO_BYTES:
                     errors.append({"filename": filename, "error": "file too large"})
