@@ -269,6 +269,37 @@ main {
   opacity: 0.6;
 }
 
+/* ── Fog-of-war (POV-aware dimming) ────────────────────────── */
+
+/* fog-0 = bloodline (fully clear) — no overrides needed */
+
+/* fog-1 = married-in partners of bloodline */
+.node-group.fog-1 { opacity: 0.55; }
+.link.fog-1 { opacity: 0.35; }
+.union-link.fog-1 { opacity: 0.3; }
+
+/* fog-2 = in-law family trees (heavy fog) */
+.node-group.fog-2 { opacity: 0.18; }
+.link.fog-2 { opacity: 0.12; }
+.union-link.fog-2 { opacity: 0.1; }
+
+/* Hover reveal — fog clears when you mouse near */
+.node-group.fog-1.fog-revealed,
+.node-group.fog-2.fog-revealed { opacity: 0.92; }
+.link.fog-1.fog-revealed,
+.link.fog-2.fog-revealed { opacity: 0.7; }
+.union-link.fog-1.fog-revealed,
+.union-link.fog-2.fog-revealed { opacity: 0.5; }
+
+/* Smooth transitions for the fog-of-war effect */
+.node-group { transition: opacity 0.35s ease; }
+.link { transition: opacity 0.35s ease; }
+.union-link { transition: opacity 0.35s ease; }
+
+/* Fogged nodes still brighten on hover to hint interactivity */
+.node-group.fog-1:hover,
+.node-group.fog-2:hover { opacity: 0.75; }
+
 /* ── Person Panel ───────────────────────────────────────────── */
 
 .panel {
