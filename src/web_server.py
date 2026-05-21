@@ -163,14 +163,20 @@ def api_geocode():
     """Geocode a list of place strings via Nominatim (with DB cache).
 
     Body: JSON array of place strings.
-    Returns: {place: [lat, lng]} for every place that resolved.
+    Returns: { coords: {place: [lat, lng]}, pending: N }
+
+    Cached results are returned immediately. Cache misses are resolved
+    in a background thread; the client can poll again when pending > 0.
     """
     from geocoder import geocode_places
     places = request.get_json(silent=True) or []
     if not isinstance(places, list):
         return jsonify({"error": "expected a JSON array"}), 400
-    coords = geocode_places(places)
-    return jsonify({p: list(c) for p, c in coords.items() if c is not None})
+    coords, pending = geocode_places(places)
+    return jsonify({
+        "coords": {p: list(c) for p, c in coords.items()},
+        "pending": pending,
+    })
 
 
 @app.route("/api/data")
