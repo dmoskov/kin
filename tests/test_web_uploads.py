@@ -92,6 +92,11 @@ def app_client(tmp_path, monkeypatch):
     web_server.PRIVATE_DIR = tmp_path
     web_server.app.config["TESTING"] = True
 
+    # Reinitialize photo storage to use the tmp_path
+    import storage
+    storage.photo_storage = storage.init_storage(private_dir=tmp_path, web_dir=tmp_path / "web")
+    web_server.photo_storage = storage.photo_storage
+
     from database.repository import TreeRepository
     repo = TreeRepository(db_path)
 
