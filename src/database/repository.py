@@ -87,20 +87,22 @@ class TreeRepository:
             person.given_name,
             person.surname,
             person.gender.value,
-            person.birth_date,
-            person.birth_place,
-            person.death_date,
-            person.death_place,
-            person.maiden_name,
+            person.birth_date or None,
+            person.birth_place or None,
+            person.death_date or None,
+            person.death_place or None,
+            person.maiden_name or None,
             json.dumps(person.nicknames),
             person.notes,
             json.dumps(person.photo_paths),
             json.dumps(person.photo_captions),
-            person.email,
+            person.email or None,
         )
         try:
             if _is_pg():
-                _execute(conn, f"""
+                _execute(
+                    conn,
+                    f"""
                     INSERT INTO people
                         (id, given_name, surname, gender, birth_date, birth_place,
                          death_date, death_place, maiden_name, nicknames, notes,
@@ -114,15 +116,21 @@ class TreeRepository:
                         nicknames=EXCLUDED.nicknames, notes=EXCLUDED.notes,
                         photo_paths=EXCLUDED.photo_paths, photo_captions=EXCLUDED.photo_captions,
                         email=EXCLUDED.email, updated_at=NOW()
-                """, params)
+                """,
+                    params,
+                )
             else:
-                _execute(conn, f"""
+                _execute(
+                    conn,
+                    f"""
                     INSERT OR REPLACE INTO people
                         (id, given_name, surname, gender, birth_date, birth_place,
                          death_date, death_place, maiden_name, nicknames, notes,
                          photo_paths, photo_captions, email, updated_at)
                     VALUES ({_ph(14)}, datetime('now'))
-                """, params)
+                """,
+                    params,
+                )
             conn.commit()
         finally:
             conn.close()
@@ -131,7 +139,9 @@ class TreeRepository:
         """Fetch a single Person by ID."""
         conn = self._conn()
         try:
-            row = _fetchone(conn, f"SELECT * FROM people WHERE id = {_ph()}", (person_id,))
+            row = _fetchone(
+                conn, f"SELECT * FROM people WHERE id = {_ph()}", (person_id,)
+            )
             return self._row_to_person(row) if row else None
         finally:
             conn.close()
@@ -152,21 +162,29 @@ class TreeRepository:
             pattern = f"%{query}%"
             p = _ph()
             if _is_pg():
-                rows = _fetchall(conn, f"""
+                rows = _fetchall(
+                    conn,
+                    f"""
                     SELECT * FROM people
                     WHERE given_name ILIKE {p} OR surname ILIKE {p}
                        OR maiden_name ILIKE {p} OR nicknames ILIKE {p}
                        OR notes ILIKE {p}
                     ORDER BY surname, given_name
-                """, (pattern,) * 5)
+                """,
+                    (pattern,) * 5,
+                )
             else:
-                rows = _fetchall(conn, f"""
+                rows = _fetchall(
+                    conn,
+                    f"""
                     SELECT * FROM people
                     WHERE given_name LIKE {p} OR surname LIKE {p}
                        OR maiden_name LIKE {p} OR nicknames LIKE {p}
                        OR notes LIKE {p}
                     ORDER BY surname, given_name
-                """, (pattern,) * 5)
+                """,
+                    (pattern,) * 5,
+                )
             return [self._row_to_person(r) for r in rows]
         finally:
             conn.close()
@@ -189,16 +207,24 @@ class TreeRepository:
         params = (rel.parent_id, rel.child_id, rel.rel_type.value)
         try:
             if _is_pg():
-                _execute(conn, f"""
+                _execute(
+                    conn,
+                    f"""
                     INSERT INTO relationships (parent_id, child_id, rel_type)
                     VALUES ({_ph(3)})
                     ON CONFLICT (parent_id, child_id) DO NOTHING
-                """, params)
+                """,
+                    params,
+                )
             else:
-                _execute(conn, f"""
+                _execute(
+                    conn,
+                    f"""
                     INSERT OR IGNORE INTO relationships (parent_id, child_id, rel_type)
                     VALUES ({_ph(3)})
-                """, params)
+                """,
+                    params,
+                )
             conn.commit()
         finally:
             conn.close()
@@ -209,16 +235,25 @@ class TreeRepository:
         """Insert a marriage/partnership."""
         conn = self._conn()
         params = (
-            union.partner1_id, union.partner2_id, union.union_date,
-            union.union_place, union.end_date, union.end_reason, union.notes,
+            union.partner1_id,
+            union.partner2_id,
+            union.union_date,
+            union.union_place,
+            union.end_date,
+            union.end_reason,
+            union.notes,
         )
         try:
-            _execute(conn, f"""
+            _execute(
+                conn,
+                f"""
                 INSERT INTO unions
                     (partner1_id, partner2_id, union_date, union_place,
                      end_date, end_reason, notes)
                 VALUES ({_ph(7)})
-            """, params)
+            """,
+                params,
+            )
             conn.commit()
         finally:
             conn.close()
@@ -229,16 +264,25 @@ class TreeRepository:
         """Insert a life event."""
         conn = self._conn()
         params = (
-            event.person_id, event.event_type.value, event.date,
-            event.end_date, event.place, event.description, event.source,
+            event.person_id,
+            event.event_type.value,
+            event.date,
+            event.end_date,
+            event.place,
+            event.description,
+            event.source,
         )
         try:
-            _execute(conn, f"""
+            _execute(
+                conn,
+                f"""
                 INSERT INTO events
                     (person_id, event_type, date, end_date, place,
                      description, source)
                 VALUES ({_ph(7)})
-            """, params)
+            """,
+                params,
+            )
             conn.commit()
         finally:
             conn.close()
@@ -249,12 +293,19 @@ class TreeRepository:
         """Insert or upsert a Source."""
         conn = self._conn()
         params = (
-            source.id, source.name, source.source_type.value,
-            source.author, source.date, source.description, source.url,
+            source.id,
+            source.name,
+            source.source_type.value,
+            source.author,
+            source.date,
+            source.description,
+            source.url,
         )
         try:
             if _is_pg():
-                _execute(conn, f"""
+                _execute(
+                    conn,
+                    f"""
                     INSERT INTO sources
                         (id, name, source_type, author, date, description, url)
                     VALUES ({_ph(7)})
@@ -262,13 +313,19 @@ class TreeRepository:
                         name=EXCLUDED.name, source_type=EXCLUDED.source_type,
                         author=EXCLUDED.author, date=EXCLUDED.date,
                         description=EXCLUDED.description, url=EXCLUDED.url
-                """, params)
+                """,
+                    params,
+                )
             else:
-                _execute(conn, f"""
+                _execute(
+                    conn,
+                    f"""
                     INSERT OR REPLACE INTO sources
                         (id, name, source_type, author, date, description, url)
                     VALUES ({_ph(7)})
-                """, params)
+                """,
+                    params,
+                )
             conn.commit()
         finally:
             conn.close()
@@ -277,7 +334,9 @@ class TreeRepository:
         """Fetch a single Source by ID."""
         conn = self._conn()
         try:
-            row = _fetchone(conn, f"SELECT * FROM sources WHERE id = {_ph()}", (source_id,))
+            row = _fetchone(
+                conn, f"SELECT * FROM sources WHERE id = {_ph()}", (source_id,)
+            )
             return self._row_to_source(row) if row else None
         finally:
             conn.close()
@@ -297,17 +356,25 @@ class TreeRepository:
         """Insert a citation linking a source to an entity."""
         conn = self._conn()
         params = (
-            citation.source_id, citation.entity_type.value, citation.entity_id,
-            citation.field_name, citation.excerpt, citation.confidence.value,
+            citation.source_id,
+            citation.entity_type.value,
+            citation.entity_id,
+            citation.field_name,
+            citation.excerpt,
+            citation.confidence.value,
             citation.notes,
         )
         try:
-            _execute(conn, f"""
+            _execute(
+                conn,
+                f"""
                 INSERT INTO citations
                     (source_id, entity_type, entity_id, field_name,
                      excerpt, confidence, notes)
                 VALUES ({_ph(7)})
-            """, params)
+            """,
+                params,
+            )
             conn.commit()
         finally:
             conn.close()
@@ -323,17 +390,25 @@ class TreeRepository:
         try:
             p = _ph()
             if field_name:
-                rows = _fetchall(conn, f"""
+                rows = _fetchall(
+                    conn,
+                    f"""
                     SELECT * FROM citations
                     WHERE entity_type = {p} AND entity_id = {p} AND field_name = {p}
                     ORDER BY id
-                """, (entity_type.value, entity_id, field_name))
+                """,
+                    (entity_type.value, entity_id, field_name),
+                )
             else:
-                rows = _fetchall(conn, f"""
+                rows = _fetchall(
+                    conn,
+                    f"""
                     SELECT * FROM citations
                     WHERE entity_type = {p} AND entity_id = {p}
                     ORDER BY id
-                """, (entity_type.value, entity_id))
+                """,
+                    (entity_type.value, entity_id),
+                )
             return [self._row_to_citation(r) for r in rows]
         finally:
             conn.close()
@@ -359,15 +434,25 @@ class TreeRepository:
         try:
             for person in tree.people.values():
                 params = (
-                    person.id, person.given_name, person.surname,
-                    person.gender.value, person.birth_date, person.birth_place,
-                    person.death_date, person.death_place, person.maiden_name,
-                    json.dumps(person.nicknames), person.notes,
-                    json.dumps(person.photo_paths), json.dumps(person.photo_captions),
-                    person.email,
+                    person.id,
+                    person.given_name,
+                    person.surname,
+                    person.gender.value,
+                    person.birth_date or None,
+                    person.birth_place or None,
+                    person.death_date or None,
+                    person.death_place or None,
+                    person.maiden_name or None,
+                    json.dumps(person.nicknames),
+                    person.notes,
+                    json.dumps(person.photo_paths),
+                    json.dumps(person.photo_captions),
+                    person.email or None,
                 )
                 if _is_pg():
-                    _execute(conn, f"""
+                    _execute(
+                        conn,
+                        f"""
                         INSERT INTO people
                             (id, given_name, surname, gender, birth_date, birth_place,
                              death_date, death_place, maiden_name, nicknames, notes,
@@ -381,59 +466,98 @@ class TreeRepository:
                             nicknames=EXCLUDED.nicknames, notes=EXCLUDED.notes,
                             photo_paths=EXCLUDED.photo_paths, photo_captions=EXCLUDED.photo_captions,
                             email=EXCLUDED.email, updated_at=NOW()
-                    """, params)
+                    """,
+                        params,
+                    )
                 else:
-                    _execute(conn, f"""
+                    _execute(
+                        conn,
+                        f"""
                         INSERT OR REPLACE INTO people
                             (id, given_name, surname, gender, birth_date, birth_place,
                              death_date, death_place, maiden_name, nicknames, notes,
                              photo_paths, photo_captions, email, updated_at)
                         VALUES ({_ph(14)}, datetime('now'))
-                    """, params)
+                    """,
+                        params,
+                    )
 
             for rel in tree.relationships:
                 params = (rel.parent_id, rel.child_id, rel.rel_type.value)
                 if _is_pg():
-                    _execute(conn, f"""
+                    _execute(
+                        conn,
+                        f"""
                         INSERT INTO relationships (parent_id, child_id, rel_type)
                         VALUES ({_ph(3)})
                         ON CONFLICT (parent_id, child_id) DO NOTHING
-                    """, params)
+                    """,
+                        params,
+                    )
                 else:
-                    _execute(conn, f"""
+                    _execute(
+                        conn,
+                        f"""
                         INSERT OR IGNORE INTO relationships (parent_id, child_id, rel_type)
                         VALUES ({_ph(3)})
-                    """, params)
+                    """,
+                        params,
+                    )
 
             for union in tree.unions:
-                _execute(conn, f"""
+                _execute(
+                    conn,
+                    f"""
                     INSERT INTO unions
                         (partner1_id, partner2_id, union_date, union_place,
                          end_date, end_reason, notes)
                     VALUES ({_ph(7)})
-                """, (
-                    union.partner1_id, union.partner2_id, union.union_date,
-                    union.union_place, union.end_date, union.end_reason, union.notes,
-                ))
+                """,
+                    (
+                        union.partner1_id,
+                        union.partner2_id,
+                        union.union_date,
+                        union.union_place,
+                        union.end_date,
+                        union.end_reason,
+                        union.notes,
+                    ),
+                )
 
             for event in tree.events:
-                _execute(conn, f"""
+                _execute(
+                    conn,
+                    f"""
                     INSERT INTO events
                         (person_id, event_type, date, end_date, place,
                          description, source)
                     VALUES ({_ph(7)})
-                """, (
-                    event.person_id, event.event_type.value, event.date,
-                    event.end_date, event.place, event.description, event.source,
-                ))
+                """,
+                    (
+                        event.person_id,
+                        event.event_type.value,
+                        event.date,
+                        event.end_date,
+                        event.place,
+                        event.description,
+                        event.source,
+                    ),
+                )
 
             for source in tree.sources.values():
                 params = (
-                    source.id, source.name, source.source_type.value,
-                    source.author, source.date, source.description, source.url,
+                    source.id,
+                    source.name,
+                    source.source_type.value,
+                    source.author,
+                    source.date,
+                    source.description,
+                    source.url,
                 )
                 if _is_pg():
-                    _execute(conn, f"""
+                    _execute(
+                        conn,
+                        f"""
                         INSERT INTO sources
                             (id, name, source_type, author, date, description, url)
                         VALUES ({_ph(7)})
@@ -441,25 +565,39 @@ class TreeRepository:
                             name=EXCLUDED.name, source_type=EXCLUDED.source_type,
                             author=EXCLUDED.author, date=EXCLUDED.date,
                             description=EXCLUDED.description, url=EXCLUDED.url
-                    """, params)
+                    """,
+                        params,
+                    )
                 else:
-                    _execute(conn, f"""
+                    _execute(
+                        conn,
+                        f"""
                         INSERT OR REPLACE INTO sources
                             (id, name, source_type, author, date, description, url)
                         VALUES ({_ph(7)})
-                    """, params)
+                    """,
+                        params,
+                    )
 
             for citation in tree.citations:
-                _execute(conn, f"""
+                _execute(
+                    conn,
+                    f"""
                     INSERT INTO citations
                         (source_id, entity_type, entity_id, field_name,
                          excerpt, confidence, notes)
                     VALUES ({_ph(7)})
-                """, (
-                    citation.source_id, citation.entity_type.value, citation.entity_id,
-                    citation.field_name, citation.excerpt, citation.confidence.value,
-                    citation.notes,
-                ))
+                """,
+                    (
+                        citation.source_id,
+                        citation.entity_type.value,
+                        citation.entity_id,
+                        citation.field_name,
+                        citation.excerpt,
+                        citation.confidence.value,
+                        citation.notes,
+                    ),
+                )
 
             conn.commit()
         except Exception:
@@ -587,16 +725,16 @@ class TreeRepository:
             given_name=row["given_name"],
             surname=row["surname"],
             gender=Gender(row["gender"]),
-            birth_date=row["birth_date"],
-            birth_place=row["birth_place"],
-            death_date=row["death_date"],
-            death_place=row["death_place"],
-            maiden_name=row["maiden_name"],
+            birth_date=row["birth_date"] or None,
+            birth_place=row["birth_place"] or None,
+            death_date=row["death_date"] or None,
+            death_place=row["death_place"] or None,
+            maiden_name=row["maiden_name"] or None,
             nicknames=json.loads(row["nicknames"] or "[]"),
             notes=row["notes"] or "",
             photo_paths=json.loads(row["photo_paths"] or "[]"),
             photo_captions=json.loads(row.get("photo_captions") or "{}"),
-            email=row.get("email"),
+            email=row.get("email") or None,
         )
 
     @staticmethod
