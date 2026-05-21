@@ -255,10 +255,15 @@ main {
   font-style: italic;
 }
 
+.node-photo {
+  pointer-events: none;
+  border-radius: 50%;
+}
+
 .link {
   fill: none;
   stroke: var(--border);
-  stroke-width: 2;
+  stroke-width: 1.5;
 }
 
 .union-link {
