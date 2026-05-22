@@ -9,10 +9,14 @@ Supports schema migrations: on init_db(), any unapplied migrations are
 automatically applied in order.
 """
 
+import json
+import logging
 import os
 import sqlite3
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from .schema import (
     PG_SCHEMA_SQL,
@@ -125,6 +129,90 @@ def init_db(db_path: str | None = None) -> str:
 
 
 
+def _migrate_photos_data(conn: Any, is_pg: bool) -> None:
+    """Migrate photo_paths/photo_captions from people table into photos + person_photos.
+
+    Idempotent: skips if person_photos already has rows.
+    """
+    ph = "%s" if is_pg else "?"
+
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) as n FROM person_photos")
+        row = cur.fetchone()
+        count = row["n"] if isinstance(row, dict) else row[0]
+        if count > 0:
+            return
+    except Exception:
+        if is_pg:
+            conn.rollback()
+        return
+
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT id, photo_paths, photo_captions FROM people")
+        rows = cur.fetchall()
+
+        for row in rows:
+            if isinstance(row, dict):
+                person_id = row["id"]
+                raw_paths = row["photo_paths"]
+                raw_captions = row["photo_captions"]
+            else:
+                person_id = row[0]
+                raw_paths = row[1]
+                raw_captions = row[2]
+
+            paths = json.loads(raw_paths or "[]")
+            captions = json.loads(raw_captions or "{}")
+
+            if not paths:
+                continue
+
+            for idx, file_path in enumerate(paths):
+                if is_pg:
+                    cur.execute(
+                        "INSERT INTO photos (file_path) VALUES (%s) ON CONFLICT (file_path) DO NOTHING",
+                        (file_path,),
+                    )
+                else:
+                    cur.execute(
+                        "INSERT OR IGNORE INTO photos (file_path) VALUES (?)",
+                        (file_path,),
+                    )
+
+                cur.execute(
+                    f"SELECT id FROM photos WHERE file_path = {ph}",
+                    (file_path,),
+                )
+                photo_row = cur.fetchone()
+                photo_id = photo_row["id"] if isinstance(photo_row, dict) else photo_row[0]
+
+                caption = captions.get(file_path, "")
+                is_profile = 1 if idx == 0 else 0
+
+                if is_pg:
+                    cur.execute(
+                        "INSERT INTO person_photos (person_id, photo_id, is_profile, display_order, caption) "
+                        "VALUES (%s, %s, %s, %s, %s) ON CONFLICT (person_id, photo_id) DO NOTHING",
+                        (person_id, photo_id, bool(is_profile), idx, caption),
+                    )
+                else:
+                    cur.execute(
+                        "INSERT OR IGNORE INTO person_photos (person_id, photo_id, is_profile, display_order, caption) "
+                        "VALUES (?, ?, ?, ?, ?)",
+                        (person_id, photo_id, is_profile, idx, caption),
+                    )
+
+        conn.commit()
+        logger.info("Migrated photo data for %d people into photos/person_photos tables", len(rows))
+    except Exception as e:
+        logger.error("Photo data migration failed: %s", e)
+        if is_pg:
+            conn.rollback()
+        raise
+
+
 def _init_sqlite(db_path: str | None = None) -> str:
     path = db_path or get_db_path()
     conn = _get_sqlite_connection(path)
@@ -148,6 +236,8 @@ def _init_sqlite(db_path: str | None = None) -> str:
                 (SCHEMA_VERSION,),
             )
             conn.commit()
+
+        _migrate_photos_data(conn, is_pg=False)
     finally:
         conn.close()
 
@@ -179,6 +269,8 @@ def _init_pg() -> str:
                 (SCHEMA_VERSION,),
             )
         conn.commit()
+
+        _migrate_photos_data(conn, is_pg=True)
     except Exception:
         conn.rollback()
         raise

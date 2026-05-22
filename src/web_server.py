@@ -187,6 +187,44 @@ def api_data():
     """Return the full family tree as JSON (read from DB on each request)."""
     repo = TreeRepository()
     tree = repo.load_tree()
+    all_photos = repo.list_all_photos()
+    photos_list = []
+    for p in all_photos:
+        photos_list.append({
+            "id": p["id"],
+            "file_path": p["file_path"],
+            "date": p.get("date"),
+            "date_circa": bool(p.get("date_circa")),
+            "place": p.get("place"),
+            "photo_type": p.get("photo_type", "photo"),
+            "tagged_people": [
+                {
+                    "person_id": tp["person_id"],
+                    "is_profile": bool(tp.get("is_profile")),
+                    "caption": tp.get("caption", ""),
+                    "given_name": tp.get("given_name", ""),
+                    "surname": tp.get("surname", ""),
+                    "crop_x": tp.get("crop_x"),
+                    "crop_y": tp.get("crop_y"),
+                    "crop_w": tp.get("crop_w"),
+                    "crop_h": tp.get("crop_h"),
+                }
+                for tp in p.get("tagged_people", [])
+            ],
+            "face_regions": [
+                {
+                    "id": fr["id"],
+                    "person_id": fr["person_id"],
+                    "x": fr["x"],
+                    "y": fr["y"],
+                    "w": fr["w"],
+                    "h": fr["h"],
+                    "given_name": fr.get("given_name", ""),
+                    "surname": fr.get("surname", ""),
+                }
+                for fr in p.get("face_regions", [])
+            ],
+        })
     data = {
         "people": [_person_to_dict(p) for p in tree.people.values()],
         "relationships": [_rel_to_dict(r) for r in tree.relationships],
@@ -194,6 +232,7 @@ def api_data():
         "events": [_event_to_dict(e) for e in tree.events],
         "sources": [_source_to_dict(s) for s in tree.sources.values()],
         "citations": [_citation_to_dict(c) for c in tree.citations],
+        "photos": photos_list,
     }
     return jsonify(data)
 
@@ -458,7 +497,35 @@ def api_create_union():
 
 @app.route("/api/photos")
 def api_photos():
-    """Return a list of all photo files (from S3 or local disk)."""
+    """Return rich photo objects from the photos table, with tagged people.
+
+    Falls back to a flat path list if the photos table is empty (pre-migration).
+    """
+    repo = TreeRepository()
+    photos = repo.list_all_photos()
+    if photos:
+        result = []
+        for p in photos:
+            obj = {
+                "id": p["id"],
+                "file_path": p["file_path"],
+                "date": p.get("date"),
+                "date_circa": bool(p.get("date_circa")),
+                "place": p.get("place"),
+                "photo_type": p.get("photo_type", "photo"),
+                "tagged_people": [
+                    {
+                        "person_id": tp["person_id"],
+                        "is_profile": bool(tp.get("is_profile")),
+                        "caption": tp.get("caption", ""),
+                        "given_name": tp.get("given_name", ""),
+                        "surname": tp.get("surname", ""),
+                    }
+                    for tp in p.get("tagged_people", [])
+                ],
+            }
+            result.append(obj)
+        return jsonify(result)
     names = photo_storage.list_all()
     return jsonify([f"photos/{n}" for n in names])
 
@@ -683,7 +750,10 @@ def api_upload_photo():
         logger.error("photo save failed: %s", e)
         return jsonify({"error": "Could not save file", "code": "io_error"}), 500
 
-    return jsonify({"path": f"photos/{safe_name}"})
+    photo_path = f"photos/{safe_name}"
+    repo = TreeRepository()
+    photo_id = repo.get_or_create_photo(photo_path)
+    return jsonify({"path": photo_path, "photo_id": photo_id})
 
 
 @app.route("/api/people/<person_id>/google-photos", methods=["POST"])
@@ -829,6 +899,249 @@ def api_set_photo_caption(person_id):
     person.photo_captions = captions
     repo.save_person(person)
     return jsonify({"photo_captions": captions})
+
+
+# ── Photo Metadata & Tagging ───────────────────────────────────────
+
+
+@app.route("/api/photos/<int:photo_id>/metadata", methods=["PUT"])
+@require_editor
+def api_update_photo_metadata(photo_id):
+    """Update metadata for a photo (date, date_circa, place, photo_type).
+
+    Body: {"date": "1987-04", "date_circa": true, "place": "NYC", "photo_type": "portrait"}
+    """
+    body = request.get_json(force=True) or {}
+    repo = TreeRepository()
+    photo = repo.get_photo(photo_id)
+    if not photo:
+        return jsonify({"error": "photo not found", "code": "not_found"}), 404
+
+    kwargs = {}
+    if "date" in body:
+        kwargs["date"] = body["date"] or None
+    if "date_circa" in body:
+        kwargs["date_circa"] = bool(body["date_circa"])
+    if "place" in body:
+        kwargs["place"] = body["place"] or None
+    if "photo_type" in body:
+        pt = body["photo_type"]
+        if pt not in ("portrait", "group", "document", "headstone", "photo"):
+            return jsonify({"error": "invalid photo_type", "code": "bad_request"}), 400
+        kwargs["photo_type"] = pt
+
+    if kwargs:
+        repo.update_photo_metadata(photo_id, **kwargs)
+
+    updated = repo.get_photo(photo_id)
+    return jsonify({
+        "id": updated["id"],
+        "file_path": updated["file_path"],
+        "date": updated.get("date"),
+        "date_circa": bool(updated.get("date_circa")),
+        "place": updated.get("place"),
+        "photo_type": updated.get("photo_type", "photo"),
+    })
+
+
+@app.route("/api/people/<person_id>/profile-photo", methods=["PUT"])
+@require_editor
+def api_set_profile_photo(person_id):
+    """Set the profile photo for a person. Body: {"photo_id": N}"""
+    body = request.get_json(force=True) or {}
+    photo_id = body.get("photo_id")
+    if not photo_id:
+        return jsonify({"error": "photo_id required", "code": "missing_field"}), 400
+
+    repo = TreeRepository()
+    person = repo.get_person(person_id)
+    if not person:
+        return jsonify({"error": "person not found", "code": "not_found"}), 404
+
+    repo.set_profile_photo(person_id, int(photo_id))
+
+    # Also sync the old photo_paths array so the profile photo is first
+    photo = repo.get_photo(int(photo_id))
+    if photo and photo["file_path"] in person.photo_paths:
+        paths = list(person.photo_paths)
+        paths.remove(photo["file_path"])
+        paths.insert(0, photo["file_path"])
+        person.photo_paths = paths
+        repo.save_person(person)
+
+    return jsonify({"ok": True, "photo_id": photo_id})
+
+
+@app.route("/api/photos/<int:photo_id>/tag", methods=["POST"])
+@require_editor
+def api_tag_person_in_photo(photo_id):
+    """Tag a person in a photo. Body: {"person_id": "..."}"""
+    body = request.get_json(force=True) or {}
+    person_id = (body.get("person_id") or "").strip()
+    if not person_id:
+        return jsonify({"error": "person_id required", "code": "missing_field"}), 400
+
+    repo = TreeRepository()
+    photo = repo.get_photo(photo_id)
+    if not photo:
+        return jsonify({"error": "photo not found", "code": "not_found"}), 404
+    person = repo.get_person(person_id)
+    if not person:
+        return jsonify({"error": "person not found", "code": "not_found"}), 404
+
+    # Get current max display_order for this person
+    existing = repo.photos_for_person(person_id)
+    max_order = max((p.get("display_order", 0) for p in existing), default=-1)
+
+    repo.assign_photo_to_person(person_id, photo_id, display_order=max_order + 1)
+
+    # Also add to old photo_paths for backward compat
+    if photo["file_path"] not in person.photo_paths:
+        person.photo_paths = list(person.photo_paths) + [photo["file_path"]]
+        repo.save_person(person)
+
+    return jsonify({"ok": True}), 201
+
+
+@app.route("/api/photos/<int:photo_id>/tag/<person_id>", methods=["DELETE"])
+@require_editor
+def api_untag_person_from_photo(photo_id, person_id):
+    """Remove a person's tag from a photo."""
+    repo = TreeRepository()
+    repo.unassign_photo_from_person(person_id, photo_id)
+
+    # Also remove from old photo_paths for backward compat
+    photo = repo.get_photo(photo_id)
+    person = repo.get_person(person_id)
+    if photo and person and photo["file_path"] in person.photo_paths:
+        person.photo_paths = [p for p in person.photo_paths if p != photo["file_path"]]
+        captions = dict(person.photo_captions)
+        captions.pop(photo["file_path"], None)
+        person.photo_captions = captions
+        repo.save_person(person)
+
+    return ("", 204)
+
+
+# ── Face Regions ───────────────────────────────────────────────────────
+
+
+@app.route("/api/photos/<int:photo_id>/face-region", methods=["PUT"])
+@require_editor
+def api_save_face_region(photo_id):
+    """Save a face region for a person on a photo.
+
+    Body: {"person_id": "...", "x": 0.2, "y": 0.1, "w": 0.3, "h": 0.4}
+    Coordinates are normalized 0-1.
+    """
+    body = request.get_json(force=True) or {}
+    person_id = (body.get("person_id") or "").strip()
+    if not person_id:
+        return jsonify({"error": "person_id required", "code": "missing_field"}), 400
+
+    try:
+        x = float(body.get("x", -1))
+        y = float(body.get("y", -1))
+        w = float(body.get("w", -1))
+        h = float(body.get("h", -1))
+    except (TypeError, ValueError):
+        return jsonify({"error": "x, y, w, h must be numbers", "code": "bad_request"}), 400
+
+    if not (0 <= x <= 1 and 0 <= y <= 1 and 0 < w <= 1 and 0 < h <= 1):
+        return jsonify({"error": "coordinates must be in 0-1 range", "code": "bad_request"}), 400
+    if x + w > 1.001 or y + h > 1.001:
+        return jsonify({"error": "region extends beyond image bounds", "code": "bad_request"}), 400
+
+    repo = TreeRepository()
+    photo = repo.get_photo(photo_id)
+    if not photo:
+        return jsonify({"error": "photo not found", "code": "not_found"}), 404
+    person = repo.get_person(person_id)
+    if not person:
+        return jsonify({"error": "person not found", "code": "not_found"}), 404
+
+    region_id = repo.save_face_region(photo_id, person_id, x, y, w, h)
+    return jsonify({"id": region_id, "photo_id": photo_id, "person_id": person_id,
+                    "x": x, "y": y, "w": w, "h": h})
+
+
+@app.route("/api/photos/<int:photo_id>/face-regions")
+def api_get_face_regions(photo_id):
+    """Return all face regions for a photo."""
+    repo = TreeRepository()
+    regions = repo.get_face_regions(photo_id)
+    return jsonify([
+        {
+            "id": r["id"],
+            "photo_id": r["photo_id"],
+            "person_id": r["person_id"],
+            "x": r["x"], "y": r["y"], "w": r["w"], "h": r["h"],
+            "given_name": r.get("given_name", ""),
+            "surname": r.get("surname", ""),
+        }
+        for r in regions
+    ])
+
+
+@app.route("/api/photos/<int:photo_id>/face-region/<int:region_id>", methods=["DELETE"])
+@require_editor
+def api_delete_face_region(photo_id, region_id):
+    """Delete a face region."""
+    repo = TreeRepository()
+    repo.delete_face_region(region_id)
+    return ("", 204)
+
+
+# ── Profile Crop ──────────────────────────────────────────────────────
+
+
+@app.route("/api/people/<person_id>/profile-crop", methods=["PUT"])
+@require_editor
+def api_set_profile_crop(person_id):
+    """Set the crop region for a person's profile photo.
+
+    Body: {"photo_id": N, "crop_x": 0.1, "crop_y": 0.1, "crop_w": 0.5, "crop_h": 0.5}
+    """
+    body = request.get_json(force=True) or {}
+    photo_id = body.get("photo_id")
+    if not photo_id:
+        return jsonify({"error": "photo_id required", "code": "missing_field"}), 400
+
+    try:
+        crop_x = float(body.get("crop_x", -1))
+        crop_y = float(body.get("crop_y", -1))
+        crop_w = float(body.get("crop_w", -1))
+        crop_h = float(body.get("crop_h", -1))
+    except (TypeError, ValueError):
+        return jsonify({"error": "crop values must be numbers", "code": "bad_request"}), 400
+
+    if not (0 <= crop_x <= 1 and 0 <= crop_y <= 1 and 0 < crop_w <= 1 and 0 < crop_h <= 1):
+        return jsonify({"error": "crop coordinates must be in 0-1 range", "code": "bad_request"}), 400
+    if crop_x + crop_w > 1.001 or crop_y + crop_h > 1.001:
+        return jsonify({"error": "crop region extends beyond image bounds", "code": "bad_request"}), 400
+
+    repo = TreeRepository()
+    person = repo.get_person(person_id)
+    if not person:
+        return jsonify({"error": "person not found", "code": "not_found"}), 404
+
+    repo.set_profile_crop(person_id, int(photo_id), crop_x, crop_y, crop_w, crop_h)
+    return jsonify({"ok": True, "person_id": person_id, "photo_id": photo_id,
+                    "crop_x": crop_x, "crop_y": crop_y, "crop_w": crop_w, "crop_h": crop_h})
+
+
+@app.route("/api/people/<person_id>/profile-crop", methods=["DELETE"])
+@require_editor
+def api_clear_profile_crop(person_id):
+    """Clear the crop region for a person's profile photo."""
+    body = request.get_json(force=True) or {}
+    photo_id = body.get("photo_id")
+    if not photo_id:
+        return jsonify({"error": "photo_id required", "code": "missing_field"}), 400
+
+    repo = TreeRepository()
+    repo.clear_profile_crop(person_id, int(photo_id))
+    return jsonify({"ok": True})
 
 
 # ── Document Upload & AI Parsing ───────────────────────────────────────

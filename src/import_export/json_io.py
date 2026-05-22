@@ -203,7 +203,7 @@ def _citation_to_dict(c: Citation) -> dict[str, Any]:
     return d
 
 
-def save_tree(tree: FamilyTree, path: str) -> None:
+def save_tree(tree: FamilyTree, path: str, photos: list[dict] | None = None) -> None:
     """Serialize a FamilyTree to the JSON format."""
     data = {
         "people": [_person_to_dict(p) for p in tree.people.values()],
@@ -213,6 +213,8 @@ def save_tree(tree: FamilyTree, path: str) -> None:
         "sources": [_source_to_dict(s) for s in tree.sources.values()],
         "citations": [_citation_to_dict(c) for c in tree.citations],
     }
+    if photos:
+        data["photos"] = photos
     Path(path).write_text(
         json.dumps(data, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
