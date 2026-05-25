@@ -1061,8 +1061,21 @@ def api_save_face_region(photo_id):
         return jsonify({"error": "person not found", "code": "not_found"}), 404
 
     region_id = repo.save_face_region(photo_id, person_id, x, y, w, h)
+
+    # Auto-tag: if this person isn't already tagged in the photo, add them.
+    # This makes the photo show up on the tagged person's panel.
+    existing_people = repo.people_for_photo(photo_id)
+    already_tagged = {p["person_id"] for p in existing_people}
+    if person_id not in already_tagged:
+        max_order = max((p.get("display_order", 0) for p in existing_people), default=-1)
+        repo.assign_photo_to_person(person_id, photo_id, display_order=max_order + 1)
+        # Also add to old photo_paths for backward compat
+        if photo["file_path"] not in person.photo_paths:
+            person.photo_paths = list(person.photo_paths) + [photo["file_path"]]
+            repo.save_person(person)
+
     return jsonify({"id": region_id, "photo_id": photo_id, "person_id": person_id,
-                    "x": x, "y": y, "w": w, "h": h})
+                    "x": x, "y": y, "w": w, "h": h, "auto_tagged": person_id not in already_tagged})
 
 
 @app.route("/api/photos/<int:photo_id>/face-regions")

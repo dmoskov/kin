@@ -886,26 +886,21 @@ class TreeRepository:
 
     def save_face_region(self, photo_id: int, person_id: str,
                          x: float, y: float, w: float, h: float) -> int:
-        """Upsert a face region for a person on a photo. Returns the region id."""
+        """Insert a face region for a person on a photo. Returns the region id.
+
+        Multiple regions per person per photo are allowed (for montages).
+        """
         conn = self._conn()
         try:
-            p = _ph()
-            if _is_pg():
-                _execute(conn, f"""
-                    INSERT INTO face_regions (photo_id, person_id, x, y, w, h)
-                    VALUES ({_ph(6)})
-                    ON CONFLICT (photo_id, person_id) DO UPDATE SET
-                        x=EXCLUDED.x, y=EXCLUDED.y, w=EXCLUDED.w, h=EXCLUDED.h
-                """, (photo_id, person_id, x, y, w, h))
-            else:
-                _execute(conn, f"""
-                    INSERT OR REPLACE INTO face_regions (photo_id, person_id, x, y, w, h)
-                    VALUES ({_ph(6)})
-                """, (photo_id, person_id, x, y, w, h))
+            _execute(conn, f"""
+                INSERT INTO face_regions (photo_id, person_id, x, y, w, h)
+                VALUES ({_ph(6)})
+            """, (photo_id, person_id, x, y, w, h))
             conn.commit()
-            row = _fetchone(conn, f"""
-                SELECT id FROM face_regions WHERE photo_id = {p} AND person_id = {p}
-            """, (photo_id, person_id))
+            if _is_pg():
+                row = _fetchone(conn, "SELECT lastval() AS id")
+            else:
+                row = _fetchone(conn, "SELECT last_insert_rowid() AS id")
             return row["id"]
         finally:
             conn.close()

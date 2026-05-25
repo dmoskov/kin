@@ -5,7 +5,7 @@ The schema mirrors the domain models in models/ and is designed for
 efficient querying.
 """
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 # ═══════════════════════════════════════════════════════════════════════
 # SQLite schema (local dev / tests)
@@ -194,7 +194,27 @@ ALTER TABLE person_photos ADD COLUMN crop_w REAL;
 ALTER TABLE person_photos ADD COLUMN crop_h REAL;
 """
 
-SCHEMA_SQL = SCHEMA_V1 + SCHEMA_V2 + SCHEMA_V3 + SCHEMA_V4 + SCHEMA_V5 + SCHEMA_V6 + SCHEMA_V7 + SCHEMA_V8
+SCHEMA_V9 = """
+-- Recreate face_regions without UNIQUE(photo_id, person_id) to allow
+-- multiple face tags for the same person in montage photos.
+CREATE TABLE IF NOT EXISTS face_regions_new (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    photo_id INTEGER NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
+    person_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+    x REAL NOT NULL,
+    y REAL NOT NULL,
+    w REAL NOT NULL,
+    h REAL NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+INSERT INTO face_regions_new SELECT * FROM face_regions;
+DROP TABLE face_regions;
+ALTER TABLE face_regions_new RENAME TO face_regions;
+CREATE INDEX IF NOT EXISTS idx_face_regions_photo ON face_regions(photo_id);
+CREATE INDEX IF NOT EXISTS idx_face_regions_person ON face_regions(person_id);
+"""
+
+SCHEMA_SQL = SCHEMA_V1 + SCHEMA_V2 + SCHEMA_V3 + SCHEMA_V4 + SCHEMA_V5 + SCHEMA_V6 + SCHEMA_V7 + SCHEMA_V8 + SCHEMA_V9
 
 MIGRATIONS = {
     2: SCHEMA_V2,
@@ -204,6 +224,7 @@ MIGRATIONS = {
     6: SCHEMA_V6,
     7: SCHEMA_V7,
     8: SCHEMA_V8,
+    9: SCHEMA_V9,
 }
 
 
@@ -394,7 +415,11 @@ ALTER TABLE person_photos ADD COLUMN IF NOT EXISTS crop_w DOUBLE PRECISION;
 ALTER TABLE person_photos ADD COLUMN IF NOT EXISTS crop_h DOUBLE PRECISION;
 """
 
-PG_SCHEMA_SQL = PG_SCHEMA_V1 + PG_SCHEMA_V2 + PG_SCHEMA_V3 + PG_SCHEMA_V4 + PG_SCHEMA_V5 + PG_SCHEMA_V6 + PG_SCHEMA_V7 + PG_SCHEMA_V8
+PG_SCHEMA_V9 = """
+ALTER TABLE face_regions DROP CONSTRAINT IF EXISTS face_regions_photo_id_person_id_key;
+"""
+
+PG_SCHEMA_SQL = PG_SCHEMA_V1 + PG_SCHEMA_V2 + PG_SCHEMA_V3 + PG_SCHEMA_V4 + PG_SCHEMA_V5 + PG_SCHEMA_V6 + PG_SCHEMA_V7 + PG_SCHEMA_V8 + PG_SCHEMA_V9
 
 PG_MIGRATIONS = {
     2: PG_SCHEMA_V2,
@@ -404,4 +429,5 @@ PG_MIGRATIONS = {
     6: PG_SCHEMA_V6,
     7: PG_SCHEMA_V7,
     8: PG_SCHEMA_V8,
+    9: PG_SCHEMA_V9,
 }
