@@ -302,7 +302,39 @@ private/             # YOUR family data (gitignored)
 
 ## Deployment
 
-See `deploy/` for scripts to deploy on an EC2 instance with nginx + gunicorn.
+### Production (EC2)
+
+The app runs on an EC2 instance at `YOUR_EC2_HOST` (`your.domain.com`) with nginx + gunicorn.
+
+**Deploy code changes:**
+
+```bash
+bash deploy/deploy.sh
+```
+
+This script:
+1. Pushes your SSH key via EC2 Instance Connect (requires AWS CLI)
+2. `rsync`s `web/`, `src/`, `private/config/`, `private/photos/`, and `requirements.txt` to the server
+3. Installs Python dependencies
+4. Restarts the `familytree` systemd service
+
+**Requirements:**
+- AWS CLI with `ec2-instance-connect` permissions
+- SSH key pair at `~/.ssh/familytree-ec2` (`.pem`) and `~/.ssh/familytree-ec2.pub`
+- `rsync` installed locally
+
+**Important notes:**
+- `private/config/family-config.json` is synced local → server on each deploy. Keep the local copy as the source of truth.
+- Photos sync is additive (no `--delete`) — photos uploaded via the web UI on the server are preserved.
+- `private/` is gitignored; config and photos never go into the repo.
+
+**First-time setup:**
+```bash
+# On the EC2 instance:
+sudo bash deploy/setup.sh
+```
+
+### Local (Docker)
 
 ```bash
 # Quick start with Docker Compose
