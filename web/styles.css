@@ -142,11 +142,12 @@ nav {
 /* ── Views ──────────────────────────────────────────────────── */
 
 main {
+  display: flex;
   height: calc(100vh - 65px);
   position: relative;
 }
 
-.view { display: none; height: 100%; }
+.view { display: none; height: 100%; flex: 1; min-width: 0; }
 .view.active { display: flex; }
 
 /* ── Tree View ──────────────────────────────────────────────── */
