@@ -15,7 +15,6 @@ Usage:
 """
 
 import json
-import os
 from typing import Any, Optional
 
 from models.person import Gender, Person
@@ -25,11 +24,7 @@ from models.source import Source, SourceType
 from models.citation import Citation, EntityType, Confidence
 from models.tree import FamilyTree
 
-from .connection import get_connection
-
-
-def _is_pg() -> bool:
-    return bool(os.environ.get("DATABASE_URL"))
+from .connection import get_connection, _use_postgres as _is_pg
 
 
 def _ph(n: int = 1) -> str:
@@ -713,15 +708,27 @@ class TreeRepository:
         """Return the photo id for a file_path, creating a row if needed."""
         conn = self._conn()
         try:
-            row = _fetchone(conn, f"SELECT id FROM photos WHERE file_path = {_ph()}", (file_path,))
+            row = _fetchone(
+                conn, f"SELECT id FROM photos WHERE file_path = {_ph()}", (file_path,)
+            )
             if row:
                 return row["id"]
             if _is_pg():
-                _execute(conn, f"INSERT INTO photos (file_path) VALUES ({_ph()}) ON CONFLICT (file_path) DO NOTHING", (file_path,))
+                _execute(
+                    conn,
+                    f"INSERT INTO photos (file_path) VALUES ({_ph()}) ON CONFLICT (file_path) DO NOTHING",
+                    (file_path,),
+                )
             else:
-                _execute(conn, f"INSERT OR IGNORE INTO photos (file_path) VALUES ({_ph()})", (file_path,))
+                _execute(
+                    conn,
+                    f"INSERT OR IGNORE INTO photos (file_path) VALUES ({_ph()})",
+                    (file_path,),
+                )
             conn.commit()
-            row = _fetchone(conn, f"SELECT id FROM photos WHERE file_path = {_ph()}", (file_path,))
+            row = _fetchone(
+                conn, f"SELECT id FROM photos WHERE file_path = {_ph()}", (file_path,)
+            )
             return row["id"]
         finally:
             conn.close()
@@ -753,7 +760,9 @@ class TreeRepository:
         """Fetch a single photo by id."""
         conn = self._conn()
         try:
-            return _fetchone(conn, f"SELECT * FROM photos WHERE id = {_ph()}", (photo_id,))
+            return _fetchone(
+                conn, f"SELECT * FROM photos WHERE id = {_ph()}", (photo_id,)
+            )
         finally:
             conn.close()
 
@@ -762,14 +771,18 @@ class TreeRepository:
         conn = self._conn()
         try:
             p = _ph()
-            return _fetchall(conn, f"""
+            return _fetchall(
+                conn,
+                f"""
                 SELECT p.*, pp.is_profile, pp.display_order, pp.caption, pp.person_id,
                        pp.crop_x, pp.crop_y, pp.crop_w, pp.crop_h
                 FROM photos p
                 JOIN person_photos pp ON pp.photo_id = p.id
                 WHERE pp.person_id = {p}
                 ORDER BY pp.display_order
-            """, (person_id,))
+            """,
+                (person_id,),
+            )
         finally:
             conn.close()
 
@@ -778,7 +791,9 @@ class TreeRepository:
         conn = self._conn()
         try:
             p = _ph()
-            return _fetchall(conn, f"""
+            return _fetchall(
+                conn,
+                f"""
                 SELECT pp.person_id, pp.is_profile, pp.display_order, pp.caption,
                        pp.crop_x, pp.crop_y, pp.crop_w, pp.crop_h,
                        ppl.given_name, ppl.surname
@@ -786,29 +801,50 @@ class TreeRepository:
                 JOIN people ppl ON ppl.id = pp.person_id
                 WHERE pp.photo_id = {p}
                 ORDER BY pp.display_order
-            """, (photo_id,))
+            """,
+                (photo_id,),
+            )
         finally:
             conn.close()
 
-    def assign_photo_to_person(self, person_id: str, photo_id: int,
-                                caption: str = "", display_order: int = 0,
-                                is_profile: bool = False) -> None:
+    def assign_photo_to_person(
+        self,
+        person_id: str,
+        photo_id: int,
+        caption: str = "",
+        display_order: int = 0,
+        is_profile: bool = False,
+    ) -> None:
         """Link a photo to a person."""
         conn = self._conn()
         try:
             if _is_pg():
-                _execute(conn, f"""
+                _execute(
+                    conn,
+                    f"""
                     INSERT INTO person_photos (person_id, photo_id, is_profile, display_order, caption)
                     VALUES ({_ph(5)})
                     ON CONFLICT (person_id, photo_id) DO UPDATE SET
                         is_profile=EXCLUDED.is_profile, display_order=EXCLUDED.display_order,
                         caption=EXCLUDED.caption
-                """, (person_id, photo_id, is_profile, display_order, caption))
+                """,
+                    (person_id, photo_id, is_profile, display_order, caption),
+                )
             else:
-                _execute(conn, f"""
+                _execute(
+                    conn,
+                    f"""
                     INSERT OR REPLACE INTO person_photos (person_id, photo_id, is_profile, display_order, caption)
                     VALUES ({_ph(5)})
-                """, (person_id, photo_id, 1 if is_profile else 0, display_order, caption))
+                """,
+                    (
+                        person_id,
+                        photo_id,
+                        1 if is_profile else 0,
+                        display_order,
+                        caption,
+                    ),
+                )
             conn.commit()
         finally:
             conn.close()
@@ -817,8 +853,11 @@ class TreeRepository:
         """Remove a photo from a person."""
         conn = self._conn()
         try:
-            _execute(conn, f"DELETE FROM person_photos WHERE person_id = {_ph()} AND photo_id = {_ph()}",
-                     (person_id, photo_id))
+            _execute(
+                conn,
+                f"DELETE FROM person_photos WHERE person_id = {_ph()} AND photo_id = {_ph()}",
+                (person_id, photo_id),
+            )
             conn.commit()
         finally:
             conn.close()
@@ -829,20 +868,31 @@ class TreeRepository:
         try:
             false_val = False if _is_pg() else 0
             true_val = True if _is_pg() else 1
-            _execute(conn, f"UPDATE person_photos SET is_profile = {_ph()} WHERE person_id = {_ph()}",
-                     (false_val, person_id))
-            _execute(conn, f"UPDATE person_photos SET is_profile = {_ph()} WHERE person_id = {_ph()} AND photo_id = {_ph()}",
-                     (true_val, person_id, photo_id))
+            _execute(
+                conn,
+                f"UPDATE person_photos SET is_profile = {_ph()} WHERE person_id = {_ph()}",
+                (false_val, person_id),
+            )
+            _execute(
+                conn,
+                f"UPDATE person_photos SET is_profile = {_ph()} WHERE person_id = {_ph()} AND photo_id = {_ph()}",
+                (true_val, person_id, photo_id),
+            )
             conn.commit()
         finally:
             conn.close()
 
-    def set_photo_caption_new(self, person_id: str, photo_id: int, caption: str) -> None:
+    def set_photo_caption_new(
+        self, person_id: str, photo_id: int, caption: str
+    ) -> None:
         """Set the caption for a person-photo link."""
         conn = self._conn()
         try:
-            _execute(conn, f"UPDATE person_photos SET caption = {_ph()} WHERE person_id = {_ph()} AND photo_id = {_ph()}",
-                     (caption, person_id, photo_id))
+            _execute(
+                conn,
+                f"UPDATE person_photos SET caption = {_ph()} WHERE person_id = {_ph()} AND photo_id = {_ph()}",
+                (caption, person_id, photo_id),
+            )
             conn.commit()
         finally:
             conn.close()
@@ -854,7 +904,9 @@ class TreeRepository:
             photos = _fetchall(conn, "SELECT * FROM photos ORDER BY id")
             p = _ph()
             for photo in photos:
-                people = _fetchall(conn, f"""
+                people = _fetchall(
+                    conn,
+                    f"""
                     SELECT pp.person_id, pp.is_profile, pp.caption,
                            pp.crop_x, pp.crop_y, pp.crop_w, pp.crop_h,
                            ppl.given_name, ppl.surname
@@ -862,17 +914,23 @@ class TreeRepository:
                     JOIN people ppl ON ppl.id = pp.person_id
                     WHERE pp.photo_id = {p}
                     ORDER BY pp.display_order
-                """, (photo["id"],))
+                """,
+                    (photo["id"],),
+                )
                 photo["tagged_people"] = people
                 try:
-                    regions = _fetchall(conn, f"""
+                    regions = _fetchall(
+                        conn,
+                        f"""
                         SELECT fr.id, fr.person_id, fr.x, fr.y, fr.w, fr.h,
                                ppl.given_name, ppl.surname
                         FROM face_regions fr
                         JOIN people ppl ON ppl.id = fr.person_id
                         WHERE fr.photo_id = {p}
                         ORDER BY fr.id
-                    """, (photo["id"],))
+                    """,
+                        (photo["id"],),
+                    )
                     photo["face_regions"] = regions
                 except Exception:
                     photo["face_regions"] = []
@@ -884,18 +942,23 @@ class TreeRepository:
 
     # ── Face Regions ──────────────────────────────────────────────────
 
-    def save_face_region(self, photo_id: int, person_id: str,
-                         x: float, y: float, w: float, h: float) -> int:
+    def save_face_region(
+        self, photo_id: int, person_id: str, x: float, y: float, w: float, h: float
+    ) -> int:
         """Insert a face region for a person on a photo. Returns the region id.
 
         Multiple regions per person per photo are allowed (for montages).
         """
         conn = self._conn()
         try:
-            _execute(conn, f"""
+            _execute(
+                conn,
+                f"""
                 INSERT INTO face_regions (photo_id, person_id, x, y, w, h)
                 VALUES ({_ph(6)})
-            """, (photo_id, person_id, x, y, w, h))
+            """,
+                (photo_id, person_id, x, y, w, h),
+            )
             conn.commit()
             if _is_pg():
                 row = _fetchone(conn, "SELECT lastval() AS id")
@@ -910,14 +973,18 @@ class TreeRepository:
         conn = self._conn()
         try:
             p = _ph()
-            return _fetchall(conn, f"""
+            return _fetchall(
+                conn,
+                f"""
                 SELECT fr.id, fr.photo_id, fr.person_id, fr.x, fr.y, fr.w, fr.h,
                        ppl.given_name, ppl.surname
                 FROM face_regions fr
                 JOIN people ppl ON ppl.id = fr.person_id
                 WHERE fr.photo_id = {p}
                 ORDER BY fr.id
-            """, (photo_id,))
+            """,
+                (photo_id,),
+            )
         finally:
             conn.close()
 
@@ -930,32 +997,49 @@ class TreeRepository:
         finally:
             conn.close()
 
-    def face_region_for_person_photo(self, photo_id: int, person_id: str) -> Optional[dict]:
+    def face_region_for_person_photo(
+        self, photo_id: int, person_id: str
+    ) -> Optional[dict]:
         """Return the face region for a specific person on a specific photo."""
         conn = self._conn()
         try:
             p = _ph()
-            return _fetchone(conn, f"""
+            return _fetchone(
+                conn,
+                f"""
                 SELECT id, photo_id, person_id, x, y, w, h
                 FROM face_regions
                 WHERE photo_id = {p} AND person_id = {p}
-            """, (photo_id, person_id))
+            """,
+                (photo_id, person_id),
+            )
         finally:
             conn.close()
 
     # ── Profile Crop ───────────────────────────────────────────────────
 
-    def set_profile_crop(self, person_id: str, photo_id: int,
-                         crop_x: float, crop_y: float, crop_w: float, crop_h: float) -> None:
+    def set_profile_crop(
+        self,
+        person_id: str,
+        photo_id: int,
+        crop_x: float,
+        crop_y: float,
+        crop_w: float,
+        crop_h: float,
+    ) -> None:
         """Set the crop region for a person's profile photo."""
         conn = self._conn()
         try:
             p = _ph()
-            _execute(conn, f"""
+            _execute(
+                conn,
+                f"""
                 UPDATE person_photos
                 SET crop_x = {p}, crop_y = {p}, crop_w = {p}, crop_h = {p}
                 WHERE person_id = {p} AND photo_id = {p}
-            """, (crop_x, crop_y, crop_w, crop_h, person_id, photo_id))
+            """,
+                (crop_x, crop_y, crop_w, crop_h, person_id, photo_id),
+            )
             conn.commit()
         finally:
             conn.close()
@@ -965,16 +1049,20 @@ class TreeRepository:
         conn = self._conn()
         try:
             p = _ph()
-            _execute(conn, f"""
+            _execute(
+                conn,
+                f"""
                 UPDATE person_photos
                 SET crop_x = NULL, crop_y = NULL, crop_w = NULL, crop_h = NULL
                 WHERE person_id = {p} AND photo_id = {p}
-            """, (person_id, photo_id))
+            """,
+                (person_id, photo_id),
+            )
             conn.commit()
         finally:
             conn.close()
 
-    def _sync_person_photos(self, conn: Any, person: 'Person') -> None:
+    def _sync_person_photos(self, conn: Any, person: "Person") -> None:
         """Sync the new photos/person_photos tables from a person's photo_paths.
 
         Called during save_person for dual-write compatibility.
@@ -982,44 +1070,73 @@ class TreeRepository:
         p = _ph()
         for idx, file_path in enumerate(person.photo_paths):
             if _is_pg():
-                _execute(conn, f"INSERT INTO photos (file_path) VALUES ({p}) ON CONFLICT (file_path) DO NOTHING", (file_path,))
+                _execute(
+                    conn,
+                    f"INSERT INTO photos (file_path) VALUES ({p}) ON CONFLICT (file_path) DO NOTHING",
+                    (file_path,),
+                )
             else:
-                _execute(conn, f"INSERT OR IGNORE INTO photos (file_path) VALUES ({p})", (file_path,))
+                _execute(
+                    conn,
+                    f"INSERT OR IGNORE INTO photos (file_path) VALUES ({p})",
+                    (file_path,),
+                )
 
-            row = _fetchone(conn, f"SELECT id FROM photos WHERE file_path = {p}", (file_path,))
+            row = _fetchone(
+                conn, f"SELECT id FROM photos WHERE file_path = {p}", (file_path,)
+            )
             photo_id = row["id"]
 
             caption = person.photo_captions.get(file_path, "")
 
-            existing = _fetchone(conn, f"""
+            existing = _fetchone(
+                conn,
+                f"""
                 SELECT is_profile FROM person_photos
                 WHERE person_id = {p} AND photo_id = {p}
-            """, (person.id, photo_id))
+            """,
+                (person.id, photo_id),
+            )
 
             if existing:
-                _execute(conn, f"""
+                _execute(
+                    conn,
+                    f"""
                     UPDATE person_photos SET display_order = {p}, caption = {p}
                     WHERE person_id = {p} AND photo_id = {p}
-                """, (idx, caption, person.id, photo_id))
+                """,
+                    (idx, caption, person.id, photo_id),
+                )
             else:
-                is_profile_val = (idx == 0)
+                is_profile_val = idx == 0
                 if not _is_pg():
                     is_profile_val = 1 if is_profile_val else 0
-                _execute(conn, f"""
+                _execute(
+                    conn,
+                    f"""
                     INSERT INTO person_photos (person_id, photo_id, is_profile, display_order, caption)
                     VALUES ({_ph(5)})
-                """, (person.id, photo_id, is_profile_val, idx, caption))
+                """,
+                    (person.id, photo_id, is_profile_val, idx, caption),
+                )
 
-        current_photos = _fetchall(conn, f"""
+        current_photos = _fetchall(
+            conn,
+            f"""
             SELECT p.file_path, pp.photo_id FROM person_photos pp
             JOIN photos p ON p.id = pp.photo_id
             WHERE pp.person_id = {p}
-        """, (person.id,))
+        """,
+            (person.id,),
+        )
         paths_set = set(person.photo_paths)
         for cp in current_photos:
             if cp["file_path"] not in paths_set:
-                _execute(conn, f"DELETE FROM person_photos WHERE person_id = {p} AND photo_id = {p}",
-                         (person.id, cp["photo_id"]))
+                _execute(
+                    conn,
+                    f"DELETE FROM person_photos WHERE person_id = {p} AND photo_id = {p}",
+                    (person.id, cp["photo_id"]),
+                )
 
     # ── Internal helpers ────────────────────────────────────────────────
 

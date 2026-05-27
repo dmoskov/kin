@@ -11,13 +11,12 @@ and spawns a background thread to resolve cache misses. Callers receive a
 
 import json
 import logging
-import os
 import threading
 import time
 import urllib.parse
 import urllib.request
 
-from database.connection import get_connection
+from database.connection import get_connection, _use_postgres as _is_pg
 
 logger = logging.getLogger(__name__)
 
@@ -28,13 +27,8 @@ _RATE_LIMIT = 1.1  # seconds between requests (Nominatim policy: max 1/sec)
 _last_request_time: float = 0.0
 _lock = threading.Lock()
 
-# Track which places are currently being resolved in the background
 _pending: set[str] = set()
 _pending_lock = threading.Lock()
-
-
-def _is_pg() -> bool:
-    return bool(os.environ.get("DATABASE_URL"))
 
 
 def geocode_places(places: list[str]) -> tuple[dict[str, tuple[float, float]], int]:
@@ -106,8 +100,8 @@ def _load_cache(places: list[str]) -> dict[str, tuple[float, float] | None]:
     result = {}
     for row in rows:
         place = row["place"] if hasattr(row, "keys") else row[0]
-        lat   = row["lat"]   if hasattr(row, "keys") else row[1]
-        lng   = row["lng"]   if hasattr(row, "keys") else row[2]
+        lat = row["lat"] if hasattr(row, "keys") else row[1]
+        lng = row["lng"] if hasattr(row, "keys") else row[2]
         if lat is not None and lng is not None:
             result[place] = (lat, lng)
         else:
@@ -147,11 +141,17 @@ def _nominatim(place: str) -> tuple[float, float] | None:
             time.sleep(_RATE_LIMIT - elapsed)
         _last_request_time = time.time()
 
-    url = _NOMINATIM_URL + "?" + urllib.parse.urlencode({
-        "q": place,
-        "format": "json",
-        "limit": 1,
-    })
+    url = (
+        _NOMINATIM_URL
+        + "?"
+        + urllib.parse.urlencode(
+            {
+                "q": place,
+                "format": "json",
+                "limit": 1,
+            }
+        )
+    )
     req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
     try:
         with urllib.request.urlopen(req, timeout=8) as resp:
