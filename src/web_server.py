@@ -1545,9 +1545,9 @@ def _update_document_progress(doc_id: str, total: int, done: int) -> None:
         conn.close()
 
 
-def _run_chunked_parse(doc_id: str, file_path: str, filename: str, existing_people: list[dict], total_chunks: int) -> None:
-    """Background thread target for multi-chunk PDF parsing."""
-    from intelligence.document_parser import parse_document_chunked, _plan_chunks
+def _run_background_parse(doc_id: str, file_path: str, filename: str, existing_people: list[dict]) -> None:
+    """Background thread target for all document parsing (single or multi-chunk)."""
+    from intelligence.document_parser import parse_document_chunked
 
     job = _parse_jobs[doc_id]
 
@@ -1568,7 +1568,7 @@ def _run_chunked_parse(doc_id: str, file_path: str, filename: str, existing_peop
             on_progress=on_progress,
         )
     except Exception as e:
-        logger.error("Chunked document parsing failed: %s", e)
+        logger.error("Document parsing failed: %s", e)
         result = {"error": str(e)}
 
     if "error" in result:
@@ -1586,9 +1586,8 @@ def _run_chunked_parse(doc_id: str, file_path: str, filename: str, existing_peop
 def api_parse_document(doc_id):
     """Trigger AI parsing of a document.
 
-    Short documents (single chunk): synchronous, returns result immediately.
-    Long PDFs (multi-chunk): returns immediately with progress info,
-    spawns a background thread, client polls /parse-status.
+    Always returns immediately and spawns a background thread.
+    Client polls /parse-status for progress and final result.
     """
     row = _get_document(doc_id)
     if not row:
@@ -1602,17 +1601,19 @@ def api_parse_document(doc_id):
 
     existing_people = _get_existing_people()
 
-    # Check if this is a multi-chunk PDF
+    # Plan chunks for PDFs to report progress; non-PDFs get 1 virtual chunk
     ext = Path(file_path).suffix.lower()
+    total_chunks = 1
+    chunks: list[dict] = []
+
     if ext == ".pdf":
         from intelligence.document_parser import _plan_chunks
         chunks = _plan_chunks(file_path)
+        total_chunks = max(len(chunks), 1)
 
         if len(chunks) > 1:
-            total = len(chunks)
-            _update_document_progress(doc_id, total, 0)
+            _update_document_progress(doc_id, total_chunks, 0)
 
-            # Insert pending chunk rows
             conn = get_connection()
             try:
                 for i, chunk in enumerate(chunks):
@@ -1627,50 +1628,25 @@ def api_parse_document(doc_id):
             finally:
                 conn.close()
 
-            _parse_jobs[doc_id] = {
-                "status": "parsing",
-                "total_chunks": total,
-                "chunks_done": 0,
-                "chunk_plan": chunks,
-            }
+    _parse_jobs[doc_id] = {
+        "status": "parsing",
+        "total_chunks": total_chunks,
+        "chunks_done": 0,
+        "chunk_plan": chunks,
+    }
 
-            t = threading.Thread(
-                target=_run_chunked_parse,
-                args=(doc_id, file_path, row["filename"], existing_people, total),
-                daemon=True,
-            )
-            t.start()
-
-            return jsonify({
-                "document_id": doc_id,
-                "status": "parsing",
-                "total_chunks": total,
-                "chunks_done": 0,
-            })
-
-    # Single-chunk / non-PDF: synchronous parse (existing behavior)
-    try:
-        from intelligence.document_parser import parse_document
-        result = parse_document(
-            file_path=file_path,
-            existing_people=existing_people,
-            document_filename=row["filename"],
-        )
-    except Exception as e:
-        logger.error("Document parsing failed: %s", e)
-        _update_document(doc_id, status="error", parsed_data={"error": str(e)})
-        return jsonify({"error": f"Parsing failed: {e}", "code": "parse_failed"}), 500
-
-    if "error" in result:
-        _update_document(doc_id, status="error", parsed_data=result)
-        return jsonify(result), 500
-
-    _update_document(doc_id, status="parsed", parsed_data=result)
+    t = threading.Thread(
+        target=_run_background_parse,
+        args=(doc_id, file_path, row["filename"], existing_people),
+        daemon=True,
+    )
+    t.start()
 
     return jsonify({
         "document_id": doc_id,
-        "status": "parsed",
-        "proposed_changes": result,
+        "status": "parsing",
+        "total_chunks": total_chunks,
+        "chunks_done": 0,
     })
 
 
