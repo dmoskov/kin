@@ -7,7 +7,7 @@ User=ec2-user
 Group=ec2-user
 WorkingDirectory=/home/ec2-user/family-tree/src
 EnvironmentFile=/home/ec2-user/family-tree/.env
-ExecStart=/home/ec2-user/family-tree/venv/bin/gunicorn web_server:app --bind 127.0.0.1:8000 --workers 2
+ExecStart=/home/ec2-user/family-tree/venv/bin/gunicorn web_server:app --bind 127.0.0.1:8000 --workers 2 --timeout 120
 Restart=always
 RestartSec=5
 

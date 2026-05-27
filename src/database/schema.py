@@ -5,7 +5,7 @@ The schema mirrors the domain models in models/ and is designed for
 efficient querying.
 """
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 12
 
 # ═══════════════════════════════════════════════════════════════════════
 # SQLite schema (local dev / tests)
@@ -214,7 +214,67 @@ CREATE INDEX IF NOT EXISTS idx_face_regions_photo ON face_regions(photo_id);
 CREATE INDEX IF NOT EXISTS idx_face_regions_person ON face_regions(person_id);
 """
 
-SCHEMA_SQL = SCHEMA_V1 + SCHEMA_V2 + SCHEMA_V3 + SCHEMA_V4 + SCHEMA_V5 + SCHEMA_V6 + SCHEMA_V7 + SCHEMA_V8 + SCHEMA_V9
+SCHEMA_V10 = """
+ALTER TABLE photos ADD COLUMN lat REAL;
+ALTER TABLE photos ADD COLUMN lng REAL;
+CREATE INDEX IF NOT EXISTS idx_photos_lat_lng ON photos(lat, lng);
+"""
+
+SCHEMA_V11 = """
+CREATE TABLE IF NOT EXISTS document_chunks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    chunk_index INTEGER NOT NULL,
+    start_page INTEGER NOT NULL,
+    end_page INTEGER NOT NULL,
+    mode TEXT NOT NULL DEFAULT 'text' CHECK (mode IN ('text', 'image')),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'done', 'error')),
+    parsed_data TEXT DEFAULT '{}',
+    error_message TEXT,
+    UNIQUE(document_id, chunk_index)
+);
+
+ALTER TABLE documents ADD COLUMN total_chunks INTEGER DEFAULT 0;
+ALTER TABLE documents ADD COLUMN chunks_done INTEGER DEFAULT 0;
+"""
+
+SCHEMA_V12 = """
+CREATE TABLE IF NOT EXISTS news_articles (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    url TEXT,
+    publication TEXT,
+    date TEXT,
+    summary TEXT DEFAULT '',
+    photo_url TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS person_articles (
+    person_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+    article_id TEXT NOT NULL REFERENCES news_articles(id) ON DELETE CASCADE,
+    UNIQUE(person_id, article_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_person_articles_person ON person_articles(person_id);
+CREATE INDEX IF NOT EXISTS idx_person_articles_article ON person_articles(article_id);
+CREATE INDEX IF NOT EXISTS idx_news_articles_date ON news_articles(date);
+"""
+
+SCHEMA_SQL = (
+    SCHEMA_V1
+    + SCHEMA_V2
+    + SCHEMA_V3
+    + SCHEMA_V4
+    + SCHEMA_V5
+    + SCHEMA_V6
+    + SCHEMA_V7
+    + SCHEMA_V8
+    + SCHEMA_V9
+    + SCHEMA_V10
+    + SCHEMA_V11
+    + SCHEMA_V12
+)
 
 MIGRATIONS = {
     2: SCHEMA_V2,
@@ -225,6 +285,9 @@ MIGRATIONS = {
     7: SCHEMA_V7,
     8: SCHEMA_V8,
     9: SCHEMA_V9,
+    10: SCHEMA_V10,
+    11: SCHEMA_V11,
+    12: SCHEMA_V12,
 }
 
 
@@ -419,7 +482,67 @@ PG_SCHEMA_V9 = """
 ALTER TABLE face_regions DROP CONSTRAINT IF EXISTS face_regions_photo_id_person_id_key;
 """
 
-PG_SCHEMA_SQL = PG_SCHEMA_V1 + PG_SCHEMA_V2 + PG_SCHEMA_V3 + PG_SCHEMA_V4 + PG_SCHEMA_V5 + PG_SCHEMA_V6 + PG_SCHEMA_V7 + PG_SCHEMA_V8 + PG_SCHEMA_V9
+PG_SCHEMA_V10 = """
+ALTER TABLE photos ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;
+ALTER TABLE photos ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;
+CREATE INDEX IF NOT EXISTS idx_photos_lat_lng ON photos(lat, lng);
+"""
+
+PG_SCHEMA_V11 = """
+CREATE TABLE IF NOT EXISTS document_chunks (
+    id SERIAL PRIMARY KEY,
+    document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    chunk_index INTEGER NOT NULL,
+    start_page INTEGER NOT NULL,
+    end_page INTEGER NOT NULL,
+    mode TEXT NOT NULL DEFAULT 'text' CHECK (mode IN ('text', 'image')),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'done', 'error')),
+    parsed_data TEXT DEFAULT '{}',
+    error_message TEXT,
+    UNIQUE(document_id, chunk_index)
+);
+
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS total_chunks INTEGER DEFAULT 0;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS chunks_done INTEGER DEFAULT 0;
+"""
+
+PG_SCHEMA_V12 = """
+CREATE TABLE IF NOT EXISTS news_articles (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    url TEXT,
+    publication TEXT,
+    date TEXT,
+    summary TEXT DEFAULT '',
+    photo_url TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS person_articles (
+    person_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+    article_id TEXT NOT NULL REFERENCES news_articles(id) ON DELETE CASCADE,
+    UNIQUE(person_id, article_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_person_articles_person ON person_articles(person_id);
+CREATE INDEX IF NOT EXISTS idx_person_articles_article ON person_articles(article_id);
+CREATE INDEX IF NOT EXISTS idx_news_articles_date ON news_articles(date);
+"""
+
+PG_SCHEMA_SQL = (
+    PG_SCHEMA_V1
+    + PG_SCHEMA_V2
+    + PG_SCHEMA_V3
+    + PG_SCHEMA_V4
+    + PG_SCHEMA_V5
+    + PG_SCHEMA_V6
+    + PG_SCHEMA_V7
+    + PG_SCHEMA_V8
+    + PG_SCHEMA_V9
+    + PG_SCHEMA_V10
+    + PG_SCHEMA_V11
+    + PG_SCHEMA_V12
+)
 
 PG_MIGRATIONS = {
     2: PG_SCHEMA_V2,
@@ -430,4 +553,7 @@ PG_MIGRATIONS = {
     7: PG_SCHEMA_V7,
     8: PG_SCHEMA_V8,
     9: PG_SCHEMA_V9,
+    10: PG_SCHEMA_V10,
+    11: PG_SCHEMA_V11,
+    12: PG_SCHEMA_V12,
 }

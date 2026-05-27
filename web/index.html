@@ -22,6 +22,7 @@
         <button class="tab active" data-view="tree">Tree</button>
         <button class="tab" data-view="timeline">Timeline</button>
         <button class="tab" data-view="map">Map</button>
+        <button class="tab" data-view="photos">Photos</button>
         <button class="tab" data-view="relationships">Relationships</button>
       </nav>
       <div class="viewing-as-section">
@@ -85,14 +86,10 @@
             <option value="4">+ Great-grandparents &amp; 2nd cousins</option>
             <option value="all">Everyone</option>
           </select>
-          <button class="focus-clear-btn" onclick="clearFocus()">Clear focus</button>
+          <button class="focus-clear-btn" onclick="clearFocus(); router.navigate('/tree')">Clear focus</button>
         </div>
         <svg id="tree-svg"></svg>
       </div>
-      <aside id="person-panel" class="panel hidden">
-        <button class="close-btn" id="close-panel">&times;</button>
-        <div id="panel-content"></div>
-      </aside>
     </section>
 
     <!-- Timeline View -->
@@ -104,6 +101,7 @@
             <select id="timeline-filter">
               <option value="all">Everyone</option>
             </select>
+            <button id="timeline-view-toggle" class="timeline-align-btn" onclick="toggleTimelineView()">Stream</button>
             <button id="timeline-align-toggle" class="timeline-align-btn" onclick="toggleTimelineAlignment()">Compact</button>
           </div>
         </div>
@@ -151,6 +149,64 @@
       </div>
     </section>
 
+    <!-- Photos Gallery View -->
+    <section id="view-photos" class="view">
+      <div class="photos-container">
+        <div class="photos-header">
+          <h2>Photo Gallery <span class="badge" id="photos-count-badge"></span></h2>
+          <div class="photos-header-actions">
+            <button class="gallery-select-btn" id="gallery-select-btn" onclick="toggleSelectMode()" title="Select photos for bulk editing">Select</button>
+            <button class="gallery-upload-btn" id="gallery-upload-btn" title="Upload photos">&#128247; Upload Photos</button>
+            <input type="file" id="gallery-file-input" multiple accept="image/*" style="display:none" />
+          </div>
+          <div class="photos-active-filters" id="photos-active-filters"></div>
+        </div>
+        <div class="gallery-search-bar" id="gallery-search-bar">
+          <input type="text" id="gallery-text-search" class="gallery-search-input" placeholder="Search captions, places, people..." />
+          <div class="gallery-date-range">
+            <input type="number" id="gallery-year-from" class="gallery-year-input" placeholder="From year" min="1600" max="2099" />
+            <span class="gallery-date-sep">&ndash;</span>
+            <input type="number" id="gallery-year-to" class="gallery-year-input" placeholder="To year" min="1600" max="2099" />
+          </div>
+        </div>
+        <div class="gallery-drop-zone hidden" id="gallery-drop-zone">
+          <div class="gallery-drop-content">
+            <span class="upload-icon">&#128247;</span>
+            <span>Drop photos here or click "Upload Photos" above</span>
+          </div>
+          <div class="gallery-upload-progress hidden" id="gallery-upload-progress">
+            <span id="gallery-upload-text">Uploading...</span>
+          </div>
+        </div>
+        <div class="photos-body">
+          <aside class="photos-facets" id="photos-facets">
+            <div class="facet-section" id="facet-status">
+              <h4 class="facet-title">Status</h4>
+              <div class="facet-options" id="facet-status-options"></div>
+            </div>
+            <div class="facet-section" id="facet-years">
+              <h4 class="facet-title">Year</h4>
+              <div class="facet-options" id="facet-year-options"></div>
+            </div>
+            <div class="facet-section" id="facet-places">
+              <h4 class="facet-title">Place</h4>
+              <div class="facet-options" id="facet-place-options"></div>
+            </div>
+            <div class="facet-section" id="facet-people">
+              <h4 class="facet-title">Person</h4>
+              <input type="text" class="facet-search" id="facet-people-search" placeholder="Filter people..." />
+              <div class="facet-options facet-options-scroll" id="facet-people-options"></div>
+            </div>
+            <div class="facet-section" id="facet-exif">
+              <h4 class="facet-title">EXIF Data</h4>
+              <div class="facet-options" id="facet-exif-options"></div>
+            </div>
+          </aside>
+          <div class="photos-grid" id="photos-grid"></div>
+        </div>
+      </div>
+    </section>
+
     <!-- Relationships View -->
     <section id="view-relationships" class="view">
       <div class="relationships-container">
@@ -170,6 +226,11 @@
         <div id="rel-result" class="rel-result hidden"></div>
       </div>
     </section>
+
+    <aside id="person-panel" class="panel hidden">
+      <button class="close-btn" id="close-panel">&times;</button>
+      <div id="panel-content"></div>
+    </aside>
   </main>
 
   <!-- Hovercard (positioned absolutely, shown on hover over person links) -->
@@ -212,15 +273,49 @@
       </div>
       <p class="modal-desc">Upload a family document (photo, scan, PDF) and AI will extract family tree information for your review.</p>
       <div class="doc-drop-zone" id="doc-drop-zone">
-        <div class="upload-zone-content">
+        <div class="upload-zone-content" id="doc-drop-content">
           <span class="upload-icon">&#128196;</span>
           <span>Drop a document here or <label for="doc-file-input" class="upload-browse-link">browse</label></span>
+          <span class="doc-drop-hint">Images (.jpg, .png, .webp) or PDF &middot; up to 50 MB</span>
         </div>
         <input type="file" id="doc-file-input" accept="image/*,.pdf" style="display:none" />
       </div>
-      <div id="doc-upload-status" class="doc-upload-status hidden">
-        <div class="spinner"></div>
-        <span id="doc-status-text">Uploading...</span>
+      <div id="doc-progress" class="doc-progress hidden">
+        <div class="doc-progress-steps">
+          <div class="doc-step" id="doc-step-prepare" data-status="pending">
+            <span class="doc-step-icon"></span>
+            <div class="doc-step-body">
+              <span class="doc-step-label">Prepare</span>
+              <span class="doc-step-detail" id="doc-step-prepare-detail"></span>
+            </div>
+          </div>
+          <div class="doc-step" id="doc-step-upload" data-status="pending">
+            <span class="doc-step-icon"></span>
+            <div class="doc-step-body">
+              <span class="doc-step-label">Upload</span>
+              <span class="doc-step-detail" id="doc-step-upload-detail"></span>
+            </div>
+          </div>
+          <div class="doc-step" id="doc-step-analyze" data-status="pending">
+            <span class="doc-step-icon"></span>
+            <div class="doc-step-body">
+              <span class="doc-step-label">AI Analysis</span>
+              <span class="doc-step-detail" id="doc-step-analyze-detail"></span>
+              <div id="doc-chunk-progress" class="doc-chunk-progress hidden">
+                <div class="chunk-progress-bar">
+                  <div class="chunk-progress-fill" id="doc-chunk-fill"></div>
+                </div>
+                <span class="chunk-progress-text" id="doc-chunk-text"></span>
+              </div>
+              <button id="doc-chunk-resume" class="doc-chunk-resume hidden">Resume</button>
+            </div>
+          </div>
+        </div>
+        <div class="doc-error-box hidden" id="doc-error-box">
+          <div class="doc-error-title" id="doc-error-title">Error</div>
+          <div class="doc-error-detail" id="doc-error-detail"></div>
+          <button class="doc-error-retry" id="doc-error-retry">Try again</button>
+        </div>
       </div>
     </div>
   </div>
@@ -342,7 +437,6 @@
   </div>
 
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="https://apis.google.com/js/api.js" async defer></script>
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="app.js"></script>
