@@ -2163,7 +2163,7 @@ def api_parse_status(doc_id):
         "chunks_done": chunks_done,
     }
 
-    if status == "parsed":
+    if status in ("parsed", "applied"):
         try:
             resp["proposed_changes"] = json.loads(row.get("parsed_data", "{}"))
         except (json.JSONDecodeError, TypeError):
