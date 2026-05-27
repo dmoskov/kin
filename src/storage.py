@@ -23,7 +23,6 @@ Usage::
     names = photo_storage.list_all()
 """
 
-import io
 import logging
 import os
 from pathlib import Path
@@ -119,9 +118,14 @@ class S3Storage(PhotoStorage):
     (covers legacy photos that haven't been migrated yet).
     """
 
-    def __init__(self, bucket: str, prefix: str = "photos/",
-                 local_fallback: LocalStorage | None = None):
+    def __init__(
+        self,
+        bucket: str,
+        prefix: str = "photos/",
+        local_fallback: LocalStorage | None = None,
+    ):
         import boto3
+
         self.s3 = boto3.client("s3")
         self.bucket = bucket
         self.prefix = prefix
@@ -132,6 +136,7 @@ class S3Storage(PhotoStorage):
 
     def put(self, filename: str, data: bytes) -> None:
         import mimetypes
+
         content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
         self.s3.put_object(
             Bucket=self.bucket,
@@ -139,7 +144,9 @@ class S3Storage(PhotoStorage):
             Body=data,
             ContentType=content_type,
         )
-        logger.info("S3 put: s3://%s/%s (%d bytes)", self.bucket, self._key(filename), len(data))
+        logger.info(
+            "S3 put: s3://%s/%s (%d bytes)", self.bucket, self._key(filename), len(data)
+        )
 
     def get(self, filename: str) -> bytes | None:
         try:
@@ -193,7 +200,10 @@ class S3Storage(PhotoStorage):
 # Module-level singleton — import this
 # ---------------------------------------------------------------------------
 
-def init_storage(private_dir: Path | None = None, web_dir: Path | None = None) -> PhotoStorage:
+
+def init_storage(
+    private_dir: Path | None = None, web_dir: Path | None = None
+) -> PhotoStorage:
     """Create the appropriate backend based on environment.
 
     Parameters can be overridden for testing.
@@ -207,7 +217,9 @@ def init_storage(private_dir: Path | None = None, web_dir: Path | None = None) -
 
     private_photos = private_dir / "photos"
     web_photos = web_dir / "photos"
-    local = LocalStorage(write_dir=private_photos, read_dirs=[private_photos, web_photos])
+    local = LocalStorage(
+        write_dir=private_photos, read_dirs=[private_photos, web_photos]
+    )
 
     bucket = os.environ.get("S3_BUCKET", "").strip()
     if bucket:
