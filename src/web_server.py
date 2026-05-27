@@ -1651,6 +1651,8 @@ def api_list_documents():
             "SELECT id, filename, file_type, status, uploaded_at, "
             "total_chunks, chunks_done FROM documents ORDER BY uploaded_at DESC",
         )
+    except Exception:
+        return jsonify([])
     finally:
         conn.close()
 
