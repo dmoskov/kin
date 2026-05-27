@@ -650,6 +650,124 @@ main {
   color: var(--text);
 }
 
+/* ── Stream column in grid ─────────────────────────────────── */
+
+.timeline-grid.has-stream .timeline-row {
+  grid-template-columns: repeat(calc(var(--lane-count) - 1), 1fr) minmax(300px, 1.4fr);
+}
+
+/* Alternating decade row tinting */
+.timeline-row:nth-child(even) {
+  background: color-mix(in srgb, var(--text) 2%, var(--bg));
+}
+
+.tstream-cell {
+  border-left: 3px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 3%, transparent);
+  position: relative;
+  padding-top: 8px;
+  animation: streamFadeIn 0.3s ease-out;
+}
+@keyframes streamFadeIn {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.tstream-col-header {
+  border-left: 3px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 3%, var(--bg));
+}
+
+/* Vertical rail connecting dots */
+.tstream-cell::before {
+  content: "";
+  position: absolute;
+  left: 18px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
+  pointer-events: none;
+}
+
+/* Photo cards in stream */
+.tstream-cell .tstream-entry {
+  margin-bottom: 8px;
+}
+.tstream-cell .tstream-photo-entry {
+  position: relative;
+}
+.tstream-cell .tstream-card {
+  border-radius: 8px;
+}
+.tstream-cell .tstream-card-body {
+  padding: 6px 10px;
+}
+.tstream-cell .tstream-rail {
+  width: 28px;
+}
+
+/* 16:9 photo aspect ratio container */
+.tstream-photo-frame {
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--border);
+}
+.tstream-photo-frame .tstream-photo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.tstream-photo-frame .tstream-photo-img:hover { opacity: 0.9; }
+
+/* Flat event entries (no card, inline digest style) */
+.tstream-event-flat {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 10px 4px 12px;
+  position: relative;
+  min-height: 28px;
+}
+.tstream-flat-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 5px;
+  z-index: 1;
+}
+.tstream-flat-body {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  line-height: 1.4;
+  min-width: 0;
+}
+.tstream-flat-date {
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+.tstream-flat-title {
+  color: var(--text);
+  font-weight: 500;
+}
+.tstream-flat-person {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+@media (max-width: 900px) {
+  .timeline-grid.has-stream .timeline-row {
+    grid-template-columns: repeat(var(--lane-count), 1fr);
+  }
+}
+
 /* ── Decade-row-first Grid ─────────────────────────────────── */
 
 .timeline-grid {
@@ -1920,6 +2038,19 @@ main {
   margin-top: 2px;
   display: block;
 }
+.doc-chunk-resume {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--text);
+  margin-top: 8px;
+}
+.doc-chunk-resume:hover { border-color: var(--accent); color: var(--accent); }
+.doc-chunk-resume.hidden { display: none; }
 
 .spinner {
   width: 18px;

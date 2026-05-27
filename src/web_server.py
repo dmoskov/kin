@@ -1881,8 +1881,34 @@ def _update_document_progress(doc_id: str, total: int, done: int) -> None:
         conn.close()
 
 
+def _load_done_chunks(doc_id: str) -> list[tuple[int, dict]]:
+    """Return (chunk_index, parsed_data_dict) for all status='done' chunks."""
+    from database.repository import _fetchall
+    conn = get_connection()
+    try:
+        rows = _fetchall(
+            conn,
+            f"SELECT chunk_index, parsed_data FROM document_chunks "
+            f"WHERE document_id = {_ph()} AND status = 'done' "
+            f"ORDER BY chunk_index",
+            (doc_id,),
+        )
+    finally:
+        conn.close()
+    result = []
+    for row in rows:
+        try:
+            data = json.loads(row["parsed_data"]) if row["parsed_data"] else {}
+        except (json.JSONDecodeError, TypeError):
+            data = {}
+        result.append((row["chunk_index"], data))
+    return result
+
+
 def _run_background_parse(
-    doc_id: str, file_path: str, filename: str, existing_people: list[dict]
+    doc_id: str, file_path: str, filename: str,
+    existing_people: list[dict],
+    done_results: list[dict] | None = None,
 ) -> None:
     """Background thread target for all document parsing (single or multi-chunk)."""
     from intelligence.document_parser import parse_document_chunked
@@ -1904,6 +1930,7 @@ def _run_background_parse(
             existing_people=existing_people,
             filename=filename,
             on_progress=on_progress,
+            done_results=done_results,
         )
     except Exception as e:
         logger.error("Document parsing failed: %s", e)
@@ -1926,6 +1953,10 @@ def api_parse_document(doc_id):
 
     Always returns immediately and spawns a background thread.
     Client polls /parse-status for progress and final result.
+
+    If existing done chunks are found from a previous interrupted run,
+    enters resume mode: skips already-done chunks and picks up from where
+    it left off.
     """
     row = _get_document(doc_id)
     if not row:
@@ -1937,14 +1968,68 @@ def api_parse_document(doc_id):
             {"error": "Document file not found on disk", "code": "missing_file"}
         ), 404
 
-    _update_document(doc_id, status="parsing")
-
     existing_people = _get_existing_people()
 
-    # Plan chunks for PDFs to report progress; non-PDFs get 1 virtual chunk
+    # Check for existing done chunks (resume mode)
+    done_chunk_rows = _load_done_chunks(doc_id)
+    done_results: list[dict] | None = None
+    resume_count = 0
+
     ext = Path(file_path).suffix.lower()
     total_chunks = 1
     chunks: list[dict] = []
+
+    if done_chunk_rows:
+        # Resume mode: we have prior completed chunks
+        resume_count = len(done_chunk_rows)
+        done_results = [{"_chunk_index": idx, **data} for idx, data in done_chunk_rows]
+
+        # Re-plan chunks to get total (must match original plan)
+        if ext == ".pdf":
+            from intelligence.document_parser import _plan_chunks
+            chunks = _plan_chunks(file_path)
+            total_chunks = max(len(chunks), 1)
+
+        # Reset non-done chunks to pending for re-processing
+        conn = get_connection()
+        try:
+            _execute(
+                conn,
+                f"UPDATE document_chunks SET status = 'pending', error_message = NULL "
+                f"WHERE document_id = {_ph()} AND status != 'done'",
+                (doc_id,),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        _update_document(doc_id, status="parsing")
+        _update_document_progress(doc_id, total_chunks, resume_count)
+
+        _parse_jobs[doc_id] = {
+            "status": "parsing",
+            "total_chunks": total_chunks,
+            "chunks_done": resume_count,
+            "chunk_plan": chunks,
+        }
+
+        t = threading.Thread(
+            target=_run_background_parse,
+            args=(doc_id, file_path, row["filename"], existing_people),
+            kwargs={"done_results": done_results},
+            daemon=True,
+        )
+        t.start()
+
+        return jsonify({
+            "document_id": doc_id,
+            "status": "parsing",
+            "total_chunks": total_chunks,
+            "chunks_done": resume_count,
+        })
+
+    # Fresh parse: no prior chunks
+    _update_document(doc_id, status="parsing")
 
     if ext == ".pdf":
         from intelligence.document_parser import _plan_chunks
@@ -2027,11 +2112,19 @@ def api_parse_status(doc_id):
         return jsonify({"error": "Document not found", "code": "not_found"}), 404
 
     status = row.get("status", "uploaded")
+    total_chunks = row.get("total_chunks", 0) or 0
+    chunks_done = row.get("chunks_done", 0) or 0
+
+    # Stall detection: DB says "parsing" but no in-memory job is running.
+    # This happens when the server restarts (e.g. gunicorn deploy) mid-parse.
+    if status == "parsing" and chunks_done < total_chunks:
+        status = "stalled"
+
     resp = {
         "document_id": doc_id,
         "status": status,
-        "total_chunks": row.get("total_chunks", 0) or 0,
-        "chunks_done": row.get("chunks_done", 0) or 0,
+        "total_chunks": total_chunks,
+        "chunks_done": chunks_done,
     }
 
     if status == "parsed":

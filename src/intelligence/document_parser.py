@@ -548,6 +548,7 @@ def parse_document_chunked(
     existing_people: list[dict],
     filename: str = "",
     on_progress: Optional[Callable] = None,
+    done_results: list[dict] | None = None,
 ) -> dict[str, Any]:
     """Main entry point for chunked document parsing.
 
@@ -559,6 +560,10 @@ def parse_document_chunked(
         existing_people: List of existing person dicts for matching
         filename: Original filename for context
         on_progress: Callback(chunk_idx, total, chunk_result) after each chunk
+        done_results: Pre-completed chunk results from a previous interrupted run.
+            Each dict should include ``_chunk_index`` to identify which chunk it
+            covers.  These chunks are skipped during processing and their people
+            seed ``prior_people`` so later chunks can reference them.
     """
     ext = Path(file_path).suffix.lower()
 
@@ -573,15 +578,43 @@ def parse_document_chunked(
     logger.info("Splitting PDF into %d chunks for processing", len(chunks))
 
     client = _get_client()
-    chunk_results: list[dict] = []
     prior_people: list[dict] = []
 
+    # Build lookup of already-done chunk indices
+    done_by_index: dict[int, dict] = {}
+    if done_results:
+        for dr in done_results:
+            idx = dr.get("_chunk_index")
+            if idx is not None:
+                done_by_index[idx] = dr
+        # Seed prior_people from all done results
+        for dr in done_results:
+            for person in dr.get("people", []):
+                pid = person.get("id", "")
+                if pid and not any(p["id"] == pid for p in prior_people):
+                    prior_people.append({
+                        "id": pid,
+                        "given_name": person.get("given_name", ""),
+                        "surname": person.get("surname", ""),
+                    })
+        logger.info("Resuming with %d pre-done chunks, %d prior people",
+                     len(done_by_index), len(prior_people))
+
+    # Pre-populate chunk_results: done results in their slots, None for pending
+    chunk_results: list[dict] = [done_by_index.get(i, {}) for i in range(len(chunks))]
+
     for idx, chunk in enumerate(chunks):
+        if idx in done_by_index:
+            # Already done — fire progress callback but skip API call
+            if on_progress:
+                on_progress(idx, len(chunks), done_by_index[idx])
+            continue
+
         logger.info("Processing chunk %d/%d (pages %d-%d, mode=%s)",
                      idx + 1, len(chunks), chunk["start_page"], chunk["end_page"], chunk["mode"])
 
         result = _parse_chunk(client, file_path, chunk, existing_people, prior_people, filename or Path(file_path).name)
-        chunk_results.append(result)
+        chunk_results[idx] = result
 
         if "error" not in result:
             for person in result.get("people", []):
