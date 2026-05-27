@@ -1639,6 +1639,40 @@ def _update_document(
         conn.close()
 
 
+@app.route("/api/documents")
+def api_list_documents():
+    """Return all documents ordered by upload date (newest first)."""
+    from database.repository import _fetchall
+
+    conn = get_connection()
+    try:
+        rows = _fetchall(
+            conn,
+            "SELECT id, filename, file_type, status, uploaded_at, "
+            "total_chunks, chunks_done FROM documents ORDER BY uploaded_at DESC",
+        )
+    finally:
+        conn.close()
+
+    docs = []
+    for r in rows:
+        status = r["status"]
+        total = r.get("total_chunks") or 0
+        done = r.get("chunks_done") or 0
+        if status == "parsing" and r["id"] not in _parse_jobs and done < total:
+            status = "stalled"
+        docs.append({
+            "id": r["id"],
+            "filename": r["filename"],
+            "file_type": r.get("file_type"),
+            "status": status,
+            "uploaded_at": r.get("uploaded_at"),
+            "total_chunks": total,
+            "chunks_done": done,
+        })
+    return jsonify(docs)
+
+
 def _get_document(doc_id: str) -> dict | None:
     conn = get_connection()
     try:

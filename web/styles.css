@@ -2052,6 +2052,105 @@ main {
 .doc-chunk-resume:hover { border-color: var(--accent); color: var(--accent); }
 .doc-chunk-resume.hidden { display: none; }
 
+/* ── Document History ────────────────────────────────────── */
+
+.doc-history {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.doc-history.hidden { display: none; }
+.doc-history-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  margin: 0 0 8px 0;
+  padding: 0 4px;
+}
+.doc-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.doc-history-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg);
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: default;
+  transition: background 0.1s;
+}
+.doc-history-item:hover { background: var(--surface-hover); }
+.doc-history-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.doc-history-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.doc-status-badge {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  padding: 2px 7px;
+  border-radius: 9px;
+  white-space: nowrap;
+}
+.doc-status-badge[data-status="uploaded"] {
+  background: color-mix(in srgb, var(--text-muted) 15%, transparent);
+  color: var(--text-muted);
+}
+.doc-status-badge[data-status="parsing"] {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+  animation: pulse-badge 1.5s ease-in-out infinite;
+}
+.doc-status-badge[data-status="stalled"] {
+  background: color-mix(in srgb, #e67e22 18%, transparent);
+  color: #e67e22;
+}
+.doc-status-badge[data-status="parsed"] {
+  background: color-mix(in srgb, #27ae60 18%, transparent);
+  color: #27ae60;
+}
+.doc-status-badge[data-status="applied"] {
+  background: color-mix(in srgb, #27ae60 12%, transparent);
+  color: color-mix(in srgb, #27ae60 60%, var(--text-muted));
+}
+.doc-status-badge[data-status="error"] {
+  background: color-mix(in srgb, #e74c3c 18%, transparent);
+  color: #e74c3c;
+}
+@keyframes pulse-badge {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.doc-history-action {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--text);
+  white-space: nowrap;
+}
+.doc-history-action:hover { border-color: var(--accent); color: var(--accent); }
+
 .spinner {
   width: 18px;
   height: 18px;
