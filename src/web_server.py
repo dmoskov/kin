@@ -31,6 +31,7 @@ from flask import Flask, jsonify, request, send_from_directory, abort, session
 from database.connection import get_connection, init_db
 from database.repository import TreeRepository, _execute, _fetchone, _now, _ph
 from models.person import Gender, Person
+from exif_utils import extract_exif_metadata
 from storage import photo_storage
 
 logger = logging.getLogger(__name__)
@@ -59,7 +60,7 @@ app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-in-production")
 # enforced explicitly inside the upload handlers so we can return a clean
 # JSON error with a helpful message.
 MAX_PHOTO_BYTES = int(os.environ.get("MAX_PHOTO_BYTES", 8 * 1024 * 1024))   # 8 MB
-MAX_DOC_BYTES = int(os.environ.get("MAX_DOC_BYTES", 15 * 1024 * 1024))     # 15 MB
+MAX_DOC_BYTES = int(os.environ.get("MAX_DOC_BYTES", 50 * 1024 * 1024))     # 50 MB
 app.config["MAX_CONTENT_LENGTH"] = max(MAX_PHOTO_BYTES, MAX_DOC_BYTES) + 1024 * 1024
 
 # Comma-separated list of Gmail addresses that may write to the tree.
@@ -109,6 +110,20 @@ def require_editor(f):
 
 @app.route("/")
 def index():
+    return send_from_directory(WEB_DIR, "index.html")
+
+
+@app.errorhandler(404)
+def spa_fallback(e):
+    """Serve index.html for client-side routes; return JSON 404 for API/asset paths."""
+    path = request.path
+    is_asset = (
+        path.startswith("/api/")
+        or path.startswith("/documents/")
+        or (path.startswith("/photos/") and not path.startswith("/photos/view/"))
+    )
+    if is_asset:
+        return jsonify({"error": "not found", "code": "not_found"}), 404
     return send_from_directory(WEB_DIR, "index.html")
 
 
@@ -197,6 +212,8 @@ def api_data():
             "date_circa": bool(p.get("date_circa")),
             "place": p.get("place"),
             "photo_type": p.get("photo_type", "photo"),
+            "lat": p.get("lat"),
+            "lng": p.get("lng"),
             "tagged_people": [
                 {
                     "person_id": tp["person_id"],
@@ -753,7 +770,22 @@ def api_upload_photo():
     photo_path = f"photos/{safe_name}"
     repo = TreeRepository()
     photo_id = repo.get_or_create_photo(photo_path)
-    return jsonify({"path": photo_path, "photo_id": photo_id})
+
+    # Extract EXIF metadata (date, GPS) and auto-populate
+    exif = extract_exif_metadata(file_data)
+    if exif:
+        meta_update = {}
+        photo = repo.get_photo(photo_id)
+        if exif.get("date") and not photo.get("date"):
+            meta_update["date"] = exif["date"]
+        if exif.get("lat") is not None:
+            meta_update["lat"] = exif["lat"]
+        if exif.get("lng") is not None:
+            meta_update["lng"] = exif["lng"]
+        if meta_update:
+            repo.update_photo_metadata(photo_id, **meta_update)
+
+    return jsonify({"path": photo_path, "photo_id": photo_id, "exif": exif})
 
 
 @app.route("/api/people/<person_id>/google-photos", methods=["POST"])
@@ -929,6 +961,10 @@ def api_update_photo_metadata(photo_id):
         if pt not in ("portrait", "group", "document", "headstone", "photo"):
             return jsonify({"error": "invalid photo_type", "code": "bad_request"}), 400
         kwargs["photo_type"] = pt
+    if "lat" in body:
+        kwargs["lat"] = float(body["lat"]) if body["lat"] is not None else None
+    if "lng" in body:
+        kwargs["lng"] = float(body["lng"]) if body["lng"] is not None else None
 
     if kwargs:
         repo.update_photo_metadata(photo_id, **kwargs)
@@ -941,7 +977,102 @@ def api_update_photo_metadata(photo_id):
         "date_circa": bool(updated.get("date_circa")),
         "place": updated.get("place"),
         "photo_type": updated.get("photo_type", "photo"),
+        "lat": updated.get("lat"),
+        "lng": updated.get("lng"),
     })
+
+
+@app.route("/api/photos/bulk-metadata", methods=["PUT"])
+@require_editor
+def api_bulk_update_photo_metadata():
+    """Update metadata for multiple photos at once.
+
+    Body: {"photo_ids": [1, 2, 3], "date": "1985", "date_circa": true, ...}
+    Same fields as single-photo metadata endpoint, applied to all listed photos.
+    Max 200 photos per request.
+    """
+    body = request.get_json(force=True) or {}
+    photo_ids = body.get("photo_ids", [])
+    if not isinstance(photo_ids, list) or len(photo_ids) == 0:
+        return jsonify({"error": "photo_ids must be a non-empty array", "code": "bad_request"}), 400
+    if len(photo_ids) > 200:
+        return jsonify({"error": "max 200 photos per request", "code": "bad_request"}), 400
+
+    kwargs = {}
+    if "date" in body:
+        kwargs["date"] = body["date"] or None
+    if "date_circa" in body:
+        kwargs["date_circa"] = bool(body["date_circa"])
+    if "place" in body:
+        kwargs["place"] = body["place"] or None
+    if "photo_type" in body:
+        pt = body["photo_type"]
+        if pt not in ("portrait", "group", "document", "headstone", "photo"):
+            return jsonify({"error": "invalid photo_type", "code": "bad_request"}), 400
+        kwargs["photo_type"] = pt
+    if "lat" in body:
+        kwargs["lat"] = float(body["lat"]) if body["lat"] is not None else None
+    if "lng" in body:
+        kwargs["lng"] = float(body["lng"]) if body["lng"] is not None else None
+
+    if not kwargs:
+        return jsonify({"error": "no metadata fields provided", "code": "bad_request"}), 400
+
+    repo = TreeRepository()
+    updated = []
+    not_found = []
+    for pid in photo_ids:
+        photo = repo.get_photo(pid)
+        if not photo:
+            not_found.append(pid)
+            continue
+        repo.update_photo_metadata(pid, **kwargs)
+        updated.append(pid)
+
+    return jsonify({"updated": updated, "not_found": not_found})
+
+
+@app.route("/api/photos/reextract-exif", methods=["POST"])
+@require_editor
+def api_reextract_exif():
+    """Bulk re-extract EXIF metadata for photos missing date and GPS.
+
+    Fetches image bytes for each photo where lat IS NULL AND date IS NULL,
+    runs EXIF extraction, and updates metadata.
+
+    Returns {"updated": N}
+    """
+    repo = TreeRepository()
+    conn = get_connection()
+    try:
+        from database.repository import _fetchall
+        rows = _fetchall(conn, "SELECT id, file_path FROM photos WHERE lat IS NULL AND date IS NULL")
+    finally:
+        conn.close()
+
+    updated = 0
+    for row in rows:
+        file_path = row["file_path"]
+        # Strip "photos/" prefix for storage lookup
+        filename = file_path.replace("photos/", "", 1) if file_path.startswith("photos/") else file_path
+        data = photo_storage.get(filename)
+        if not data:
+            continue
+        exif = extract_exif_metadata(data)
+        if not exif:
+            continue
+        meta = {}
+        if exif.get("date"):
+            meta["date"] = exif["date"]
+        if exif.get("lat") is not None:
+            meta["lat"] = exif["lat"]
+        if exif.get("lng") is not None:
+            meta["lng"] = exif["lng"]
+        if meta:
+            repo.update_photo_metadata(row["id"], **meta)
+            updated += 1
+
+    return jsonify({"updated": updated})
 
 
 @app.route("/api/people/<person_id>/profile-photo", methods=["PUT"])
