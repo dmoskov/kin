@@ -15,7 +15,6 @@ Usage:
 """
 
 import json
-import os
 from typing import Any, Optional
 
 from models.person import Gender, Person
@@ -23,13 +22,10 @@ from models.relationship import Relationship, RelationshipType, Union
 from models.event import EventType, LifeEvent
 from models.source import Source, SourceType
 from models.citation import Citation, EntityType, Confidence
+from models.article import NewsArticle
 from models.tree import FamilyTree
 
-from .connection import get_connection
-
-
-def _is_pg() -> bool:
-    return bool(os.environ.get("DATABASE_URL"))
+from .connection import get_connection, _use_postgres as _is_pg
 
 
 def _ph(n: int = 1) -> str:
@@ -80,27 +76,29 @@ class TreeRepository:
     # ── People ──────────────────────────────────────────────────────────
 
     def save_person(self, person: Person) -> None:
-        """Insert or upsert a Person."""
+        """Insert or upsert a Person. Dual-writes to photos/person_photos tables."""
         conn = self._conn()
         params = (
             person.id,
             person.given_name,
             person.surname,
             person.gender.value,
-            person.birth_date,
-            person.birth_place,
-            person.death_date,
-            person.death_place,
-            person.maiden_name,
+            person.birth_date or None,
+            person.birth_place or None,
+            person.death_date or None,
+            person.death_place or None,
+            person.maiden_name or None,
             json.dumps(person.nicknames),
             person.notes,
             json.dumps(person.photo_paths),
             json.dumps(person.photo_captions),
-            person.email,
+            person.email or None,
         )
         try:
             if _is_pg():
-                _execute(conn, f"""
+                _execute(
+                    conn,
+                    f"""
                     INSERT INTO people
                         (id, given_name, surname, gender, birth_date, birth_place,
                          death_date, death_place, maiden_name, nicknames, notes,
@@ -114,15 +112,25 @@ class TreeRepository:
                         nicknames=EXCLUDED.nicknames, notes=EXCLUDED.notes,
                         photo_paths=EXCLUDED.photo_paths, photo_captions=EXCLUDED.photo_captions,
                         email=EXCLUDED.email, updated_at=NOW()
-                """, params)
+                """,
+                    params,
+                )
             else:
-                _execute(conn, f"""
+                _execute(
+                    conn,
+                    f"""
                     INSERT OR REPLACE INTO people
                         (id, given_name, surname, gender, birth_date, birth_place,
                          death_date, death_place, maiden_name, nicknames, notes,
                          photo_paths, photo_captions, email, updated_at)
                     VALUES ({_ph(14)}, datetime('now'))
-                """, params)
+                """,
+                    params,
+                )
+            try:
+                self._sync_person_photos(conn, person)
+            except Exception:
+                pass
             conn.commit()
         finally:
             conn.close()
@@ -131,7 +139,9 @@ class TreeRepository:
         """Fetch a single Person by ID."""
         conn = self._conn()
         try:
-            row = _fetchone(conn, f"SELECT * FROM people WHERE id = {_ph()}", (person_id,))
+            row = _fetchone(
+                conn, f"SELECT * FROM people WHERE id = {_ph()}", (person_id,)
+            )
             return self._row_to_person(row) if row else None
         finally:
             conn.close()
@@ -152,21 +162,29 @@ class TreeRepository:
             pattern = f"%{query}%"
             p = _ph()
             if _is_pg():
-                rows = _fetchall(conn, f"""
+                rows = _fetchall(
+                    conn,
+                    f"""
                     SELECT * FROM people
                     WHERE given_name ILIKE {p} OR surname ILIKE {p}
                        OR maiden_name ILIKE {p} OR nicknames ILIKE {p}
                        OR notes ILIKE {p}
                     ORDER BY surname, given_name
-                """, (pattern,) * 5)
+                """,
+                    (pattern,) * 5,
+                )
             else:
-                rows = _fetchall(conn, f"""
+                rows = _fetchall(
+                    conn,
+                    f"""
                     SELECT * FROM people
                     WHERE given_name LIKE {p} OR surname LIKE {p}
                        OR maiden_name LIKE {p} OR nicknames LIKE {p}
                        OR notes LIKE {p}
                     ORDER BY surname, given_name
-                """, (pattern,) * 5)
+                """,
+                    (pattern,) * 5,
+                )
             return [self._row_to_person(r) for r in rows]
         finally:
             conn.close()
@@ -189,16 +207,24 @@ class TreeRepository:
         params = (rel.parent_id, rel.child_id, rel.rel_type.value)
         try:
             if _is_pg():
-                _execute(conn, f"""
+                _execute(
+                    conn,
+                    f"""
                     INSERT INTO relationships (parent_id, child_id, rel_type)
                     VALUES ({_ph(3)})
                     ON CONFLICT (parent_id, child_id) DO NOTHING
-                """, params)
+                """,
+                    params,
+                )
             else:
-                _execute(conn, f"""
+                _execute(
+                    conn,
+                    f"""
                     INSERT OR IGNORE INTO relationships (parent_id, child_id, rel_type)
                     VALUES ({_ph(3)})
-                """, params)
+                """,
+                    params,
+                )
             conn.commit()
         finally:
             conn.close()
@@ -209,16 +235,25 @@ class TreeRepository:
         """Insert a marriage/partnership."""
         conn = self._conn()
         params = (
-            union.partner1_id, union.partner2_id, union.union_date,
-            union.union_place, union.end_date, union.end_reason, union.notes,
+            union.partner1_id,
+            union.partner2_id,
+            union.union_date,
+            union.union_place,
+            union.end_date,
+            union.end_reason,
+            union.notes,
         )
         try:
-            _execute(conn, f"""
+            _execute(
+                conn,
+                f"""
                 INSERT INTO unions
                     (partner1_id, partner2_id, union_date, union_place,
                      end_date, end_reason, notes)
                 VALUES ({_ph(7)})
-            """, params)
+            """,
+                params,
+            )
             conn.commit()
         finally:
             conn.close()
@@ -229,16 +264,25 @@ class TreeRepository:
         """Insert a life event."""
         conn = self._conn()
         params = (
-            event.person_id, event.event_type.value, event.date,
-            event.end_date, event.place, event.description, event.source,
+            event.person_id,
+            event.event_type.value,
+            event.date,
+            event.end_date,
+            event.place,
+            event.description,
+            event.source,
         )
         try:
-            _execute(conn, f"""
+            _execute(
+                conn,
+                f"""
                 INSERT INTO events
                     (person_id, event_type, date, end_date, place,
                      description, source)
                 VALUES ({_ph(7)})
-            """, params)
+            """,
+                params,
+            )
             conn.commit()
         finally:
             conn.close()
@@ -249,12 +293,19 @@ class TreeRepository:
         """Insert or upsert a Source."""
         conn = self._conn()
         params = (
-            source.id, source.name, source.source_type.value,
-            source.author, source.date, source.description, source.url,
+            source.id,
+            source.name,
+            source.source_type.value,
+            source.author,
+            source.date,
+            source.description,
+            source.url,
         )
         try:
             if _is_pg():
-                _execute(conn, f"""
+                _execute(
+                    conn,
+                    f"""
                     INSERT INTO sources
                         (id, name, source_type, author, date, description, url)
                     VALUES ({_ph(7)})
@@ -262,13 +313,19 @@ class TreeRepository:
                         name=EXCLUDED.name, source_type=EXCLUDED.source_type,
                         author=EXCLUDED.author, date=EXCLUDED.date,
                         description=EXCLUDED.description, url=EXCLUDED.url
-                """, params)
+                """,
+                    params,
+                )
             else:
-                _execute(conn, f"""
+                _execute(
+                    conn,
+                    f"""
                     INSERT OR REPLACE INTO sources
                         (id, name, source_type, author, date, description, url)
                     VALUES ({_ph(7)})
-                """, params)
+                """,
+                    params,
+                )
             conn.commit()
         finally:
             conn.close()
@@ -277,7 +334,9 @@ class TreeRepository:
         """Fetch a single Source by ID."""
         conn = self._conn()
         try:
-            row = _fetchone(conn, f"SELECT * FROM sources WHERE id = {_ph()}", (source_id,))
+            row = _fetchone(
+                conn, f"SELECT * FROM sources WHERE id = {_ph()}", (source_id,)
+            )
             return self._row_to_source(row) if row else None
         finally:
             conn.close()
@@ -297,17 +356,25 @@ class TreeRepository:
         """Insert a citation linking a source to an entity."""
         conn = self._conn()
         params = (
-            citation.source_id, citation.entity_type.value, citation.entity_id,
-            citation.field_name, citation.excerpt, citation.confidence.value,
+            citation.source_id,
+            citation.entity_type.value,
+            citation.entity_id,
+            citation.field_name,
+            citation.excerpt,
+            citation.confidence.value,
             citation.notes,
         )
         try:
-            _execute(conn, f"""
+            _execute(
+                conn,
+                f"""
                 INSERT INTO citations
                     (source_id, entity_type, entity_id, field_name,
                      excerpt, confidence, notes)
                 VALUES ({_ph(7)})
-            """, params)
+            """,
+                params,
+            )
             conn.commit()
         finally:
             conn.close()
@@ -323,17 +390,25 @@ class TreeRepository:
         try:
             p = _ph()
             if field_name:
-                rows = _fetchall(conn, f"""
+                rows = _fetchall(
+                    conn,
+                    f"""
                     SELECT * FROM citations
                     WHERE entity_type = {p} AND entity_id = {p} AND field_name = {p}
                     ORDER BY id
-                """, (entity_type.value, entity_id, field_name))
+                """,
+                    (entity_type.value, entity_id, field_name),
+                )
             else:
-                rows = _fetchall(conn, f"""
+                rows = _fetchall(
+                    conn,
+                    f"""
                     SELECT * FROM citations
                     WHERE entity_type = {p} AND entity_id = {p}
                     ORDER BY id
-                """, (entity_type.value, entity_id))
+                """,
+                    (entity_type.value, entity_id),
+                )
             return [self._row_to_citation(r) for r in rows]
         finally:
             conn.close()
@@ -351,6 +426,164 @@ class TreeRepository:
         finally:
             conn.close()
 
+    # ── News Articles ──────────────────────────────────────────────────
+
+    def save_article(self, article: NewsArticle) -> None:
+        """Insert or upsert a NewsArticle."""
+        conn = self._conn()
+        params = (
+            article.id,
+            article.title,
+            article.url,
+            article.publication,
+            article.date,
+            article.summary,
+            article.photo_url,
+        )
+        try:
+            if _is_pg():
+                _execute(
+                    conn,
+                    f"""
+                    INSERT INTO news_articles
+                        (id, title, url, publication, date, summary, photo_url)
+                    VALUES ({_ph(7)})
+                    ON CONFLICT (id) DO UPDATE SET
+                        title=EXCLUDED.title, url=EXCLUDED.url,
+                        publication=EXCLUDED.publication, date=EXCLUDED.date,
+                        summary=EXCLUDED.summary, photo_url=EXCLUDED.photo_url
+                """,
+                    params,
+                )
+            else:
+                _execute(
+                    conn,
+                    f"""
+                    INSERT OR REPLACE INTO news_articles
+                        (id, title, url, publication, date, summary, photo_url)
+                    VALUES ({_ph(7)})
+                """,
+                    params,
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get_article(self, article_id: str) -> Optional[NewsArticle]:
+        """Fetch a single NewsArticle by ID."""
+        conn = self._conn()
+        try:
+            row = _fetchone(
+                conn, f"SELECT * FROM news_articles WHERE id = {_ph()}", (article_id,)
+            )
+            return self._row_to_article(row) if row else None
+        finally:
+            conn.close()
+
+    def list_articles(self) -> list[NewsArticle]:
+        """Fetch all news articles, ordered by date descending."""
+        conn = self._conn()
+        try:
+            rows = _fetchall(
+                conn,
+                "SELECT * FROM news_articles ORDER BY date DESC, title",
+            )
+            return [self._row_to_article(r) for r in rows]
+        finally:
+            conn.close()
+
+    def delete_article(self, article_id: str) -> bool:
+        """Delete an article (cascades to person_articles)."""
+        conn = self._conn()
+        try:
+            cur = _execute(
+                conn,
+                f"DELETE FROM news_articles WHERE id = {_ph()}",
+                (article_id,),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+        finally:
+            conn.close()
+
+    def link_article_to_person(self, person_id: str, article_id: str) -> None:
+        """Associate a news article with a person."""
+        conn = self._conn()
+        try:
+            if _is_pg():
+                _execute(
+                    conn,
+                    f"""
+                    INSERT INTO person_articles (person_id, article_id)
+                    VALUES ({_ph(2)})
+                    ON CONFLICT (person_id, article_id) DO NOTHING
+                """,
+                    (person_id, article_id),
+                )
+            else:
+                _execute(
+                    conn,
+                    f"""
+                    INSERT OR IGNORE INTO person_articles (person_id, article_id)
+                    VALUES ({_ph(2)})
+                """,
+                    (person_id, article_id),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def unlink_article_from_person(self, person_id: str, article_id: str) -> None:
+        """Remove the association between a person and an article."""
+        conn = self._conn()
+        try:
+            _execute(
+                conn,
+                f"DELETE FROM person_articles WHERE person_id = {_ph()} AND article_id = {_ph()}",
+                (person_id, article_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def articles_for_person(self, person_id: str) -> list[NewsArticle]:
+        """Fetch all articles linked to a person."""
+        conn = self._conn()
+        try:
+            p = _ph()
+            rows = _fetchall(
+                conn,
+                f"""
+                SELECT a.* FROM news_articles a
+                JOIN person_articles pa ON pa.article_id = a.id
+                WHERE pa.person_id = {p}
+                ORDER BY a.date DESC, a.title
+            """,
+                (person_id,),
+            )
+            return [self._row_to_article(r) for r in rows]
+        finally:
+            conn.close()
+
+    def people_for_article(self, article_id: str) -> list[dict]:
+        """Return all people linked to an article."""
+        conn = self._conn()
+        try:
+            p = _ph()
+            return _fetchall(
+                conn,
+                f"""
+                SELECT ppl.id, ppl.given_name, ppl.surname
+                FROM person_articles pa
+                JOIN people ppl ON ppl.id = pa.person_id
+                WHERE pa.article_id = {p}
+                ORDER BY ppl.surname, ppl.given_name
+            """,
+                (article_id,),
+            )
+        finally:
+            conn.close()
+
     # ── Bulk operations ─────────────────────────────────────────────────
 
     def save_tree(self, tree: FamilyTree) -> None:
@@ -359,15 +592,25 @@ class TreeRepository:
         try:
             for person in tree.people.values():
                 params = (
-                    person.id, person.given_name, person.surname,
-                    person.gender.value, person.birth_date, person.birth_place,
-                    person.death_date, person.death_place, person.maiden_name,
-                    json.dumps(person.nicknames), person.notes,
-                    json.dumps(person.photo_paths), json.dumps(person.photo_captions),
-                    person.email,
+                    person.id,
+                    person.given_name,
+                    person.surname,
+                    person.gender.value,
+                    person.birth_date or None,
+                    person.birth_place or None,
+                    person.death_date or None,
+                    person.death_place or None,
+                    person.maiden_name or None,
+                    json.dumps(person.nicknames),
+                    person.notes,
+                    json.dumps(person.photo_paths),
+                    json.dumps(person.photo_captions),
+                    person.email or None,
                 )
                 if _is_pg():
-                    _execute(conn, f"""
+                    _execute(
+                        conn,
+                        f"""
                         INSERT INTO people
                             (id, given_name, surname, gender, birth_date, birth_place,
                              death_date, death_place, maiden_name, nicknames, notes,
@@ -381,59 +624,98 @@ class TreeRepository:
                             nicknames=EXCLUDED.nicknames, notes=EXCLUDED.notes,
                             photo_paths=EXCLUDED.photo_paths, photo_captions=EXCLUDED.photo_captions,
                             email=EXCLUDED.email, updated_at=NOW()
-                    """, params)
+                    """,
+                        params,
+                    )
                 else:
-                    _execute(conn, f"""
+                    _execute(
+                        conn,
+                        f"""
                         INSERT OR REPLACE INTO people
                             (id, given_name, surname, gender, birth_date, birth_place,
                              death_date, death_place, maiden_name, nicknames, notes,
                              photo_paths, photo_captions, email, updated_at)
                         VALUES ({_ph(14)}, datetime('now'))
-                    """, params)
+                    """,
+                        params,
+                    )
 
             for rel in tree.relationships:
                 params = (rel.parent_id, rel.child_id, rel.rel_type.value)
                 if _is_pg():
-                    _execute(conn, f"""
+                    _execute(
+                        conn,
+                        f"""
                         INSERT INTO relationships (parent_id, child_id, rel_type)
                         VALUES ({_ph(3)})
                         ON CONFLICT (parent_id, child_id) DO NOTHING
-                    """, params)
+                    """,
+                        params,
+                    )
                 else:
-                    _execute(conn, f"""
+                    _execute(
+                        conn,
+                        f"""
                         INSERT OR IGNORE INTO relationships (parent_id, child_id, rel_type)
                         VALUES ({_ph(3)})
-                    """, params)
+                    """,
+                        params,
+                    )
 
             for union in tree.unions:
-                _execute(conn, f"""
+                _execute(
+                    conn,
+                    f"""
                     INSERT INTO unions
                         (partner1_id, partner2_id, union_date, union_place,
                          end_date, end_reason, notes)
                     VALUES ({_ph(7)})
-                """, (
-                    union.partner1_id, union.partner2_id, union.union_date,
-                    union.union_place, union.end_date, union.end_reason, union.notes,
-                ))
+                """,
+                    (
+                        union.partner1_id,
+                        union.partner2_id,
+                        union.union_date,
+                        union.union_place,
+                        union.end_date,
+                        union.end_reason,
+                        union.notes,
+                    ),
+                )
 
             for event in tree.events:
-                _execute(conn, f"""
+                _execute(
+                    conn,
+                    f"""
                     INSERT INTO events
                         (person_id, event_type, date, end_date, place,
                          description, source)
                     VALUES ({_ph(7)})
-                """, (
-                    event.person_id, event.event_type.value, event.date,
-                    event.end_date, event.place, event.description, event.source,
-                ))
+                """,
+                    (
+                        event.person_id,
+                        event.event_type.value,
+                        event.date,
+                        event.end_date,
+                        event.place,
+                        event.description,
+                        event.source,
+                    ),
+                )
 
             for source in tree.sources.values():
                 params = (
-                    source.id, source.name, source.source_type.value,
-                    source.author, source.date, source.description, source.url,
+                    source.id,
+                    source.name,
+                    source.source_type.value,
+                    source.author,
+                    source.date,
+                    source.description,
+                    source.url,
                 )
                 if _is_pg():
-                    _execute(conn, f"""
+                    _execute(
+                        conn,
+                        f"""
                         INSERT INTO sources
                             (id, name, source_type, author, date, description, url)
                         VALUES ({_ph(7)})
@@ -441,25 +723,96 @@ class TreeRepository:
                             name=EXCLUDED.name, source_type=EXCLUDED.source_type,
                             author=EXCLUDED.author, date=EXCLUDED.date,
                             description=EXCLUDED.description, url=EXCLUDED.url
-                    """, params)
+                    """,
+                        params,
+                    )
                 else:
-                    _execute(conn, f"""
+                    _execute(
+                        conn,
+                        f"""
                         INSERT OR REPLACE INTO sources
                             (id, name, source_type, author, date, description, url)
                         VALUES ({_ph(7)})
-                    """, params)
+                    """,
+                        params,
+                    )
 
             for citation in tree.citations:
-                _execute(conn, f"""
+                _execute(
+                    conn,
+                    f"""
                     INSERT INTO citations
                         (source_id, entity_type, entity_id, field_name,
                          excerpt, confidence, notes)
                     VALUES ({_ph(7)})
-                """, (
-                    citation.source_id, citation.entity_type.value, citation.entity_id,
-                    citation.field_name, citation.excerpt, citation.confidence.value,
-                    citation.notes,
-                ))
+                """,
+                    (
+                        citation.source_id,
+                        citation.entity_type.value,
+                        citation.entity_id,
+                        citation.field_name,
+                        citation.excerpt,
+                        citation.confidence.value,
+                        citation.notes,
+                    ),
+                )
+
+            for article in tree.articles.values():
+                params = (
+                    article.id,
+                    article.title,
+                    article.url,
+                    article.publication,
+                    article.date,
+                    article.summary,
+                    article.photo_url,
+                )
+                if _is_pg():
+                    _execute(
+                        conn,
+                        f"""
+                        INSERT INTO news_articles
+                            (id, title, url, publication, date, summary, photo_url)
+                        VALUES ({_ph(7)})
+                        ON CONFLICT (id) DO UPDATE SET
+                            title=EXCLUDED.title, url=EXCLUDED.url,
+                            publication=EXCLUDED.publication, date=EXCLUDED.date,
+                            summary=EXCLUDED.summary, photo_url=EXCLUDED.photo_url
+                    """,
+                        params,
+                    )
+                else:
+                    _execute(
+                        conn,
+                        f"""
+                        INSERT OR REPLACE INTO news_articles
+                            (id, title, url, publication, date, summary, photo_url)
+                        VALUES ({_ph(7)})
+                    """,
+                        params,
+                    )
+
+            for person_id, article_ids in tree.person_article_links.items():
+                for article_id in article_ids:
+                    if _is_pg():
+                        _execute(
+                            conn,
+                            f"""
+                            INSERT INTO person_articles (person_id, article_id)
+                            VALUES ({_ph(2)})
+                            ON CONFLICT (person_id, article_id) DO NOTHING
+                        """,
+                            (person_id, article_id),
+                        )
+                    else:
+                        _execute(
+                            conn,
+                            f"""
+                            INSERT OR IGNORE INTO person_articles (person_id, article_id)
+                            VALUES ({_ph(2)})
+                        """,
+                            (person_id, article_id),
+                        )
 
             conn.commit()
         except Exception:
@@ -527,6 +880,17 @@ class TreeRepository:
                 if _is_pg():
                     conn.rollback()
 
+            try:
+                for row in _fetchall(conn, "SELECT * FROM news_articles"):
+                    tree.add_article(self._row_to_article(row))
+                for row in _fetchall(
+                    conn, "SELECT person_id, article_id FROM person_articles"
+                ):
+                    tree.add_person_article_link(row["person_id"], row["article_id"])
+            except Exception:
+                if _is_pg():
+                    conn.rollback()
+
             return tree
         finally:
             conn.close()
@@ -561,9 +925,454 @@ class TreeRepository:
                 counts["sources"] = 0
                 counts["citations"] = 0
 
+            try:
+                counts["articles"] = _fetchone(
+                    conn, "SELECT COUNT(*) as n FROM news_articles"
+                )["n"]
+            except Exception:
+                if _is_pg():
+                    conn.rollback()
+                counts["articles"] = 0
+
             return counts
         finally:
             conn.close()
+
+    # ── Photos ─────────────────────────────────────────────────────────
+
+    def get_or_create_photo(self, file_path: str) -> int:
+        """Return the photo id for a file_path, creating a row if needed."""
+        conn = self._conn()
+        try:
+            row = _fetchone(
+                conn, f"SELECT id FROM photos WHERE file_path = {_ph()}", (file_path,)
+            )
+            if row:
+                return row["id"]
+            if _is_pg():
+                _execute(
+                    conn,
+                    f"INSERT INTO photos (file_path) VALUES ({_ph()}) ON CONFLICT (file_path) DO NOTHING",
+                    (file_path,),
+                )
+            else:
+                _execute(
+                    conn,
+                    f"INSERT OR IGNORE INTO photos (file_path) VALUES ({_ph()})",
+                    (file_path,),
+                )
+            conn.commit()
+            row = _fetchone(
+                conn, f"SELECT id FROM photos WHERE file_path = {_ph()}", (file_path,)
+            )
+            return row["id"]
+        finally:
+            conn.close()
+
+    def update_photo_metadata(self, photo_id: int, **kwargs) -> None:
+        """Update metadata fields on a photo (date, date_circa, place, photo_type)."""
+        allowed = {"date", "date_circa", "place", "photo_type", "lat", "lng"}
+        sets = []
+        params = []
+        for k, v in kwargs.items():
+            if k not in allowed:
+                continue
+            if k == "date_circa":
+                v = bool(v) if _is_pg() else (1 if v else 0)
+            sets.append(f"{k} = {_ph()}")
+            params.append(v)
+        if not sets:
+            return
+        params.append(photo_id)
+        sql = f"UPDATE photos SET {', '.join(sets)} WHERE id = {_ph()}"
+        conn = self._conn()
+        try:
+            _execute(conn, sql, tuple(params))
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get_photo(self, photo_id: int) -> dict | None:
+        """Fetch a single photo by id."""
+        conn = self._conn()
+        try:
+            return _fetchone(
+                conn, f"SELECT * FROM photos WHERE id = {_ph()}", (photo_id,)
+            )
+        finally:
+            conn.close()
+
+    def photos_for_person(self, person_id: str) -> list[dict]:
+        """Return all photos for a person, joined with person_photos metadata."""
+        conn = self._conn()
+        try:
+            p = _ph()
+            return _fetchall(
+                conn,
+                f"""
+                SELECT p.*, pp.is_profile, pp.display_order, pp.caption, pp.person_id,
+                       pp.crop_x, pp.crop_y, pp.crop_w, pp.crop_h
+                FROM photos p
+                JOIN person_photos pp ON pp.photo_id = p.id
+                WHERE pp.person_id = {p}
+                ORDER BY pp.display_order
+            """,
+                (person_id,),
+            )
+        finally:
+            conn.close()
+
+    def people_for_photo(self, photo_id: int) -> list[dict]:
+        """Return all people tagged in a photo."""
+        conn = self._conn()
+        try:
+            p = _ph()
+            return _fetchall(
+                conn,
+                f"""
+                SELECT pp.person_id, pp.is_profile, pp.display_order, pp.caption,
+                       pp.crop_x, pp.crop_y, pp.crop_w, pp.crop_h,
+                       ppl.given_name, ppl.surname
+                FROM person_photos pp
+                JOIN people ppl ON ppl.id = pp.person_id
+                WHERE pp.photo_id = {p}
+                ORDER BY pp.display_order
+            """,
+                (photo_id,),
+            )
+        finally:
+            conn.close()
+
+    def assign_photo_to_person(
+        self,
+        person_id: str,
+        photo_id: int,
+        caption: str = "",
+        display_order: int = 0,
+        is_profile: bool = False,
+    ) -> None:
+        """Link a photo to a person."""
+        conn = self._conn()
+        try:
+            if _is_pg():
+                _execute(
+                    conn,
+                    f"""
+                    INSERT INTO person_photos (person_id, photo_id, is_profile, display_order, caption)
+                    VALUES ({_ph(5)})
+                    ON CONFLICT (person_id, photo_id) DO UPDATE SET
+                        is_profile=EXCLUDED.is_profile, display_order=EXCLUDED.display_order,
+                        caption=EXCLUDED.caption
+                """,
+                    (person_id, photo_id, is_profile, display_order, caption),
+                )
+            else:
+                _execute(
+                    conn,
+                    f"""
+                    INSERT OR REPLACE INTO person_photos (person_id, photo_id, is_profile, display_order, caption)
+                    VALUES ({_ph(5)})
+                """,
+                    (
+                        person_id,
+                        photo_id,
+                        1 if is_profile else 0,
+                        display_order,
+                        caption,
+                    ),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def unassign_photo_from_person(self, person_id: str, photo_id: int) -> None:
+        """Remove a photo from a person."""
+        conn = self._conn()
+        try:
+            _execute(
+                conn,
+                f"DELETE FROM person_photos WHERE person_id = {_ph()} AND photo_id = {_ph()}",
+                (person_id, photo_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def set_profile_photo(self, person_id: str, photo_id: int) -> None:
+        """Set a photo as the profile photo for a person, clearing others."""
+        conn = self._conn()
+        try:
+            false_val = False if _is_pg() else 0
+            true_val = True if _is_pg() else 1
+            _execute(
+                conn,
+                f"UPDATE person_photos SET is_profile = {_ph()} WHERE person_id = {_ph()}",
+                (false_val, person_id),
+            )
+            _execute(
+                conn,
+                f"UPDATE person_photos SET is_profile = {_ph()} WHERE person_id = {_ph()} AND photo_id = {_ph()}",
+                (true_val, person_id, photo_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def set_photo_caption_new(
+        self, person_id: str, photo_id: int, caption: str
+    ) -> None:
+        """Set the caption for a person-photo link."""
+        conn = self._conn()
+        try:
+            _execute(
+                conn,
+                f"UPDATE person_photos SET caption = {_ph()} WHERE person_id = {_ph()} AND photo_id = {_ph()}",
+                (caption, person_id, photo_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def list_all_photos(self) -> list[dict]:
+        """Return all photos with their tagged people and face regions."""
+        conn = self._conn()
+        try:
+            photos = _fetchall(conn, "SELECT * FROM photos ORDER BY id")
+            p = _ph()
+            for photo in photos:
+                people = _fetchall(
+                    conn,
+                    f"""
+                    SELECT pp.person_id, pp.is_profile, pp.caption,
+                           pp.crop_x, pp.crop_y, pp.crop_w, pp.crop_h,
+                           ppl.given_name, ppl.surname
+                    FROM person_photos pp
+                    JOIN people ppl ON ppl.id = pp.person_id
+                    WHERE pp.photo_id = {p}
+                    ORDER BY pp.display_order
+                """,
+                    (photo["id"],),
+                )
+                photo["tagged_people"] = people
+                try:
+                    regions = _fetchall(
+                        conn,
+                        f"""
+                        SELECT fr.id, fr.person_id, fr.x, fr.y, fr.w, fr.h,
+                               ppl.given_name, ppl.surname
+                        FROM face_regions fr
+                        JOIN people ppl ON ppl.id = fr.person_id
+                        WHERE fr.photo_id = {p}
+                        ORDER BY fr.id
+                    """,
+                        (photo["id"],),
+                    )
+                    photo["face_regions"] = regions
+                except Exception:
+                    photo["face_regions"] = []
+                    if _is_pg():
+                        conn.rollback()
+            return photos
+        finally:
+            conn.close()
+
+    # ── Face Regions ──────────────────────────────────────────────────
+
+    def save_face_region(
+        self, photo_id: int, person_id: str, x: float, y: float, w: float, h: float
+    ) -> int:
+        """Insert a face region for a person on a photo. Returns the region id.
+
+        Multiple regions per person per photo are allowed (for montages).
+        """
+        conn = self._conn()
+        try:
+            _execute(
+                conn,
+                f"""
+                INSERT INTO face_regions (photo_id, person_id, x, y, w, h)
+                VALUES ({_ph(6)})
+            """,
+                (photo_id, person_id, x, y, w, h),
+            )
+            conn.commit()
+            if _is_pg():
+                row = _fetchone(conn, "SELECT lastval() AS id")
+            else:
+                row = _fetchone(conn, "SELECT last_insert_rowid() AS id")
+            return row["id"]
+        finally:
+            conn.close()
+
+    def get_face_regions(self, photo_id: int) -> list[dict]:
+        """Return all face regions for a photo, with person names."""
+        conn = self._conn()
+        try:
+            p = _ph()
+            return _fetchall(
+                conn,
+                f"""
+                SELECT fr.id, fr.photo_id, fr.person_id, fr.x, fr.y, fr.w, fr.h,
+                       ppl.given_name, ppl.surname
+                FROM face_regions fr
+                JOIN people ppl ON ppl.id = fr.person_id
+                WHERE fr.photo_id = {p}
+                ORDER BY fr.id
+            """,
+                (photo_id,),
+            )
+        finally:
+            conn.close()
+
+    def delete_face_region(self, region_id: int) -> None:
+        """Delete a face region by id."""
+        conn = self._conn()
+        try:
+            _execute(conn, f"DELETE FROM face_regions WHERE id = {_ph()}", (region_id,))
+            conn.commit()
+        finally:
+            conn.close()
+
+    def face_region_for_person_photo(
+        self, photo_id: int, person_id: str
+    ) -> Optional[dict]:
+        """Return the face region for a specific person on a specific photo."""
+        conn = self._conn()
+        try:
+            p = _ph()
+            return _fetchone(
+                conn,
+                f"""
+                SELECT id, photo_id, person_id, x, y, w, h
+                FROM face_regions
+                WHERE photo_id = {p} AND person_id = {p}
+            """,
+                (photo_id, person_id),
+            )
+        finally:
+            conn.close()
+
+    # ── Profile Crop ───────────────────────────────────────────────────
+
+    def set_profile_crop(
+        self,
+        person_id: str,
+        photo_id: int,
+        crop_x: float,
+        crop_y: float,
+        crop_w: float,
+        crop_h: float,
+    ) -> None:
+        """Set the crop region for a person's profile photo."""
+        conn = self._conn()
+        try:
+            p = _ph()
+            _execute(
+                conn,
+                f"""
+                UPDATE person_photos
+                SET crop_x = {p}, crop_y = {p}, crop_w = {p}, crop_h = {p}
+                WHERE person_id = {p} AND photo_id = {p}
+            """,
+                (crop_x, crop_y, crop_w, crop_h, person_id, photo_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def clear_profile_crop(self, person_id: str, photo_id: int) -> None:
+        """Clear the crop region for a person's profile photo."""
+        conn = self._conn()
+        try:
+            p = _ph()
+            _execute(
+                conn,
+                f"""
+                UPDATE person_photos
+                SET crop_x = NULL, crop_y = NULL, crop_w = NULL, crop_h = NULL
+                WHERE person_id = {p} AND photo_id = {p}
+            """,
+                (person_id, photo_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def _sync_person_photos(self, conn: Any, person: "Person") -> None:
+        """Sync the new photos/person_photos tables from a person's photo_paths.
+
+        Called during save_person for dual-write compatibility.
+        """
+        p = _ph()
+        for idx, file_path in enumerate(person.photo_paths):
+            if _is_pg():
+                _execute(
+                    conn,
+                    f"INSERT INTO photos (file_path) VALUES ({p}) ON CONFLICT (file_path) DO NOTHING",
+                    (file_path,),
+                )
+            else:
+                _execute(
+                    conn,
+                    f"INSERT OR IGNORE INTO photos (file_path) VALUES ({p})",
+                    (file_path,),
+                )
+
+            row = _fetchone(
+                conn, f"SELECT id FROM photos WHERE file_path = {p}", (file_path,)
+            )
+            photo_id = row["id"]
+
+            caption = person.photo_captions.get(file_path, "")
+
+            existing = _fetchone(
+                conn,
+                f"""
+                SELECT is_profile FROM person_photos
+                WHERE person_id = {p} AND photo_id = {p}
+            """,
+                (person.id, photo_id),
+            )
+
+            if existing:
+                _execute(
+                    conn,
+                    f"""
+                    UPDATE person_photos SET display_order = {p}, caption = {p}
+                    WHERE person_id = {p} AND photo_id = {p}
+                """,
+                    (idx, caption, person.id, photo_id),
+                )
+            else:
+                is_profile_val = idx == 0
+                if not _is_pg():
+                    is_profile_val = 1 if is_profile_val else 0
+                _execute(
+                    conn,
+                    f"""
+                    INSERT INTO person_photos (person_id, photo_id, is_profile, display_order, caption)
+                    VALUES ({_ph(5)})
+                """,
+                    (person.id, photo_id, is_profile_val, idx, caption),
+                )
+
+        current_photos = _fetchall(
+            conn,
+            f"""
+            SELECT p.file_path, pp.photo_id FROM person_photos pp
+            JOIN photos p ON p.id = pp.photo_id
+            WHERE pp.person_id = {p}
+        """,
+            (person.id,),
+        )
+        paths_set = set(person.photo_paths)
+        for cp in current_photos:
+            if cp["file_path"] not in paths_set:
+                _execute(
+                    conn,
+                    f"DELETE FROM person_photos WHERE person_id = {p} AND photo_id = {p}",
+                    (person.id, cp["photo_id"]),
+                )
 
     # ── Internal helpers ────────────────────────────────────────────────
 
@@ -587,16 +1396,16 @@ class TreeRepository:
             given_name=row["given_name"],
             surname=row["surname"],
             gender=Gender(row["gender"]),
-            birth_date=row["birth_date"],
-            birth_place=row["birth_place"],
-            death_date=row["death_date"],
-            death_place=row["death_place"],
-            maiden_name=row["maiden_name"],
+            birth_date=row["birth_date"] or None,
+            birth_place=row["birth_place"] or None,
+            death_date=row["death_date"] or None,
+            death_place=row["death_place"] or None,
+            maiden_name=row["maiden_name"] or None,
             nicknames=json.loads(row["nicknames"] or "[]"),
             notes=row["notes"] or "",
             photo_paths=json.loads(row["photo_paths"] or "[]"),
             photo_captions=json.loads(row.get("photo_captions") or "{}"),
-            email=row.get("email"),
+            email=row.get("email") or None,
         )
 
     @staticmethod
@@ -609,6 +1418,18 @@ class TreeRepository:
             date=row["date"],
             description=row["description"] or "",
             url=row["url"],
+        )
+
+    @staticmethod
+    def _row_to_article(row: dict) -> NewsArticle:
+        return NewsArticle(
+            id=row["id"],
+            title=row["title"],
+            url=row.get("url"),
+            publication=row.get("publication"),
+            date=row.get("date"),
+            summary=row.get("summary") or "",
+            photo_url=row.get("photo_url"),
         )
 
     @staticmethod

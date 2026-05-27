@@ -14,6 +14,7 @@ from models.relationship import Relationship, RelationshipType, Union
 from models.event import LifeEvent, EventType
 from models.source import Source, SourceType
 from models.citation import Citation, EntityType, Confidence
+from models.article import NewsArticle
 from models.tree import FamilyTree
 
 
@@ -99,6 +100,20 @@ def load_tree(path: str) -> FamilyTree:
             notes=c.get("notes", ""),
         )
         tree.add_citation(citation)
+
+    for a in data.get("articles", []):
+        article = NewsArticle(
+            id=a["id"],
+            title=a["title"],
+            url=a.get("url"),
+            publication=a.get("publication"),
+            date=a.get("date"),
+            summary=a.get("summary", ""),
+            photo_url=a.get("photo_url"),
+        )
+        tree.add_article(article)
+        for pid in a.get("person_ids", []):
+            tree.add_person_article_link(pid, article.id)
 
     return tree
 
@@ -203,8 +218,31 @@ def _citation_to_dict(c: Citation) -> dict[str, Any]:
     return d
 
 
-def save_tree(tree: FamilyTree, path: str) -> None:
+def _article_to_dict(
+    a: NewsArticle, person_ids: list[str] | None = None
+) -> dict[str, Any]:
+    d: dict[str, Any] = {
+        "id": a.id,
+        "title": a.title,
+    }
+    for key in ("url", "publication", "date", "photo_url"):
+        val = getattr(a, key)
+        if val is not None:
+            d[key] = val
+    if a.summary:
+        d["summary"] = a.summary
+    if person_ids:
+        d["person_ids"] = person_ids
+    return d
+
+
+def save_tree(tree: FamilyTree, path: str, photos: list[dict] | None = None) -> None:
     """Serialize a FamilyTree to the JSON format."""
+    article_person_map: dict[str, list[str]] = {}
+    for pid, aids in tree.person_article_links.items():
+        for aid in aids:
+            article_person_map.setdefault(aid, []).append(pid)
+
     data = {
         "people": [_person_to_dict(p) for p in tree.people.values()],
         "relationships": [_rel_to_dict(r) for r in tree.relationships],
@@ -212,7 +250,13 @@ def save_tree(tree: FamilyTree, path: str) -> None:
         "events": [_event_to_dict(e) for e in tree.events],
         "sources": [_source_to_dict(s) for s in tree.sources.values()],
         "citations": [_citation_to_dict(c) for c in tree.citations],
+        "articles": [
+            _article_to_dict(a, article_person_map.get(a.id))
+            for a in tree.articles.values()
+        ],
     }
+    if photos:
+        data["photos"] = photos
     Path(path).write_text(
         json.dumps(data, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
@@ -311,7 +355,7 @@ def parse_source_tags(notes: str) -> tuple[list[str], str]:
         return [], notes
 
     raw_sources = match.group(1)
-    cleaned = notes[:match.start()].rstrip()
+    cleaned = notes[: match.start()].rstrip()
 
     # Split on commas, semicolons, or " and "
     parts = re.split(r"[,;]|\band\b", raw_sources)

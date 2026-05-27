@@ -33,19 +33,26 @@ def app_client(tmp_path, monkeypatch):
     monkeypatch.setenv("FAMILY_TREE_DB", db_path)
 
     from database.connection import init_db
+
     init_db(db_path)
 
     import web_server
     import importlib
+
     importlib.reload(web_server)
     web_server.PRIVATE_DIR = tmp_path
     web_server.app.config["TESTING"] = True
 
     from database.repository import TreeRepository
+
     repo = TreeRepository(db_path)
 
-    repo.save_person(Person(id="p1", given_name="Alice", surname="Test", gender=Gender.FEMALE))
-    repo.save_person(Person(id="p2", given_name="Bob", surname="Test", gender=Gender.MALE))
+    repo.save_person(
+        Person(id="p1", given_name="Alice", surname="Test", gender=Gender.FEMALE)
+    )
+    repo.save_person(
+        Person(id="p2", given_name="Bob", surname="Test", gender=Gender.MALE)
+    )
 
     with web_server.app.test_client() as client:
         yield client, repo, tmp_path
@@ -53,16 +60,20 @@ def app_client(tmp_path, monkeypatch):
 
 # ── POST /api/people ─────────────────────────────────────────────────────
 
+
 class TestCreatePerson:
     def test_happy_path_auto_id(self, app_client):
         client, repo, _ = app_client
-        resp = client.post("/api/people", json={
-            "given_name": "Carol",
-            "surname": "Hughes",
-            "gender": "female",
-            "birth_date": "1950-03-14",
-            "birth_place": "Dallas, TX",
-        })
+        resp = client.post(
+            "/api/people",
+            json={
+                "given_name": "Carol",
+                "surname": "Hughes",
+                "gender": "female",
+                "birth_date": "1950-03-14",
+                "birth_place": "Dallas, TX",
+            },
+        )
         assert resp.status_code == 201, resp.get_data(as_text=True)
         body = resp.get_json()
         assert body["given_name"] == "Carol"
@@ -75,11 +86,14 @@ class TestCreatePerson:
 
     def test_explicit_id_is_honored(self, app_client):
         client, repo, _ = app_client
-        resp = client.post("/api/people", json={
-            "id": "custom_id_123",
-            "given_name": "Dana",
-            "surname": "X",
-        })
+        resp = client.post(
+            "/api/people",
+            json={
+                "id": "custom_id_123",
+                "given_name": "Dana",
+                "surname": "X",
+            },
+        )
         assert resp.status_code == 201
         assert resp.get_json()["id"] == "custom_id_123"
         assert repo.get_person("custom_id_123") is not None
@@ -95,6 +109,23 @@ class TestCreatePerson:
         client, _, _ = app_client
         resp = client.post("/api/people", json={"given_name": "Grandma"})
         assert resp.status_code == 201
+
+    def test_empty_birth_date_accepted(self, app_client):
+        """Birth dates are often unknown in genealogy — empty must not 500."""
+        client, repo, _ = app_client
+        for payload in [
+            {"given_name": "NoBirth1", "birth_date": ""},
+            {"given_name": "NoBirth2", "birth_date": None},
+            {"given_name": "NoBirth3"},
+        ]:
+            resp = client.post("/api/people", json=payload)
+            assert resp.status_code == 201, (
+                f"Failed for {payload}: {resp.get_data(as_text=True)}"
+            )
+            body = resp.get_json()
+            assert "birth_date" not in body or body["birth_date"] is None
+            person = repo.get_person(body["id"])
+            assert person.birth_date is None
 
     def test_requires_at_least_one_name(self, app_client):
         client, _, _ = app_client
@@ -115,17 +146,13 @@ class TestCreatePerson:
 
     def test_conflict_on_duplicate_id(self, app_client):
         client, _, _ = app_client
-        resp = client.post("/api/people", json={
-            "id": "p1", "given_name": "Alice"
-        })
+        resp = client.post("/api/people", json={"id": "p1", "given_name": "Alice"})
         assert resp.status_code == 409
         assert resp.get_json()["code"] == "conflict"
 
     def test_invalid_gender_rejected(self, app_client):
         client, _, _ = app_client
-        resp = client.post("/api/people", json={
-            "given_name": "Eve", "gender": "alien"
-        })
+        resp = client.post("/api/people", json={"given_name": "Eve", "gender": "alien"})
         assert resp.status_code == 400
         assert "gender" in resp.get_json()["error"]
 
@@ -139,9 +166,9 @@ class TestCreatePerson:
 
     def test_invalid_date_format_rejected(self, app_client):
         client, _, _ = app_client
-        resp = client.post("/api/people", json={
-            "given_name": "Gus", "birth_date": "March 1950"
-        })
+        resp = client.post(
+            "/api/people", json={"given_name": "Gus", "birth_date": "March 1950"}
+        )
         assert resp.status_code == 400
         assert "birth_date" in resp.get_json()["error"]
 
@@ -153,16 +180,16 @@ class TestCreatePerson:
 
     def test_nicknames_must_be_list_of_strings(self, app_client):
         client, _, _ = app_client
-        resp = client.post("/api/people", json={
-            "given_name": "Ivy", "nicknames": "just a string"
-        })
+        resp = client.post(
+            "/api/people", json={"given_name": "Ivy", "nicknames": "just a string"}
+        )
         assert resp.status_code == 400
 
     def test_nicknames_list_stored(self, app_client):
         client, repo, _ = app_client
-        resp = client.post("/api/people", json={
-            "given_name": "Jo", "nicknames": ["Jo-Jo", "Jojo"]
-        })
+        resp = client.post(
+            "/api/people", json={"given_name": "Jo", "nicknames": ["Jo-Jo", "Jojo"]}
+        )
         assert resp.status_code == 201
         pid = resp.get_json()["id"]
         assert repo.get_person(pid).nicknames == ["Jo-Jo", "Jojo"]
@@ -170,17 +197,22 @@ class TestCreatePerson:
     def test_unknown_fields_are_ignored(self, app_client):
         """Forward compatibility — extra fields shouldn't 400."""
         client, _, _ = app_client
-        resp = client.post("/api/people", json={
-            "given_name": "K", "favorite_color": "blue", "__proto__": "bad"
-        })
+        resp = client.post(
+            "/api/people",
+            json={"given_name": "K", "favorite_color": "blue", "__proto__": "bad"},
+        )
         assert resp.status_code == 201
         assert "favorite_color" not in resp.get_json()
 
     def test_whitespace_trimmed(self, app_client):
         client, _, _ = app_client
-        resp = client.post("/api/people", json={
-            "given_name": "  Liam  ", "surname": "  Smith\n",
-        })
+        resp = client.post(
+            "/api/people",
+            json={
+                "given_name": "  Liam  ",
+                "surname": "  Smith\n",
+            },
+        )
         assert resp.status_code == 201
         body = resp.get_json()
         assert body["given_name"] == "Liam"
@@ -189,13 +221,17 @@ class TestCreatePerson:
 
 # ── PUT /api/people/<id> ─────────────────────────────────────────────────
 
+
 class TestUpdatePerson:
     def test_happy_path(self, app_client):
         client, repo, _ = app_client
-        resp = client.put("/api/people/p1", json={
-            "given_name": "Alicia",
-            "birth_date": "1985-01-01",
-        })
+        resp = client.put(
+            "/api/people/p1",
+            json={
+                "given_name": "Alicia",
+                "birth_date": "1985-01-01",
+            },
+        )
         assert resp.status_code == 200
         body = resp.get_json()
         assert body["given_name"] == "Alicia"
@@ -224,6 +260,23 @@ class TestUpdatePerson:
         client.put("/api/people/p1", json={"birth_place": "X"})
         client.put("/api/people/p1", json={"birth_place": ""})
         assert repo.get_person("p1").birth_place is None
+
+    def test_clear_birth_date_with_empty_string(self, app_client):
+        """Clearing a birth date via the edit form must not 500."""
+        client, repo, _ = app_client
+        client.put("/api/people/p1", json={"birth_date": "1985-01-01"})
+        assert repo.get_person("p1").birth_date == "1985-01-01"
+        resp = client.patch("/api/people/p1", json={"birth_date": ""})
+        assert resp.status_code == 200
+        assert repo.get_person("p1").birth_date is None
+
+    def test_clear_birth_date_with_null(self, app_client):
+        """Clearing a birth date by sending null must not 500."""
+        client, repo, _ = app_client
+        client.put("/api/people/p1", json={"birth_date": "1985-01-01"})
+        resp = client.patch("/api/people/p1", json={"birth_date": None})
+        assert resp.status_code == 200
+        assert repo.get_person("p1").birth_date is None
 
     def test_gender_change(self, app_client):
         client, repo, _ = app_client
@@ -259,6 +312,7 @@ class TestUpdatePerson:
 
 # ── DELETE /api/people/<id> ──────────────────────────────────────────────
 
+
 class TestDeletePerson:
     def test_happy_path(self, app_client):
         client, repo, _ = app_client
@@ -282,29 +336,42 @@ class TestDeletePerson:
         FK is declared ON DELETE CASCADE in schema.py."""
         client, repo, _ = app_client
         from models.relationship import Relationship, RelationshipType
-        repo.save_relationship(Relationship(
-            parent_id="p1", child_id="p2", rel_type=RelationshipType.BIOLOGICAL,
-        ))
+
+        repo.save_relationship(
+            Relationship(
+                parent_id="p1",
+                child_id="p2",
+                rel_type=RelationshipType.BIOLOGICAL,
+            )
+        )
         tree_before = repo.load_tree()
-        assert any(r.parent_id == "p1" and r.child_id == "p2"
-                   for r in tree_before.relationships)
+        assert any(
+            r.parent_id == "p1" and r.child_id == "p2"
+            for r in tree_before.relationships
+        )
 
         resp = client.delete("/api/people/p1")
         assert resp.status_code == 204
 
         tree_after = repo.load_tree()
-        assert not any(r.parent_id == "p1" or r.child_id == "p1"
-                       for r in tree_after.relationships)
+        assert not any(
+            r.parent_id == "p1" or r.child_id == "p1" for r in tree_after.relationships
+        )
 
 
 # ── Round-trips via /api/data ────────────────────────────────────────────
 
+
 class TestRoundTripViaApiData:
     def test_create_shows_up_in_api_data(self, app_client):
         client, _, _ = app_client
-        resp = client.post("/api/people", json={
-            "given_name": "Mira", "surname": "New",
-        })
+        resp = client.post(
+            "/api/people",
+            json={
+                "given_name": "Mira",
+                "surname": "New",
+            },
+        )
         assert resp.status_code == 201
         created_id = resp.get_json()["id"]
 

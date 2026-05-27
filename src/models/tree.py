@@ -4,6 +4,7 @@ The FamilyTree holds all people, relationships, unions, events, sources,
 and citations. It provides the core graph queries: parents, children,
 siblings, ancestors, descendants.
 """
+
 from dataclasses import dataclass, field
 from typing import Optional
 from .person import Person
@@ -11,6 +12,7 @@ from .relationship import Relationship, Union
 from .event import LifeEvent
 from .source import Source
 from .citation import Citation, EntityType
+from .article import NewsArticle
 
 
 @dataclass
@@ -21,12 +23,19 @@ class FamilyTree:
     Events are attached to people as metadata.
     Sources and Citations track provenance of every fact.
     """
-    people: dict[str, Person] = field(default_factory=dict)          # id → Person
-    relationships: list[Relationship] = field(default_factory=list)  # parent→child edges
-    unions: list[Union] = field(default_factory=list)                # partner↔partner
+
+    people: dict[str, Person] = field(default_factory=dict)  # id → Person
+    relationships: list[Relationship] = field(
+        default_factory=list
+    )  # parent→child edges
+    unions: list[Union] = field(default_factory=list)  # partner↔partner
     events: list[LifeEvent] = field(default_factory=list)
-    sources: dict[str, Source] = field(default_factory=dict)         # id → Source
+    sources: dict[str, Source] = field(default_factory=dict)  # id → Source
     citations: list[Citation] = field(default_factory=list)
+    articles: dict[str, NewsArticle] = field(default_factory=dict)  # id → NewsArticle
+    person_article_links: dict[str, set[str]] = field(
+        default_factory=dict
+    )  # person_id → {article_ids}
 
     # --- Mutators ---
 
@@ -48,19 +57,27 @@ class FamilyTree:
     def add_citation(self, citation: Citation) -> None:
         self.citations.append(citation)
 
+    def add_article(self, article: NewsArticle) -> None:
+        self.articles[article.id] = article
+
+    def add_person_article_link(self, person_id: str, article_id: str) -> None:
+        self.person_article_links.setdefault(person_id, set()).add(article_id)
+
     # --- Citation queries ---
 
     def citations_for(self, entity_type: EntityType, entity_id: str) -> list[Citation]:
         """Get all citations for a given entity."""
         return [
-            c for c in self.citations
+            c
+            for c in self.citations
             if c.entity_type == entity_type and c.entity_id == entity_id
         ]
 
     def source_ids_for_person(self, person_id: str) -> set[str]:
         """Get all unique source IDs cited for a person."""
         return {
-            c.source_id for c in self.citations
+            c.source_id
+            for c in self.citations
             if c.entity_type == EntityType.PERSON and c.entity_id == person_id
         }
 
@@ -71,7 +88,9 @@ class FamilyTree:
 
     def parents_of(self, person_id: str) -> list[Person]:
         """Get biological/adoptive parents of a person."""
-        parent_ids = [r.parent_id for r in self.relationships if r.child_id == person_id]
+        parent_ids = [
+            r.parent_id for r in self.relationships if r.child_id == person_id
+        ]
         return [self.people[pid] for pid in parent_ids if pid in self.people]
 
     def children_of(self, person_id: str) -> list[Person]:
@@ -81,7 +100,9 @@ class FamilyTree:
 
     def siblings_of(self, person_id: str) -> list[Person]:
         """Get siblings (share at least one parent). Excludes self."""
-        parent_ids = {r.parent_id for r in self.relationships if r.child_id == person_id}
+        parent_ids = {
+            r.parent_id for r in self.relationships if r.child_id == person_id
+        }
         sibling_ids: set[str] = set()
         for pid in parent_ids:
             for r in self.relationships:
