@@ -18,6 +18,7 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -1491,24 +1492,15 @@ def api_upload_document():
     })
 
 
-@app.route("/api/documents/<doc_id>/parse", methods=["POST"])
-@require_editor
-def api_parse_document(doc_id):
-    """Trigger AI parsing of a document. Returns proposed changes for review."""
-    row = _get_document(doc_id)
-    if not row:
-        return jsonify({"error": "Document not found", "code": "not_found"}), 404
+# In-memory tracking for background parse jobs
+_parse_jobs: dict[str, dict] = {}
 
-    file_path = str(PRIVATE_DIR / row["file_path"])
-    if not Path(file_path).exists():
-        return jsonify({"error": "Document file not found on disk", "code": "missing_file"}), 404
 
-    _update_document(doc_id, status="parsing")
-
-    # Get existing people for matching
+def _get_existing_people() -> list[dict]:
+    """Load existing people for AI matching context."""
     repo = TreeRepository()
     tree = repo.load_tree()
-    existing_people = [
+    return [
         {
             "id": p.id,
             "given_name": p.given_name,
@@ -1521,7 +1513,142 @@ def api_parse_document(doc_id):
         for p in tree.people.values()
     ]
 
-    # Run AI parsing
+
+def _save_chunk_result(doc_id: str, chunk_index: int, chunk: dict, result: dict) -> None:
+    """Update a pending chunk row with parsed results."""
+    status = "error" if "error" in result else "done"
+    error_msg = result.get("error") if "error" in result else None
+    conn = get_connection()
+    try:
+        _execute(
+            conn,
+            f"UPDATE document_chunks SET status = {_ph()}, parsed_data = {_ph()}, error_message = {_ph()} "
+            f"WHERE document_id = {_ph()} AND chunk_index = {_ph()}",
+            (status, json.dumps(result), error_msg, doc_id, chunk_index),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _update_document_progress(doc_id: str, total: int, done: int) -> None:
+    """Update chunk progress columns on the documents table."""
+    conn = get_connection()
+    try:
+        _execute(
+            conn,
+            f"UPDATE documents SET total_chunks = {_ph()}, chunks_done = {_ph()} WHERE id = {_ph()}",
+            (total, done, doc_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _run_chunked_parse(doc_id: str, file_path: str, filename: str, existing_people: list[dict], total_chunks: int) -> None:
+    """Background thread target for multi-chunk PDF parsing."""
+    from intelligence.document_parser import parse_document_chunked, _plan_chunks
+
+    job = _parse_jobs[doc_id]
+
+    def on_progress(chunk_idx: int, total: int, chunk_result: dict) -> None:
+        chunks_done = chunk_idx + 1
+        job["chunks_done"] = chunks_done
+        _update_document_progress(doc_id, total, chunks_done)
+
+        chunk_plan = job.get("chunk_plan", [])
+        chunk_info = chunk_plan[chunk_idx] if chunk_idx < len(chunk_plan) else {}
+        _save_chunk_result(doc_id, chunk_idx, chunk_info, chunk_result)
+
+    try:
+        result = parse_document_chunked(
+            file_path=file_path,
+            existing_people=existing_people,
+            filename=filename,
+            on_progress=on_progress,
+        )
+    except Exception as e:
+        logger.error("Chunked document parsing failed: %s", e)
+        result = {"error": str(e)}
+
+    if "error" in result:
+        _update_document(doc_id, status="error", parsed_data=result)
+        job["status"] = "error"
+        job["error"] = result.get("error", "Unknown error")
+    else:
+        _update_document(doc_id, status="parsed", parsed_data=result)
+        job["status"] = "parsed"
+        job["result"] = result
+
+
+@app.route("/api/documents/<doc_id>/parse", methods=["POST"])
+@require_editor
+def api_parse_document(doc_id):
+    """Trigger AI parsing of a document.
+
+    Short documents (single chunk): synchronous, returns result immediately.
+    Long PDFs (multi-chunk): returns immediately with progress info,
+    spawns a background thread, client polls /parse-status.
+    """
+    row = _get_document(doc_id)
+    if not row:
+        return jsonify({"error": "Document not found", "code": "not_found"}), 404
+
+    file_path = str(PRIVATE_DIR / row["file_path"])
+    if not Path(file_path).exists():
+        return jsonify({"error": "Document file not found on disk", "code": "missing_file"}), 404
+
+    _update_document(doc_id, status="parsing")
+
+    existing_people = _get_existing_people()
+
+    # Check if this is a multi-chunk PDF
+    ext = Path(file_path).suffix.lower()
+    if ext == ".pdf":
+        from intelligence.document_parser import _plan_chunks
+        chunks = _plan_chunks(file_path)
+
+        if len(chunks) > 1:
+            total = len(chunks)
+            _update_document_progress(doc_id, total, 0)
+
+            # Insert pending chunk rows
+            conn = get_connection()
+            try:
+                for i, chunk in enumerate(chunks):
+                    _execute(
+                        conn,
+                        f"INSERT INTO document_chunks "
+                        f"(document_id, chunk_index, start_page, end_page, mode, status) "
+                        f"VALUES ({_ph(6)})",
+                        (doc_id, i, chunk["start_page"], chunk["end_page"], chunk["mode"], "pending"),
+                    )
+                conn.commit()
+            finally:
+                conn.close()
+
+            _parse_jobs[doc_id] = {
+                "status": "parsing",
+                "total_chunks": total,
+                "chunks_done": 0,
+                "chunk_plan": chunks,
+            }
+
+            t = threading.Thread(
+                target=_run_chunked_parse,
+                args=(doc_id, file_path, row["filename"], existing_people, total),
+                daemon=True,
+            )
+            t.start()
+
+            return jsonify({
+                "document_id": doc_id,
+                "status": "parsing",
+                "total_chunks": total,
+                "chunks_done": 0,
+            })
+
+    # Single-chunk / non-PDF: synchronous parse (existing behavior)
     try:
         from intelligence.document_parser import parse_document
         result = parse_document(
@@ -1534,7 +1661,6 @@ def api_parse_document(doc_id):
         _update_document(doc_id, status="error", parsed_data={"error": str(e)})
         return jsonify({"error": f"Parsing failed: {e}", "code": "parse_failed"}), 500
 
-    # Check for error in result
     if "error" in result:
         _update_document(doc_id, status="error", parsed_data=result)
         return jsonify(result), 500
@@ -1546,6 +1672,55 @@ def api_parse_document(doc_id):
         "status": "parsed",
         "proposed_changes": result,
     })
+
+
+@app.route("/api/documents/<doc_id>/parse-status", methods=["GET"])
+def api_parse_status(doc_id):
+    """Poll endpoint for multi-chunk parse progress."""
+    # Check in-memory job first (fast path)
+    job = _parse_jobs.get(doc_id)
+    if job:
+        resp = {
+            "document_id": doc_id,
+            "status": job["status"],
+            "total_chunks": job.get("total_chunks", 0),
+            "chunks_done": job.get("chunks_done", 0),
+        }
+        if job["status"] == "parsed":
+            resp["proposed_changes"] = job.get("result", {})
+            # Clean up finished job
+            _parse_jobs.pop(doc_id, None)
+        elif job["status"] == "error":
+            resp["error"] = job.get("error", "Unknown error")
+            _parse_jobs.pop(doc_id, None)
+        return jsonify(resp)
+
+    # Fallback: check DB status
+    row = _get_document(doc_id)
+    if not row:
+        return jsonify({"error": "Document not found", "code": "not_found"}), 404
+
+    status = row.get("status", "uploaded")
+    resp = {
+        "document_id": doc_id,
+        "status": status,
+        "total_chunks": row.get("total_chunks", 0) or 0,
+        "chunks_done": row.get("chunks_done", 0) or 0,
+    }
+
+    if status == "parsed":
+        try:
+            resp["proposed_changes"] = json.loads(row.get("parsed_data", "{}"))
+        except (json.JSONDecodeError, TypeError):
+            resp["proposed_changes"] = {}
+    elif status == "error":
+        try:
+            parsed = json.loads(row.get("parsed_data", "{}"))
+            resp["error"] = parsed.get("error", "Unknown error")
+        except (json.JSONDecodeError, TypeError):
+            resp["error"] = "Unknown error"
+
+    return jsonify(resp)
 
 
 @app.route("/api/documents/<doc_id>/apply", methods=["POST"])

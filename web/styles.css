@@ -1897,6 +1897,30 @@ main {
 }
 .doc-error-retry:hover { border-color: var(--accent); color: var(--accent); }
 
+.doc-chunk-progress {
+  margin-top: 6px;
+}
+.doc-chunk-progress.hidden { display: none; }
+.chunk-progress-bar {
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.chunk-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  width: 0%;
+  transition: width 0.4s ease;
+}
+.chunk-progress-text {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  display: block;
+}
+
 .spinner {
   width: 18px;
   height: 18px;

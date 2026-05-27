@@ -735,7 +735,7 @@ class TreeRepository:
 
     def update_photo_metadata(self, photo_id: int, **kwargs) -> None:
         """Update metadata fields on a photo (date, date_circa, place, photo_type)."""
-        allowed = {"date", "date_circa", "place", "photo_type"}
+        allowed = {"date", "date_circa", "place", "photo_type", "lat", "lng"}
         sets = []
         params = []
         for k, v in kwargs.items():
