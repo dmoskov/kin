@@ -22,6 +22,7 @@ from models.relationship import Relationship, RelationshipType, Union
 from models.event import EventType, LifeEvent
 from models.source import Source, SourceType
 from models.citation import Citation, EntityType, Confidence
+from models.article import NewsArticle
 from models.tree import FamilyTree
 
 from .connection import get_connection, _use_postgres as _is_pg
@@ -425,6 +426,164 @@ class TreeRepository:
         finally:
             conn.close()
 
+    # ── News Articles ──────────────────────────────────────────────────
+
+    def save_article(self, article: NewsArticle) -> None:
+        """Insert or upsert a NewsArticle."""
+        conn = self._conn()
+        params = (
+            article.id,
+            article.title,
+            article.url,
+            article.publication,
+            article.date,
+            article.summary,
+            article.photo_url,
+        )
+        try:
+            if _is_pg():
+                _execute(
+                    conn,
+                    f"""
+                    INSERT INTO news_articles
+                        (id, title, url, publication, date, summary, photo_url)
+                    VALUES ({_ph(7)})
+                    ON CONFLICT (id) DO UPDATE SET
+                        title=EXCLUDED.title, url=EXCLUDED.url,
+                        publication=EXCLUDED.publication, date=EXCLUDED.date,
+                        summary=EXCLUDED.summary, photo_url=EXCLUDED.photo_url
+                """,
+                    params,
+                )
+            else:
+                _execute(
+                    conn,
+                    f"""
+                    INSERT OR REPLACE INTO news_articles
+                        (id, title, url, publication, date, summary, photo_url)
+                    VALUES ({_ph(7)})
+                """,
+                    params,
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get_article(self, article_id: str) -> Optional[NewsArticle]:
+        """Fetch a single NewsArticle by ID."""
+        conn = self._conn()
+        try:
+            row = _fetchone(
+                conn, f"SELECT * FROM news_articles WHERE id = {_ph()}", (article_id,)
+            )
+            return self._row_to_article(row) if row else None
+        finally:
+            conn.close()
+
+    def list_articles(self) -> list[NewsArticle]:
+        """Fetch all news articles, ordered by date descending."""
+        conn = self._conn()
+        try:
+            rows = _fetchall(
+                conn,
+                "SELECT * FROM news_articles ORDER BY date DESC, title",
+            )
+            return [self._row_to_article(r) for r in rows]
+        finally:
+            conn.close()
+
+    def delete_article(self, article_id: str) -> bool:
+        """Delete an article (cascades to person_articles)."""
+        conn = self._conn()
+        try:
+            cur = _execute(
+                conn,
+                f"DELETE FROM news_articles WHERE id = {_ph()}",
+                (article_id,),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+        finally:
+            conn.close()
+
+    def link_article_to_person(self, person_id: str, article_id: str) -> None:
+        """Associate a news article with a person."""
+        conn = self._conn()
+        try:
+            if _is_pg():
+                _execute(
+                    conn,
+                    f"""
+                    INSERT INTO person_articles (person_id, article_id)
+                    VALUES ({_ph(2)})
+                    ON CONFLICT (person_id, article_id) DO NOTHING
+                """,
+                    (person_id, article_id),
+                )
+            else:
+                _execute(
+                    conn,
+                    f"""
+                    INSERT OR IGNORE INTO person_articles (person_id, article_id)
+                    VALUES ({_ph(2)})
+                """,
+                    (person_id, article_id),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def unlink_article_from_person(self, person_id: str, article_id: str) -> None:
+        """Remove the association between a person and an article."""
+        conn = self._conn()
+        try:
+            _execute(
+                conn,
+                f"DELETE FROM person_articles WHERE person_id = {_ph()} AND article_id = {_ph()}",
+                (person_id, article_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def articles_for_person(self, person_id: str) -> list[NewsArticle]:
+        """Fetch all articles linked to a person."""
+        conn = self._conn()
+        try:
+            p = _ph()
+            rows = _fetchall(
+                conn,
+                f"""
+                SELECT a.* FROM news_articles a
+                JOIN person_articles pa ON pa.article_id = a.id
+                WHERE pa.person_id = {p}
+                ORDER BY a.date DESC, a.title
+            """,
+                (person_id,),
+            )
+            return [self._row_to_article(r) for r in rows]
+        finally:
+            conn.close()
+
+    def people_for_article(self, article_id: str) -> list[dict]:
+        """Return all people linked to an article."""
+        conn = self._conn()
+        try:
+            p = _ph()
+            return _fetchall(
+                conn,
+                f"""
+                SELECT ppl.id, ppl.given_name, ppl.surname
+                FROM person_articles pa
+                JOIN people ppl ON ppl.id = pa.person_id
+                WHERE pa.article_id = {p}
+                ORDER BY ppl.surname, ppl.given_name
+            """,
+                (article_id,),
+            )
+        finally:
+            conn.close()
+
     # ── Bulk operations ─────────────────────────────────────────────────
 
     def save_tree(self, tree: FamilyTree) -> None:
@@ -598,6 +757,63 @@ class TreeRepository:
                     ),
                 )
 
+            for article in tree.articles.values():
+                params = (
+                    article.id,
+                    article.title,
+                    article.url,
+                    article.publication,
+                    article.date,
+                    article.summary,
+                    article.photo_url,
+                )
+                if _is_pg():
+                    _execute(
+                        conn,
+                        f"""
+                        INSERT INTO news_articles
+                            (id, title, url, publication, date, summary, photo_url)
+                        VALUES ({_ph(7)})
+                        ON CONFLICT (id) DO UPDATE SET
+                            title=EXCLUDED.title, url=EXCLUDED.url,
+                            publication=EXCLUDED.publication, date=EXCLUDED.date,
+                            summary=EXCLUDED.summary, photo_url=EXCLUDED.photo_url
+                    """,
+                        params,
+                    )
+                else:
+                    _execute(
+                        conn,
+                        f"""
+                        INSERT OR REPLACE INTO news_articles
+                            (id, title, url, publication, date, summary, photo_url)
+                        VALUES ({_ph(7)})
+                    """,
+                        params,
+                    )
+
+            for person_id, article_ids in tree.person_article_links.items():
+                for article_id in article_ids:
+                    if _is_pg():
+                        _execute(
+                            conn,
+                            f"""
+                            INSERT INTO person_articles (person_id, article_id)
+                            VALUES ({_ph(2)})
+                            ON CONFLICT (person_id, article_id) DO NOTHING
+                        """,
+                            (person_id, article_id),
+                        )
+                    else:
+                        _execute(
+                            conn,
+                            f"""
+                            INSERT OR IGNORE INTO person_articles (person_id, article_id)
+                            VALUES ({_ph(2)})
+                        """,
+                            (person_id, article_id),
+                        )
+
             conn.commit()
         except Exception:
             conn.rollback()
@@ -664,6 +880,17 @@ class TreeRepository:
                 if _is_pg():
                     conn.rollback()
 
+            try:
+                for row in _fetchall(conn, "SELECT * FROM news_articles"):
+                    tree.add_article(self._row_to_article(row))
+                for row in _fetchall(
+                    conn, "SELECT person_id, article_id FROM person_articles"
+                ):
+                    tree.add_person_article_link(row["person_id"], row["article_id"])
+            except Exception:
+                if _is_pg():
+                    conn.rollback()
+
             return tree
         finally:
             conn.close()
@@ -697,6 +924,15 @@ class TreeRepository:
                     conn.rollback()
                 counts["sources"] = 0
                 counts["citations"] = 0
+
+            try:
+                counts["articles"] = _fetchone(
+                    conn, "SELECT COUNT(*) as n FROM news_articles"
+                )["n"]
+            except Exception:
+                if _is_pg():
+                    conn.rollback()
+                counts["articles"] = 0
 
             return counts
         finally:
@@ -1182,6 +1418,18 @@ class TreeRepository:
             date=row["date"],
             description=row["description"] or "",
             url=row["url"],
+        )
+
+    @staticmethod
+    def _row_to_article(row: dict) -> NewsArticle:
+        return NewsArticle(
+            id=row["id"],
+            title=row["title"],
+            url=row.get("url"),
+            publication=row.get("publication"),
+            date=row.get("date"),
+            summary=row.get("summary") or "",
+            photo_url=row.get("photo_url"),
         )
 
     @staticmethod

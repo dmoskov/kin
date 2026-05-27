@@ -38,6 +38,7 @@ from storage import photo_storage
 logger = logging.getLogger(__name__)
 from import_export.gedcom_import import parse_gedcom
 from import_export.json_io import (
+    _article_to_dict,
     _citation_to_dict,
     _event_to_dict,
     _person_to_dict,
@@ -60,27 +61,27 @@ app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-in-production")
 # layer (before we see the request). MAX_PHOTO_BYTES / MAX_DOC_BYTES are
 # enforced explicitly inside the upload handlers so we can return a clean
 # JSON error with a helpful message.
-MAX_PHOTO_BYTES = int(os.environ.get("MAX_PHOTO_BYTES", 8 * 1024 * 1024))   # 8 MB
-MAX_DOC_BYTES = int(os.environ.get("MAX_DOC_BYTES", 50 * 1024 * 1024))     # 50 MB
+MAX_PHOTO_BYTES = int(os.environ.get("MAX_PHOTO_BYTES", 8 * 1024 * 1024))  # 8 MB
+MAX_DOC_BYTES = int(os.environ.get("MAX_DOC_BYTES", 50 * 1024 * 1024))  # 50 MB
 app.config["MAX_CONTENT_LENGTH"] = max(MAX_PHOTO_BYTES, MAX_DOC_BYTES) + 1024 * 1024
 
 # Comma-separated list of Gmail addresses that may write to the tree.
 # Anyone not on this list can view but not edit.
 # Example: EDITORS=alice@gmail.com,bob@gmail.com
 EDITORS: set[str] = {
-    e.strip().lower()
-    for e in os.environ.get("EDITORS", "").split(",")
-    if e.strip()
+    e.strip().lower() for e in os.environ.get("EDITORS", "").split(",") if e.strip()
 }
 
 
 @app.errorhandler(413)
 def _handle_too_large(_err):
     """Return JSON (not HTML) for oversize uploads."""
-    return jsonify({
-        "error": "File is too large",
-        "code": "too_large",
-    }), 413
+    return jsonify(
+        {
+            "error": "File is too large",
+            "code": "too_large",
+        }
+    ), 413
 
 
 @app.before_request
@@ -93,21 +94,27 @@ def _ensure_db():
 
 # ── Auth helpers ───────────────────────────────────────────────────────
 
+
 def require_editor(f):
     """Reject non-editors when an EDITORS list is configured.
 
     If EDITORS is not set, the original open-access behaviour is preserved
     so existing deployments are not broken.
     """
+
     @wraps(f)
     def wrapper(*args, **kwargs):
         if EDITORS and not session.get("is_editor"):
-            return jsonify({"error": "editor access required", "code": "forbidden"}), 403
+            return jsonify(
+                {"error": "editor access required", "code": "forbidden"}
+            ), 403
         return f(*args, **kwargs)
+
     return wrapper
 
 
 # ── Routes ─────────────────────────────────────────────────────────────
+
 
 @app.route("/")
 def index():
@@ -150,31 +157,38 @@ def api_config():
             config["editorsMisconfigured"] = editors_misconfigured
             return jsonify(config)
     # Sensible defaults when no config file exists
-    return jsonify({
-        "familyName": "Family Tree",
-        "subtitle": "",
-        "headerFont": "'Inter', sans-serif",
-        "bodyFont": "'Inter', sans-serif",
-        "heritage": [],
-        "palette": {},
-        "timelinePhotos": True,
-        "heritageLabels": False,
-        "editorsEnabled": editors_enabled,
-        "editorsMisconfigured": editors_misconfigured,
-    })
+    return jsonify(
+        {
+            "familyName": "Family Tree",
+            "subtitle": "",
+            "headerFont": "'Inter', sans-serif",
+            "bodyFont": "'Inter', sans-serif",
+            "heritage": [],
+            "palette": {},
+            "timelinePhotos": True,
+            "heritageLabels": False,
+            "editorsEnabled": editors_enabled,
+            "editorsMisconfigured": editors_misconfigured,
+        }
+    )
 
 
 @app.route("/photos/<path:filename>")
 def serve_photo(filename):
     """Serve photos from S3 (if configured) or local disk."""
     from flask import Response
+
     data = photo_storage.get(filename)
     if data is None:
         abort(404)
     import mimetypes
+
     content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
-    return Response(data, content_type=content_type,
-                    headers={"Cache-Control": "public, max-age=86400"})
+    return Response(
+        data,
+        content_type=content_type,
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 @app.route("/api/geocode", methods=["POST"])
@@ -188,14 +202,17 @@ def api_geocode():
     in a background thread; the client can poll again when pending > 0.
     """
     from geocoder import geocode_places
+
     places = request.get_json(silent=True) or []
     if not isinstance(places, list):
         return jsonify({"error": "expected a JSON array"}), 400
     coords, pending = geocode_places(places)
-    return jsonify({
-        "coords": {p: list(c) for p, c in coords.items()},
-        "pending": pending,
-    })
+    return jsonify(
+        {
+            "coords": {p: list(c) for p, c in coords.items()},
+            "pending": pending,
+        }
+    )
 
 
 @app.route("/api/data")
@@ -206,43 +223,50 @@ def api_data():
     all_photos = repo.list_all_photos()
     photos_list = []
     for p in all_photos:
-        photos_list.append({
-            "id": p["id"],
-            "file_path": p["file_path"],
-            "date": p.get("date"),
-            "date_circa": bool(p.get("date_circa")),
-            "place": p.get("place"),
-            "photo_type": p.get("photo_type", "photo"),
-            "lat": p.get("lat"),
-            "lng": p.get("lng"),
-            "tagged_people": [
-                {
-                    "person_id": tp["person_id"],
-                    "is_profile": bool(tp.get("is_profile")),
-                    "caption": tp.get("caption", ""),
-                    "given_name": tp.get("given_name", ""),
-                    "surname": tp.get("surname", ""),
-                    "crop_x": tp.get("crop_x"),
-                    "crop_y": tp.get("crop_y"),
-                    "crop_w": tp.get("crop_w"),
-                    "crop_h": tp.get("crop_h"),
-                }
-                for tp in p.get("tagged_people", [])
-            ],
-            "face_regions": [
-                {
-                    "id": fr["id"],
-                    "person_id": fr["person_id"],
-                    "x": fr["x"],
-                    "y": fr["y"],
-                    "w": fr["w"],
-                    "h": fr["h"],
-                    "given_name": fr.get("given_name", ""),
-                    "surname": fr.get("surname", ""),
-                }
-                for fr in p.get("face_regions", [])
-            ],
-        })
+        photos_list.append(
+            {
+                "id": p["id"],
+                "file_path": p["file_path"],
+                "date": p.get("date"),
+                "date_circa": bool(p.get("date_circa")),
+                "place": p.get("place"),
+                "photo_type": p.get("photo_type", "photo"),
+                "lat": p.get("lat"),
+                "lng": p.get("lng"),
+                "tagged_people": [
+                    {
+                        "person_id": tp["person_id"],
+                        "is_profile": bool(tp.get("is_profile")),
+                        "caption": tp.get("caption", ""),
+                        "given_name": tp.get("given_name", ""),
+                        "surname": tp.get("surname", ""),
+                        "crop_x": tp.get("crop_x"),
+                        "crop_y": tp.get("crop_y"),
+                        "crop_w": tp.get("crop_w"),
+                        "crop_h": tp.get("crop_h"),
+                    }
+                    for tp in p.get("tagged_people", [])
+                ],
+                "face_regions": [
+                    {
+                        "id": fr["id"],
+                        "person_id": fr["person_id"],
+                        "x": fr["x"],
+                        "y": fr["y"],
+                        "w": fr["w"],
+                        "h": fr["h"],
+                        "given_name": fr.get("given_name", ""),
+                        "surname": fr.get("surname", ""),
+                    }
+                    for fr in p.get("face_regions", [])
+                ],
+            }
+        )
+    article_person_map: dict[str, list[str]] = {}
+    for pid, aids in tree.person_article_links.items():
+        for aid in aids:
+            article_person_map.setdefault(aid, []).append(pid)
+
     data = {
         "people": [_person_to_dict(p) for p in tree.people.values()],
         "relationships": [_rel_to_dict(r) for r in tree.relationships],
@@ -250,6 +274,10 @@ def api_data():
         "events": [_event_to_dict(e) for e in tree.events],
         "sources": [_source_to_dict(s) for s in tree.sources.values()],
         "citations": [_citation_to_dict(c) for c in tree.citations],
+        "articles": [
+            _article_to_dict(a, article_person_map.get(a.id))
+            for a in tree.articles.values()
+        ],
         "photos": photos_list,
     }
     return jsonify(data)
@@ -284,7 +312,9 @@ _PERSON_WRITABLE_FIELDS = {
 _VALID_GENDERS = {g.value for g in Gender}
 
 
-def _coerce_person_payload(body: dict, *, partial: bool) -> tuple[dict, str | None, int]:
+def _coerce_person_payload(
+    body: dict, *, partial: bool
+) -> tuple[dict, str | None, int]:
     """Validate + normalize a person payload.
 
     Returns ``(normalized, error_message, status_code)``. On success
@@ -313,13 +343,17 @@ def _coerce_person_payload(body: dict, *, partial: bool) -> tuple[dict, str | No
             if value is None:
                 value = Gender.UNKNOWN.value
             if not isinstance(value, str) or value not in _VALID_GENDERS:
-                return {}, (
-                    f"gender must be one of: {', '.join(sorted(_VALID_GENDERS))}"
-                ), 400
+                return (
+                    {},
+                    (f"gender must be one of: {', '.join(sorted(_VALID_GENDERS))}"),
+                    400,
+                )
         elif key == "nicknames":
             if value is None:
                 value = []
-            if not isinstance(value, list) or not all(isinstance(n, str) for n in value):
+            if not isinstance(value, list) or not all(
+                isinstance(n, str) for n in value
+            ):
                 return {}, "nicknames must be a list of strings", 400
         elif key == "notes":
             if value is None:
@@ -377,10 +411,12 @@ def api_create_person():
 
     repo = TreeRepository()
     if repo.get_person(pid) is not None:
-        return jsonify({
-            "error": f"person id already exists: {pid}",
-            "code": "conflict",
-        }), 409
+        return jsonify(
+            {
+                "error": f"person id already exists: {pid}",
+                "code": "conflict",
+            }
+        ), 409
 
     person = Person(
         id=pid,
@@ -464,21 +500,32 @@ def api_create_relationship():
     doesn't exist.
     """
     from models.relationship import Relationship, RelationshipType
+
     body = request.get_json(silent=True) or {}
     parent_id = (body.get("parent_id") or "").strip()
     child_id = (body.get("child_id") or "").strip()
     if not parent_id or not child_id:
-        return jsonify({"error": "parent_id and child_id are required", "code": "bad_request"}), 400
+        return jsonify(
+            {"error": "parent_id and child_id are required", "code": "bad_request"}
+        ), 400
     if parent_id == child_id:
-        return jsonify({"error": "parent_id and child_id must differ", "code": "bad_request"}), 400
+        return jsonify(
+            {"error": "parent_id and child_id must differ", "code": "bad_request"}
+        ), 400
 
     repo = TreeRepository()
     if repo.get_person(parent_id) is None:
-        return jsonify({"error": f"person not found: {parent_id}", "code": "not_found"}), 404
+        return jsonify(
+            {"error": f"person not found: {parent_id}", "code": "not_found"}
+        ), 404
     if repo.get_person(child_id) is None:
-        return jsonify({"error": f"person not found: {child_id}", "code": "not_found"}), 404
+        return jsonify(
+            {"error": f"person not found: {child_id}", "code": "not_found"}
+        ), 404
 
-    rel = Relationship(parent_id=parent_id, child_id=child_id, rel_type=RelationshipType.BIOLOGICAL)
+    rel = Relationship(
+        parent_id=parent_id, child_id=child_id, rel_type=RelationshipType.BIOLOGICAL
+    )
     repo.save_relationship(rel)
     return jsonify({"parent_id": parent_id, "child_id": child_id}), 201
 
@@ -494,13 +541,18 @@ def api_create_union():
     doesn't exist.
     """
     from models.relationship import Union
+
     body = request.get_json(silent=True) or {}
     p1 = (body.get("partner1_id") or "").strip()
     p2 = (body.get("partner2_id") or "").strip()
     if not p1 or not p2:
-        return jsonify({"error": "partner1_id and partner2_id are required", "code": "bad_request"}), 400
+        return jsonify(
+            {"error": "partner1_id and partner2_id are required", "code": "bad_request"}
+        ), 400
     if p1 == p2:
-        return jsonify({"error": "partner1_id and partner2_id must differ", "code": "bad_request"}), 400
+        return jsonify(
+            {"error": "partner1_id and partner2_id must differ", "code": "bad_request"}
+        ), 400
 
     repo = TreeRepository()
     if repo.get_person(p1) is None:
@@ -724,21 +776,25 @@ def api_upload_photo():
 
     ext = Path(f.filename).suffix.lower()
     if ext not in ALLOWED_PHOTO_EXTS:
-        return jsonify({
-            "error": f"Invalid file type: {ext or '(none)'}. Allowed: "
-                     + ", ".join(sorted(ALLOWED_PHOTO_EXTS)),
-            "code": "invalid_type",
-        }), 400
+        return jsonify(
+            {
+                "error": f"Invalid file type: {ext or '(none)'}. Allowed: "
+                + ", ".join(sorted(ALLOWED_PHOTO_EXTS)),
+                "code": "invalid_type",
+            }
+        ), 400
 
     size = _measure_file_size(f)
     if size == 0:
         return jsonify({"error": "Empty file", "code": "empty"}), 400
     if size > MAX_PHOTO_BYTES:
         mb = MAX_PHOTO_BYTES // (1024 * 1024)
-        return jsonify({
-            "error": f"File too large (max {mb} MB)",
-            "code": "too_large",
-        }), 413
+        return jsonify(
+            {
+                "error": f"File too large (max {mb} MB)",
+                "code": "too_large",
+            }
+        ), 413
 
     safe_name = _sanitize_filename(f.filename)
 
@@ -747,15 +803,18 @@ def api_upload_photo():
 
     # Validate magic bytes by writing to a temp file
     import tempfile
+
     with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
         tmp.write(file_data)
         tmp_path = Path(tmp.name)
     try:
         if not _looks_like_image(tmp_path, ext):
-            return jsonify({
-                "error": "File contents do not match its extension",
-                "code": "bad_content",
-            }), 400
+            return jsonify(
+                {
+                    "error": "File contents do not match its extension",
+                    "code": "bad_content",
+                }
+            ), 400
     finally:
         try:
             tmp_path.unlink()
@@ -827,6 +886,7 @@ def api_import_google_photos(person_id):
 
         # Validate the URL is from Google domains
         from urllib.parse import urlparse
+
         parsed = urlparse(url)
         if parsed.scheme != "https" or not parsed.hostname:
             errors.append({"filename": filename, "error": "invalid URL"})
@@ -841,8 +901,7 @@ def api_import_google_photos(person_id):
             ".googleapis.com",
         )
         host_ok = any(
-            parsed.hostname == h or parsed.hostname.endswith(h)
-            for h in allowed_hosts
+            parsed.hostname == h or parsed.hostname.endswith(h) for h in allowed_hosts
         )
         if not host_ok:
             errors.append({"filename": filename, "error": "URL not from Google"})
@@ -870,6 +929,7 @@ def api_import_google_photos(person_id):
 
             # Validate image magic bytes via temp file
             import tempfile
+
             with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
                 tmp.write(data)
                 tmp_path = Path(tmp.name)
@@ -971,16 +1031,18 @@ def api_update_photo_metadata(photo_id):
         repo.update_photo_metadata(photo_id, **kwargs)
 
     updated = repo.get_photo(photo_id)
-    return jsonify({
-        "id": updated["id"],
-        "file_path": updated["file_path"],
-        "date": updated.get("date"),
-        "date_circa": bool(updated.get("date_circa")),
-        "place": updated.get("place"),
-        "photo_type": updated.get("photo_type", "photo"),
-        "lat": updated.get("lat"),
-        "lng": updated.get("lng"),
-    })
+    return jsonify(
+        {
+            "id": updated["id"],
+            "file_path": updated["file_path"],
+            "date": updated.get("date"),
+            "date_circa": bool(updated.get("date_circa")),
+            "place": updated.get("place"),
+            "photo_type": updated.get("photo_type", "photo"),
+            "lat": updated.get("lat"),
+            "lng": updated.get("lng"),
+        }
+    )
 
 
 @app.route("/api/photos/bulk-metadata", methods=["PUT"])
@@ -995,9 +1057,13 @@ def api_bulk_update_photo_metadata():
     body = request.get_json(force=True) or {}
     photo_ids = body.get("photo_ids", [])
     if not isinstance(photo_ids, list) or len(photo_ids) == 0:
-        return jsonify({"error": "photo_ids must be a non-empty array", "code": "bad_request"}), 400
+        return jsonify(
+            {"error": "photo_ids must be a non-empty array", "code": "bad_request"}
+        ), 400
     if len(photo_ids) > 200:
-        return jsonify({"error": "max 200 photos per request", "code": "bad_request"}), 400
+        return jsonify(
+            {"error": "max 200 photos per request", "code": "bad_request"}
+        ), 400
 
     kwargs = {}
     if "date" in body:
@@ -1017,7 +1083,9 @@ def api_bulk_update_photo_metadata():
         kwargs["lng"] = float(body["lng"]) if body["lng"] is not None else None
 
     if not kwargs:
-        return jsonify({"error": "no metadata fields provided", "code": "bad_request"}), 400
+        return jsonify(
+            {"error": "no metadata fields provided", "code": "bad_request"}
+        ), 400
 
     repo = TreeRepository()
     updated = []
@@ -1047,7 +1115,10 @@ def api_reextract_exif():
     conn = get_connection()
     try:
         from database.repository import _fetchall
-        rows = _fetchall(conn, "SELECT id, file_path FROM photos WHERE lat IS NULL AND date IS NULL")
+
+        rows = _fetchall(
+            conn, "SELECT id, file_path FROM photos WHERE lat IS NULL AND date IS NULL"
+        )
     finally:
         conn.close()
 
@@ -1055,7 +1126,11 @@ def api_reextract_exif():
     for row in rows:
         file_path = row["file_path"]
         # Strip "photos/" prefix for storage lookup
-        filename = file_path.replace("photos/", "", 1) if file_path.startswith("photos/") else file_path
+        filename = (
+            file_path.replace("photos/", "", 1)
+            if file_path.startswith("photos/")
+            else file_path
+        )
         data = photo_storage.get(filename)
         if not data:
             continue
@@ -1177,12 +1252,18 @@ def api_save_face_region(photo_id):
         w = float(body.get("w", -1))
         h = float(body.get("h", -1))
     except (TypeError, ValueError):
-        return jsonify({"error": "x, y, w, h must be numbers", "code": "bad_request"}), 400
+        return jsonify(
+            {"error": "x, y, w, h must be numbers", "code": "bad_request"}
+        ), 400
 
     if not (0 <= x <= 1 and 0 <= y <= 1 and 0 < w <= 1 and 0 < h <= 1):
-        return jsonify({"error": "coordinates must be in 0-1 range", "code": "bad_request"}), 400
+        return jsonify(
+            {"error": "coordinates must be in 0-1 range", "code": "bad_request"}
+        ), 400
     if x + w > 1.001 or y + h > 1.001:
-        return jsonify({"error": "region extends beyond image bounds", "code": "bad_request"}), 400
+        return jsonify(
+            {"error": "region extends beyond image bounds", "code": "bad_request"}
+        ), 400
 
     repo = TreeRepository()
     photo = repo.get_photo(photo_id)
@@ -1199,15 +1280,27 @@ def api_save_face_region(photo_id):
     existing_people = repo.people_for_photo(photo_id)
     already_tagged = {p["person_id"] for p in existing_people}
     if person_id not in already_tagged:
-        max_order = max((p.get("display_order", 0) for p in existing_people), default=-1)
+        max_order = max(
+            (p.get("display_order", 0) for p in existing_people), default=-1
+        )
         repo.assign_photo_to_person(person_id, photo_id, display_order=max_order + 1)
         # Also add to old photo_paths for backward compat
         if photo["file_path"] not in person.photo_paths:
             person.photo_paths = list(person.photo_paths) + [photo["file_path"]]
             repo.save_person(person)
 
-    return jsonify({"id": region_id, "photo_id": photo_id, "person_id": person_id,
-                    "x": x, "y": y, "w": w, "h": h, "auto_tagged": person_id not in already_tagged})
+    return jsonify(
+        {
+            "id": region_id,
+            "photo_id": photo_id,
+            "person_id": person_id,
+            "x": x,
+            "y": y,
+            "w": w,
+            "h": h,
+            "auto_tagged": person_id not in already_tagged,
+        }
+    )
 
 
 @app.route("/api/photos/<int:photo_id>/face-regions")
@@ -1215,17 +1308,22 @@ def api_get_face_regions(photo_id):
     """Return all face regions for a photo."""
     repo = TreeRepository()
     regions = repo.get_face_regions(photo_id)
-    return jsonify([
-        {
-            "id": r["id"],
-            "photo_id": r["photo_id"],
-            "person_id": r["person_id"],
-            "x": r["x"], "y": r["y"], "w": r["w"], "h": r["h"],
-            "given_name": r.get("given_name", ""),
-            "surname": r.get("surname", ""),
-        }
-        for r in regions
-    ])
+    return jsonify(
+        [
+            {
+                "id": r["id"],
+                "photo_id": r["photo_id"],
+                "person_id": r["person_id"],
+                "x": r["x"],
+                "y": r["y"],
+                "w": r["w"],
+                "h": r["h"],
+                "given_name": r.get("given_name", ""),
+                "surname": r.get("surname", ""),
+            }
+            for r in regions
+        ]
+    )
 
 
 @app.route("/api/photos/<int:photo_id>/face-region/<int:region_id>", methods=["DELETE"])
@@ -1258,12 +1356,20 @@ def api_set_profile_crop(person_id):
         crop_w = float(body.get("crop_w", -1))
         crop_h = float(body.get("crop_h", -1))
     except (TypeError, ValueError):
-        return jsonify({"error": "crop values must be numbers", "code": "bad_request"}), 400
+        return jsonify(
+            {"error": "crop values must be numbers", "code": "bad_request"}
+        ), 400
 
-    if not (0 <= crop_x <= 1 and 0 <= crop_y <= 1 and 0 < crop_w <= 1 and 0 < crop_h <= 1):
-        return jsonify({"error": "crop coordinates must be in 0-1 range", "code": "bad_request"}), 400
+    if not (
+        0 <= crop_x <= 1 and 0 <= crop_y <= 1 and 0 < crop_w <= 1 and 0 < crop_h <= 1
+    ):
+        return jsonify(
+            {"error": "crop coordinates must be in 0-1 range", "code": "bad_request"}
+        ), 400
     if crop_x + crop_w > 1.001 or crop_y + crop_h > 1.001:
-        return jsonify({"error": "crop region extends beyond image bounds", "code": "bad_request"}), 400
+        return jsonify(
+            {"error": "crop region extends beyond image bounds", "code": "bad_request"}
+        ), 400
 
     repo = TreeRepository()
     person = repo.get_person(person_id)
@@ -1271,8 +1377,17 @@ def api_set_profile_crop(person_id):
         return jsonify({"error": "person not found", "code": "not_found"}), 404
 
     repo.set_profile_crop(person_id, int(photo_id), crop_x, crop_y, crop_w, crop_h)
-    return jsonify({"ok": True, "person_id": person_id, "photo_id": photo_id,
-                    "crop_x": crop_x, "crop_y": crop_y, "crop_w": crop_w, "crop_h": crop_h})
+    return jsonify(
+        {
+            "ok": True,
+            "person_id": person_id,
+            "photo_id": photo_id,
+            "crop_x": crop_x,
+            "crop_y": crop_y,
+            "crop_w": crop_w,
+            "crop_h": crop_h,
+        }
+    )
 
 
 @app.route("/api/people/<person_id>/profile-crop", methods=["DELETE"])
@@ -1289,12 +1404,220 @@ def api_clear_profile_crop(person_id):
     return jsonify({"ok": True})
 
 
+# ── News Articles ─────────────────────────────────────────────────────
+
+
+@app.route("/api/articles", methods=["POST"])
+@require_editor
+def api_create_article():
+    """Create a news article and optionally link it to people.
+
+    Body: {"title": "...", "url": "...", "publication": "...", "date": "...",
+           "summary": "...", "photo_url": "...", "person_ids": ["..."]}
+
+    Returns 201 with the created article on success.
+    """
+    from models.article import NewsArticle
+
+    body = request.get_json(silent=True) or {}
+    title = (body.get("title") or "").strip()
+    if not title:
+        return jsonify({"error": "title is required", "code": "bad_request"}), 400
+
+    article_id = body.get("id", "").strip() if isinstance(body.get("id"), str) else ""
+    if not article_id:
+        article_id = f"article_{uuid.uuid4().hex[:12]}"
+
+    repo = TreeRepository()
+    if repo.get_article(article_id) is not None:
+        return jsonify(
+            {"error": f"article id already exists: {article_id}", "code": "conflict"}
+        ), 409
+
+    url = (body.get("url") or "").strip() or None
+    publication = (body.get("publication") or "").strip() or None
+    date = (body.get("date") or "").strip() or None
+    summary = (body.get("summary") or "").strip()
+    photo_url = (body.get("photo_url") or "").strip() or None
+
+    article = NewsArticle(
+        id=article_id,
+        title=title,
+        url=url,
+        publication=publication,
+        date=date,
+        summary=summary,
+        photo_url=photo_url,
+    )
+    repo.save_article(article)
+
+    person_ids = body.get("person_ids", [])
+    if isinstance(person_ids, list):
+        for pid in person_ids:
+            pid = (pid or "").strip()
+            if pid and repo.get_person(pid):
+                repo.link_article_to_person(pid, article_id)
+
+    linked_people = repo.people_for_article(article_id)
+    result = _article_to_dict(article, [p["id"] for p in linked_people])
+    return jsonify(result), 201
+
+
+@app.route("/api/articles/<article_id>", methods=["PUT", "PATCH"])
+@require_editor
+def api_update_article(article_id):
+    """Update an existing article.
+
+    Body: JSON with any subset of article fields. Fields not included are
+    left unchanged.
+
+    Returns 200 with the updated article, 404 if not found.
+    """
+    body = request.get_json(silent=True) or {}
+    repo = TreeRepository()
+    existing = repo.get_article(article_id)
+    if existing is None:
+        return jsonify({"error": "article not found", "code": "not_found"}), 404
+
+    if "title" in body:
+        title = (body["title"] or "").strip()
+        if not title:
+            return jsonify(
+                {"error": "title cannot be empty", "code": "bad_request"}
+            ), 400
+        existing.title = title
+    if "url" in body:
+        existing.url = (body["url"] or "").strip() or None
+    if "publication" in body:
+        existing.publication = (body["publication"] or "").strip() or None
+    if "date" in body:
+        existing.date = (body["date"] or "").strip() or None
+    if "summary" in body:
+        existing.summary = (body["summary"] or "").strip()
+    if "photo_url" in body:
+        existing.photo_url = (body["photo_url"] or "").strip() or None
+
+    repo.save_article(existing)
+
+    if "person_ids" in body:
+        current_people = repo.people_for_article(article_id)
+        current_pids = {p["id"] for p in current_people}
+        new_pids = set()
+        for pid in body["person_ids"]:
+            pid = (pid or "").strip()
+            if pid:
+                new_pids.add(pid)
+
+        for pid in new_pids - current_pids:
+            if repo.get_person(pid):
+                repo.link_article_to_person(pid, article_id)
+        for pid in current_pids - new_pids:
+            repo.unlink_article_from_person(pid, article_id)
+
+    linked_people = repo.people_for_article(article_id)
+    return jsonify(_article_to_dict(existing, [p["id"] for p in linked_people]))
+
+
+@app.route("/api/articles/<article_id>", methods=["DELETE"])
+@require_editor
+def api_delete_article(article_id):
+    """Delete a news article and its person links.
+
+    Returns 204 on success, 404 if not found.
+    """
+    repo = TreeRepository()
+    if repo.get_article(article_id) is None:
+        return jsonify({"error": "article not found", "code": "not_found"}), 404
+
+    ok = repo.delete_article(article_id)
+    if not ok:
+        return jsonify({"error": "delete failed", "code": "server_error"}), 500
+    return ("", 204)
+
+
+@app.route("/api/articles/<article_id>", methods=["GET"])
+def api_get_article(article_id):
+    """Fetch a single article with its linked people."""
+    repo = TreeRepository()
+    article = repo.get_article(article_id)
+    if article is None:
+        return jsonify({"error": "article not found", "code": "not_found"}), 404
+
+    linked_people = repo.people_for_article(article_id)
+    return jsonify(_article_to_dict(article, [p["id"] for p in linked_people]))
+
+
+@app.route("/api/articles", methods=["GET"])
+def api_list_articles():
+    """List all articles with their linked people."""
+    repo = TreeRepository()
+    articles = repo.list_articles()
+    result = []
+    for a in articles:
+        linked = repo.people_for_article(a.id)
+        result.append(_article_to_dict(a, [p["id"] for p in linked]))
+    return jsonify(result)
+
+
+@app.route("/api/people/<person_id>/articles", methods=["GET"])
+def api_person_articles(person_id):
+    """List all articles linked to a specific person."""
+    repo = TreeRepository()
+    if repo.get_person(person_id) is None:
+        return jsonify({"error": "person not found", "code": "not_found"}), 404
+
+    articles = repo.articles_for_person(person_id)
+    result = []
+    for a in articles:
+        linked = repo.people_for_article(a.id)
+        result.append(_article_to_dict(a, [p["id"] for p in linked]))
+    return jsonify(result)
+
+
+@app.route("/api/people/<person_id>/articles", methods=["POST"])
+@require_editor
+def api_link_article_to_person(person_id):
+    """Link an existing article to a person.
+
+    Body: {"article_id": "..."}
+
+    Returns 201 on success, 404 if person or article not found.
+    """
+    body = request.get_json(silent=True) or {}
+    article_id = (body.get("article_id") or "").strip()
+    if not article_id:
+        return jsonify({"error": "article_id is required", "code": "bad_request"}), 400
+
+    repo = TreeRepository()
+    if repo.get_person(person_id) is None:
+        return jsonify({"error": "person not found", "code": "not_found"}), 404
+    if repo.get_article(article_id) is None:
+        return jsonify({"error": "article not found", "code": "not_found"}), 404
+
+    repo.link_article_to_person(person_id, article_id)
+    return jsonify({"person_id": person_id, "article_id": article_id}), 201
+
+
+@app.route("/api/people/<person_id>/articles/<article_id>", methods=["DELETE"])
+@require_editor
+def api_unlink_article_from_person(person_id, article_id):
+    """Remove the link between a person and an article.
+
+    Returns 204 on success.
+    """
+    repo = TreeRepository()
+    repo.unlink_article_from_person(person_id, article_id)
+    return ("", 204)
+
+
 # ── Document Upload & AI Parsing ───────────────────────────────────────
 
 ALLOWED_DOC_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".pdf"}
 
 
-def _update_document(doc_id: str, *, status: str | None = None, parsed_data: dict | None = None) -> None:
+def _update_document(
+    doc_id: str, *, status: str | None = None, parsed_data: dict | None = None
+) -> None:
     """Portable helper that updates a documents row on either backend."""
     sets = []
     params: list = []
@@ -1348,6 +1671,7 @@ def api_import_gedcom():
 
     # Save to a temp file for parsing
     import tempfile
+
     tmp = tempfile.NamedTemporaryFile(suffix=".ged", delete=False)
     try:
         f.save(tmp.name)
@@ -1416,20 +1740,24 @@ def api_upload_document():
 
     ext = Path(f.filename).suffix.lower()
     if ext not in ALLOWED_DOC_EXTS:
-        return jsonify({
-            "error": f"Unsupported file type: {ext or '(none)'}. Use images or PDF.",
-            "code": "invalid_type",
-        }), 400
+        return jsonify(
+            {
+                "error": f"Unsupported file type: {ext or '(none)'}. Use images or PDF.",
+                "code": "invalid_type",
+            }
+        ), 400
 
     size = _measure_file_size(f)
     if size == 0:
         return jsonify({"error": "Empty file", "code": "empty"}), 400
     if size > MAX_DOC_BYTES:
         mb = MAX_DOC_BYTES // (1024 * 1024)
-        return jsonify({
-            "error": f"File too large (max {mb} MB)",
-            "code": "too_large",
-        }), 413
+        return jsonify(
+            {
+                "error": f"File too large (max {mb} MB)",
+                "code": "too_large",
+            }
+        ), 413
 
     doc_id = str(uuid.uuid4())[:12]
     safe_name = _sanitize_filename(f.filename)
@@ -1450,10 +1778,12 @@ def api_upload_document():
             dest.unlink()
         except OSError:
             pass
-        return jsonify({
-            "error": "File contents do not match its extension",
-            "code": "bad_content",
-        }), 400
+        return jsonify(
+            {
+                "error": "File contents do not match its extension",
+                "code": "bad_content",
+            }
+        ), 400
 
     file_type = "pdf" if is_pdf else "image"
     uploaded_by = session.get("person_id")
@@ -1477,19 +1807,23 @@ def api_upload_document():
             except OSError:
                 pass
             logger.error("document DB insert failed: %s", e)
-            return jsonify({
-                "error": "Could not record document",
-                "code": "db_error",
-            }), 500
+            return jsonify(
+                {
+                    "error": "Could not record document",
+                    "code": "db_error",
+                }
+            ), 500
     finally:
         conn.close()
 
-    return jsonify({
-        "document_id": doc_id,
-        "filename": f.filename,
-        "file_type": file_type,
-        "status": "uploaded",
-    })
+    return jsonify(
+        {
+            "document_id": doc_id,
+            "filename": f.filename,
+            "file_type": file_type,
+            "status": "uploaded",
+        }
+    )
 
 
 # In-memory tracking for background parse jobs
@@ -1514,7 +1848,9 @@ def _get_existing_people() -> list[dict]:
     ]
 
 
-def _save_chunk_result(doc_id: str, chunk_index: int, chunk: dict, result: dict) -> None:
+def _save_chunk_result(
+    doc_id: str, chunk_index: int, chunk: dict, result: dict
+) -> None:
     """Update a pending chunk row with parsed results."""
     status = "error" if "error" in result else "done"
     error_msg = result.get("error") if "error" in result else None
@@ -1545,7 +1881,9 @@ def _update_document_progress(doc_id: str, total: int, done: int) -> None:
         conn.close()
 
 
-def _run_background_parse(doc_id: str, file_path: str, filename: str, existing_people: list[dict]) -> None:
+def _run_background_parse(
+    doc_id: str, file_path: str, filename: str, existing_people: list[dict]
+) -> None:
     """Background thread target for all document parsing (single or multi-chunk)."""
     from intelligence.document_parser import parse_document_chunked
 
@@ -1595,7 +1933,9 @@ def api_parse_document(doc_id):
 
     file_path = str(PRIVATE_DIR / row["file_path"])
     if not Path(file_path).exists():
-        return jsonify({"error": "Document file not found on disk", "code": "missing_file"}), 404
+        return jsonify(
+            {"error": "Document file not found on disk", "code": "missing_file"}
+        ), 404
 
     _update_document(doc_id, status="parsing")
 
@@ -1608,6 +1948,7 @@ def api_parse_document(doc_id):
 
     if ext == ".pdf":
         from intelligence.document_parser import _plan_chunks
+
         chunks = _plan_chunks(file_path)
         total_chunks = max(len(chunks), 1)
 
@@ -1622,7 +1963,14 @@ def api_parse_document(doc_id):
                         f"INSERT INTO document_chunks "
                         f"(document_id, chunk_index, start_page, end_page, mode, status) "
                         f"VALUES ({_ph(6)})",
-                        (doc_id, i, chunk["start_page"], chunk["end_page"], chunk["mode"], "pending"),
+                        (
+                            doc_id,
+                            i,
+                            chunk["start_page"],
+                            chunk["end_page"],
+                            chunk["mode"],
+                            "pending",
+                        ),
                     )
                 conn.commit()
             finally:
@@ -1642,12 +1990,14 @@ def api_parse_document(doc_id):
     )
     t.start()
 
-    return jsonify({
-        "document_id": doc_id,
-        "status": "parsing",
-        "total_chunks": total_chunks,
-        "chunks_done": 0,
-    })
+    return jsonify(
+        {
+            "document_id": doc_id,
+            "status": "parsing",
+            "total_chunks": total_chunks,
+            "chunks_done": 0,
+        }
+    )
 
 
 @app.route("/api/documents/<doc_id>/parse-status", methods=["GET"])
@@ -1717,6 +2067,7 @@ def api_apply_document(doc_id):
 
     # Create a Source for this document
     from models.source import Source, SourceType
+
     source = Source(
         id=f"doc-{doc_id}",
         name=row["filename"],
@@ -1727,6 +2078,7 @@ def api_apply_document(doc_id):
 
     # Apply people
     from models.person import Person, Gender
+
     for p_data in changes.get("people", []):
         person_id = p_data.get("id", "")
         if not person_id or not p_data.get("given_name"):
@@ -1737,7 +2089,13 @@ def api_apply_document(doc_id):
         if existing:
             # Update fields that are currently empty
             changed = False
-            for field in ("birth_date", "birth_place", "death_date", "death_place", "maiden_name"):
+            for field in (
+                "birth_date",
+                "birth_place",
+                "death_date",
+                "death_place",
+                "maiden_name",
+            ):
                 new_val = p_data.get(field)
                 if new_val and not getattr(existing, field):
                     setattr(existing, field, new_val)
@@ -1773,6 +2131,7 @@ def api_apply_document(doc_id):
 
     # Apply relationships
     from models.relationship import Relationship, RelationshipType
+
     for r_data in changes.get("relationships", []):
         parent_id = r_data.get("parent_id", "")
         child_id = r_data.get("child_id", "")
@@ -1787,10 +2146,13 @@ def api_apply_document(doc_id):
             repo.save_relationship(rel)
             applied["relationships"] += 1
         except Exception as e:
-            logger.warning("Could not save relationship %s→%s: %s", parent_id, child_id, e)
+            logger.warning(
+                "Could not save relationship %s→%s: %s", parent_id, child_id, e
+            )
 
     # Apply events
     from models.event import LifeEvent, EventType
+
     for e_data in changes.get("events", []):
         person_id = e_data.get("person_id", "")
         if not person_id:
@@ -1816,6 +2178,7 @@ def api_apply_document(doc_id):
 
     # Apply unions
     from models.relationship import Union
+
     for u_data in changes.get("unions", []):
         p1 = u_data.get("partner1_id", "")
         p2 = u_data.get("partner2_id", "")
@@ -1849,6 +2212,7 @@ def serve_document(filename):
 
 
 # ── Authentication ─────────────────────────────────────────────────────
+
 
 def _get_google_client_id() -> str | None:
     """Get the Google Client ID from env or config file."""
@@ -1925,10 +2289,12 @@ def api_auth_google():
     repo = TreeRepository()
     person = repo.get_person_by_email(email)
     if not person and not is_editor:
-        return jsonify({
-            "error": "No matching person record for this email",
-            "email": email,
-        }), 403
+        return jsonify(
+            {
+                "error": "No matching person record for this email",
+                "email": email,
+            }
+        ), 403
 
     person_id = person.id if person else f"editor:{email}"
     full_name = person.full_name if person else payload.get("name", email)
@@ -1940,13 +2306,15 @@ def api_auth_google():
     session["picture"] = payload.get("picture", "")
     session["is_editor"] = is_editor
 
-    return jsonify({
-        "person_id": person_id,
-        "name": full_name,
-        "email": email,
-        "picture": payload.get("picture", ""),
-        "is_editor": is_editor,
-    })
+    return jsonify(
+        {
+            "person_id": person_id,
+            "name": full_name,
+            "email": email,
+            "picture": payload.get("picture", ""),
+            "is_editor": is_editor,
+        }
+    )
 
 
 @app.route("/api/auth/me")
@@ -1954,13 +2322,15 @@ def api_auth_me():
     """Return the current logged-in user, or 401."""
     if "person_id" not in session:
         return jsonify({"error": "not authenticated"}), 401
-    return jsonify({
-        "person_id": session["person_id"],
-        "name": session.get("name", ""),
-        "email": session.get("email", ""),
-        "picture": session.get("picture", ""),
-        "is_editor": session.get("is_editor", False),
-    })
+    return jsonify(
+        {
+            "person_id": session["person_id"],
+            "name": session.get("name", ""),
+            "email": session.get("email", ""),
+            "picture": session.get("picture", ""),
+            "is_editor": session.get("is_editor", False),
+        }
+    )
 
 
 @app.route("/api/auth/logout", methods=["POST"])
@@ -1999,6 +2369,7 @@ def api_set_email(person_id):
 
 
 # ── Standalone dev server ──────────────────────────────────────────────
+
 
 def serve(port: int = 8000) -> None:
     """Start the Flask dev server (for local use only)."""
