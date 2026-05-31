@@ -125,8 +125,12 @@ def index():
 def spa_fallback(e):
     """Serve index.html for client-side routes; return JSON 404 for API/asset paths."""
     path = request.path
+    # Treat paths with a file extension as static assets, not client-side routes.
+    filename = path.rsplit("/", 1)[-1]
+    has_extension = "." in filename
     is_asset = (
-        path.startswith("/api/")
+        has_extension
+        or path.startswith("/api/")
         or path.startswith("/documents/")
         or (path.startswith("/photos/") and not path.startswith("/photos/view/"))
     )
