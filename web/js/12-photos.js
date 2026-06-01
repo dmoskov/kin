@@ -21,12 +21,12 @@ function showToast(message, type = "success") {
 // Rebuild only the photos section inside the open side panel (no full-tree
 // reload, no panel-wide re-render). Called by the picker after successful
 // add / remove / caption operations.
-function _renderPanelPhotos(personId) {
+// Build the inner HTML of the panel's photos section (the photo grid plus the
+// "+ Manage Photos" button). Shared by showPersonPanel (full render) and
+// _renderPanelPhotos (picker-refresh render) so the markup stays in sync.
+function buildPanelPhotosInnerHtml(personId) {
   const person = PEOPLE_MAP[personId];
-  if (!person) return;
-  const section = document.querySelector("#panel-content .panel-photos-section");
-  if (!section) return; // panel isn't currently showing this person
-
+  if (!person) return "";
   const photos = person.photo_paths || [];
   const captions = person.photo_captions || {};
   let html = "";
@@ -64,7 +64,15 @@ function _renderPanelPhotos(personId) {
   if (!CONFIG?.editorsEnabled || AUTH_USER?.is_editor) {
     html += `<button class="panel-add-photo-btn" onclick="openPhotoPicker('${personId}')">+ Manage Photos</button>`;
   }
-  section.innerHTML = html;
+  return html;
+}
+
+function _renderPanelPhotos(personId) {
+  const person = PEOPLE_MAP[personId];
+  if (!person) return;
+  const section = document.querySelector("#panel-content .panel-photos-section");
+  if (!section) return; // panel isn't currently showing this person
+  section.innerHTML = buildPanelPhotosInnerHtml(personId);
 }
 
 // Wire up a caption <input> to save on blur/Enter without rebuilding

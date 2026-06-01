@@ -39,44 +39,10 @@ function showPersonPanel(personId) {
     <div id="edit-person-form" class="add-relative-form hidden"></div>
   `;
 
-  // Photos + Manage Photos button
-  const photos = person.photo_paths || [];
-  const captions = person.photo_captions || {};
+  // Photos + Manage Photos button. The inner markup is shared with
+  // _renderPanelPhotos (the picker-refresh path) via buildPanelPhotosInnerHtml.
   html += `<div class="panel-photos-section">`;
-  if (photos.length > 0) {
-    html += `<div class="panel-photos">`;
-    for (const src of photos) {
-      const capText = captions[src] || person.fullName;
-      const safeCaption = capText.replace(/'/g, "\\'");
-      const isProfile = person._profilePhotoPath === src;
-      html += `<div class="panel-photo-wrap">`;
-      if (isProfile) html += `<span class="photo-profile-badge" title="Profile photo">&#9733;</span>`;
-      html += `<img class="panel-photo" src="/${src}" alt="${capText}" loading="lazy" onclick="openLightbox('/${src}', '${safeCaption}', '${src}')" />`;
-      if (captions[src]) {
-        html += `<div class="panel-photo-caption">${captions[src]}</div>`;
-      }
-      const photoInfo = PHOTOS_MAP[src];
-      if (photoInfo) {
-        const others = (photoInfo.tagged_people || []).filter(tp => tp.person_id !== personId);
-        if (others.length > 0) {
-          html += `<div class="panel-photo-also">Also: ${others.map(tp => personLink(tp.person_id, [tp.given_name, tp.surname].filter(Boolean).join(" "))).join(", ")}</div>`;
-        }
-      }
-      if (photoInfo && (photoInfo.date || photoInfo.place)) {
-        const dateStr = photoInfo.date_circa ? `c. ${photoInfo.date}` : photoInfo.date;
-        html += `<div class="panel-photo-meta">`;
-        if (photoInfo.date) html += `<span>${dateStr}</span>`;
-        if (photoInfo.date && photoInfo.place) html += ` &middot; `;
-        if (photoInfo.place) html += `<span>${photoInfo.place}</span>`;
-        html += `</div>`;
-      }
-      html += `</div>`;
-    }
-    html += `</div>`;
-  }
-  if (!CONFIG?.editorsEnabled || AUTH_USER?.is_editor) {
-    html += `<button class="panel-add-photo-btn" onclick="openPhotoPicker('${personId}')">+ Manage Photos</button>`;
-  }
+  html += buildPanelPhotosInnerHtml(personId);
   html += `</div>`;
 
   // Heritage badge for panel
