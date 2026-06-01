@@ -24,6 +24,40 @@ ALLOWED_DOC_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".pdf"}
 _parse_jobs: dict[str, dict] = {}
 
 
+def _validate_relationship_edge(parents_of: dict, parent_id: str, child_id: str):
+    """Return (ok, reason) for adding a parent->child edge.
+
+    Rejects structurally-invalid edges so a mis-parsed document can't corrupt
+    the tree: self-loops, cycles, a parent that's already an ancestor
+    (grandparent-as-parent — the class of bug that mislabeled relatives), or a
+    third parent. ``parents_of`` maps child_id -> set(parent_ids) and should
+    reflect both existing and already-applied-in-this-batch edges.
+    """
+    if parent_id == child_id:
+        return False, "self-loop"
+
+    def is_ancestor(candidate: str, of_id: str) -> bool:
+        stack = list(parents_of.get(of_id, ()))
+        seen: set = set()
+        while stack:
+            x = stack.pop()
+            if x == candidate:
+                return True
+            if x in seen:
+                continue
+            seen.add(x)
+            stack.extend(parents_of.get(x, ()))
+        return False
+
+    if is_ancestor(child_id, parent_id):
+        return False, "would create a cycle"
+    if is_ancestor(parent_id, child_id):
+        return False, "parent is already an ancestor (grandparent-as-parent)"
+    if len(parents_of.get(child_id, ())) >= 2:
+        return False, "child already has two parents"
+    return True, ""
+
+
 def _update_document(
     doc_id: str, *, status: str | None = None, parsed_data: dict | None = None
 ) -> None:
@@ -267,9 +301,19 @@ def api_import_gedcom():
         except Exception as e:
             stats["skipped"].append(f"Union: {e}")
 
+    from collections import defaultdict
+
+    parents_of: dict = defaultdict(set)
+    for er in repo.load_tree().relationships:
+        parents_of[er.child_id].add(er.parent_id)
     for rel in tree.relationships:
+        ok, reason = _validate_relationship_edge(parents_of, rel.parent_id, rel.child_id)
+        if not ok:
+            stats["skipped"].append(f"Relationship {rel.parent_id}->{rel.child_id}: {reason}")
+            continue
         try:
             repo.save_relationship(rel)
+            parents_of[rel.child_id].add(rel.parent_id)
             stats["relationships"] += 1
         except Exception as e:
             stats["skipped"].append(f"Relationship: {e}")
@@ -676,12 +720,23 @@ def api_apply_document(doc_id):
             applied["people"] += 1
 
     # Apply relationships
+    from collections import defaultdict
+
     from models.relationship import Relationship, RelationshipType
 
+    applied["skipped_relationships"] = []
+    parents_of: dict = defaultdict(set)
+    for er in repo.load_tree().relationships:
+        parents_of[er.child_id].add(er.parent_id)
     for r_data in changes.get("relationships", []):
         parent_id = r_data.get("parent_id", "")
         child_id = r_data.get("child_id", "")
         if not parent_id or not child_id:
+            continue
+        ok, reason = _validate_relationship_edge(parents_of, parent_id, child_id)
+        if not ok:
+            applied["skipped_relationships"].append(f"{parent_id}->{child_id}: {reason}")
+            logger.info("Skipped relationship %s->%s: %s", parent_id, child_id, reason)
             continue
         try:
             rel_type = RelationshipType(r_data.get("rel_type", "biological"))
@@ -690,6 +745,7 @@ def api_apply_document(doc_id):
         rel = Relationship(parent_id=parent_id, child_id=child_id, rel_type=rel_type)
         try:
             repo.save_relationship(rel)
+            parents_of[child_id].add(parent_id)
             applied["relationships"] += 1
         except Exception as e:
             logger.warning("Could not save relationship %s→%s: %s", parent_id, child_id, e)
