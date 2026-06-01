@@ -6,7 +6,7 @@ import { S } from "../../web/js/00-state.js";
 import { rankPeople, searchPeopleLocal } from "../../web/js/03-data-nav.js";
 import { computeFogDistance } from "../../web/js/04-tree.js";
 import { calculateRelationship } from "../../web/js/07-relationship.js";
-import { autoComputeLanes, assignLane } from "../../web/js/02-lanes.js";
+import { autoComputeLanes, assignLane, buildLaneCache } from "../../web/js/02-lanes.js";
 
 // ─── Fixture helpers ───────────────────────────────────────────────────────
 
@@ -469,5 +469,19 @@ describe("lane assignment", () => {
     expect(S.LANES.length).toBeGreaterThanOrEqual(5);
     const lanePartnerGF = assignLane("PartnerGF");
     expect(lanePartnerGF).toBeTruthy();
+  });
+
+  it("buildLaneCache tolerates a lane with a null/missing root id (no crash)", () => {
+    // Regression: a center person with no partner could yield a lane root of
+    // null; buildLaneCache then did null.split(...) and the whole app failed to
+    // initialize. It must skip falsy roots and still resolve the valid ones.
+    S.LANES = [{ id: "auto-x", label: "X", rootIds: [null, undefined, "PatGF"], color: "#000" }];
+    expect(() => buildLaneCache()).not.toThrow();
+    expect(assignLane("PatGF")).toBeTruthy();
+  });
+
+  it("autoComputeLanes with a parentless, partnerless center does not crash", () => {
+    autoComputeLanes("PatGF", null); // PatGF has no parents and no partner here
+    expect(() => buildLaneCache()).not.toThrow();
   });
 });

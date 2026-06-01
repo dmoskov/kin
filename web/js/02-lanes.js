@@ -57,6 +57,7 @@ export function buildLaneCache() {
 
     const resolvedRoots = [];
     for (let rootId of roots) {
+      if (!rootId) continue; // no root (e.g. a center person with no partner)
       // Fuzzy root resolution: try exact ID, then fall back to name match
       if (!S.PEOPLE_MAP[rootId]) {
         const parts = rootId.split("-");
@@ -186,8 +187,8 @@ export function autoComputeLanes(centerA, centerB) {
         gps.push(pid);
       }
     }
-    // If no parents at all, use the person themselves
-    return gps.length > 0 ? gps : [personId];
+    // If no parents at all, use the person themselves (unless there's no person)
+    return gps.length > 0 ? gps : personId ? [personId] : [];
   }
 
   const gpsA = getGrandparents(centerA);
@@ -199,7 +200,7 @@ export function autoComputeLanes(centerA, centerB) {
   let colorIdx = 0;
 
   for (const gp of [...gpsA, ...gpsB]) {
-    if (seen.has(gp)) continue;
+    if (!gp || seen.has(gp)) continue;
     seen.add(gp);
     const person = S.PEOPLE_MAP[gp];
     const label = person ? (person.surname || person.given_name || "Unknown") : "Unknown";
