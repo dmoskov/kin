@@ -301,47 +301,51 @@ function clearLinkSelection(personId, relationship) {
   document.getElementById("arf-search")?.focus();
 }
 
-async function submitLinkExisting(personId, relationship) {
-  const errorEl = document.getElementById("arf-error");
-  if (!_arfSelectedPersonId) {
-    if (errorEl) { errorEl.textContent = "Select a person first."; errorEl.classList.remove("hidden"); }
-    return;
+function _arfShowError(errorEl, msg) {
+  if (errorEl) {
+    errorEl.textContent = msg;
+    errorEl.classList.remove("hidden");
   }
+}
 
-  const linkedId = _arfSelectedPersonId;
+function _siblingParentIds(personId) {
+  return DATA.relationships.filter((r) => r.child_id === personId).map((r) => r.parent_id);
+}
 
+// Create the union/relationship(s) linking relativeId to personId, then reload
+// and refresh. Shared by submitLinkExisting and submitAddRelative. Returns true
+// on success, false after showing an error.
+async function linkRelative(personId, relationship, relativeId, errorEl) {
   if (relationship === "partner") {
     try {
       const res = await fetch("/api/unions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ partner1_id: personId, partner2_id: linkedId }),
+        body: JSON.stringify({ partner1_id: personId, partner2_id: relativeId }),
       });
       if (!res.ok) {
         const data = await res.json();
-        if (errorEl) { errorEl.textContent = data.error || "Failed to create union."; errorEl.classList.remove("hidden"); }
-        return;
+        _arfShowError(errorEl, data.error || "Failed to create union.");
+        return false;
       }
     } catch {
-      if (errorEl) { errorEl.textContent = "Network error creating union."; errorEl.classList.remove("hidden"); }
-      return;
+      _arfShowError(errorEl, "Network error creating union.");
+      return false;
     }
   } else {
     const relPairs = [];
     if (relationship === "parent") {
-      relPairs.push({ parent_id: linkedId, child_id: personId });
+      relPairs.push({ parent_id: relativeId, child_id: personId });
     } else if (relationship === "child") {
-      relPairs.push({ parent_id: personId, child_id: linkedId });
+      relPairs.push({ parent_id: personId, child_id: relativeId });
     } else if (relationship === "sibling") {
-      const parents = DATA.relationships
-        .filter((r) => r.child_id === personId)
-        .map((r) => r.parent_id);
+      const parents = _siblingParentIds(personId);
       for (const pid of parents) {
-        relPairs.push({ parent_id: pid, child_id: linkedId });
+        relPairs.push({ parent_id: pid, child_id: relativeId });
       }
       if (relPairs.length === 0) {
-        if (errorEl) { errorEl.textContent = "Cannot link sibling: this person has no parents. Add a parent first."; errorEl.classList.remove("hidden"); }
-        return;
+        _arfShowError(errorEl, "Cannot add a sibling: this person has no parents. Add a parent first.");
+        return false;
       }
     }
 
@@ -354,13 +358,13 @@ async function submitLinkExisting(personId, relationship) {
         });
         if (!res.ok) {
           const data = await res.json();
-          if (errorEl) { errorEl.textContent = data.error || "Failed to create relationship."; errorEl.classList.remove("hidden"); }
-          return;
+          _arfShowError(errorEl, data.error || "Failed to create relationship.");
+          return false;
         }
       }
     } catch {
-      if (errorEl) { errorEl.textContent = "Network error creating relationship."; errorEl.classList.remove("hidden"); }
-      return;
+      _arfShowError(errorEl, "Network error creating relationship.");
+      return false;
     }
   }
 
@@ -368,6 +372,16 @@ async function submitLinkExisting(personId, relationship) {
   autoComputeLanes(CENTER_ID_A, CENTER_ID_B);
   refreshAllViews();
   showPersonPanel(personId);
+  return true;
+}
+
+async function submitLinkExisting(personId, relationship) {
+  const errorEl = document.getElementById("arf-error");
+  if (!_arfSelectedPersonId) {
+    _arfShowError(errorEl, "Select a person first.");
+    return;
+  }
+  await linkRelative(personId, relationship, _arfSelectedPersonId, errorEl);
 }
 
 async function submitAddRelative(personId, relationship) {
@@ -379,8 +393,15 @@ async function submitAddRelative(personId, relationship) {
   const errorEl = document.getElementById("arf-error");
 
   if (!givenName && !surname) {
-    errorEl.textContent = "Enter at least a first or last name.";
-    errorEl.classList.remove("hidden");
+    _arfShowError(errorEl, "Enter at least a first or last name.");
+    return;
+  }
+
+  // Pre-flight: a sibling attaches to the focus person's existing parents, so
+  // check that here — before creating the new person — to avoid leaving an
+  // orphan record if the link can't be made.
+  if (relationship === "sibling" && _siblingParentIds(personId).length === 0) {
+    _arfShowError(errorEl, "Cannot add a sibling: this person has no parents. Add a parent first.");
     return;
   }
 
@@ -397,77 +418,16 @@ async function submitAddRelative(personId, relationship) {
     });
     const data = await res.json();
     if (!res.ok) {
-      errorEl.textContent = data.error || "Failed to create person.";
-      errorEl.classList.remove("hidden");
+      _arfShowError(errorEl, data.error || "Failed to create person.");
       return;
     }
     newPersonId = data.id;
   } catch {
-    errorEl.textContent = "Network error. Please try again.";
-    errorEl.classList.remove("hidden");
+    _arfShowError(errorEl, "Network error. Please try again.");
     return;
   }
 
-  // Build the relationship(s)
-  if (relationship === "partner") {
-    try {
-      const res = await fetch("/api/unions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ partner1_id: personId, partner2_id: newPersonId }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        errorEl.textContent = data.error || "Failed to create union.";
-        errorEl.classList.remove("hidden");
-        return;
-      }
-    } catch {
-      errorEl.textContent = "Network error creating union.";
-      errorEl.classList.remove("hidden");
-      return;
-    }
-  } else {
-    const relPairs = [];
-    if (relationship === "parent") {
-      relPairs.push({ parent_id: newPersonId, child_id: personId });
-    } else if (relationship === "child") {
-      relPairs.push({ parent_id: personId, child_id: newPersonId });
-    } else if (relationship === "sibling") {
-      const parents = DATA.relationships
-        .filter((r) => r.child_id === personId)
-        .map((r) => r.parent_id);
-      for (const pid of parents) {
-        relPairs.push({ parent_id: pid, child_id: newPersonId });
-      }
-    }
-
-    try {
-      for (const pair of relPairs) {
-        const res = await fetch("/api/relationships", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(pair),
-        });
-        if (!res.ok) {
-          const data = await res.json();
-          errorEl.textContent = data.error || "Failed to create relationship.";
-          errorEl.classList.remove("hidden");
-          return;
-        }
-      }
-    } catch {
-      errorEl.textContent = "Network error creating relationship.";
-      errorEl.classList.remove("hidden");
-      return;
-    }
-  }
-
-  // Reload tree data and refresh all views
-  await loadData();
-  autoComputeLanes(CENTER_ID_A, CENTER_ID_B);
-  refreshAllViews();
-  showPersonPanel(personId);
+  await linkRelative(personId, relationship, newPersonId, errorEl);
 }
 
 // ═══════════════════════════════════════════════════════════════
