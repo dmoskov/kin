@@ -1,20 +1,22 @@
-// Part of the family-tree web app. Loaded as an ordered classic script.
-// See index.html for load order. Split from the former monolithic app.js.
+// Part of the family-tree web app (ES module).
+// Shared mutable state lives in S (00-state.js); functions/consts are
+// bridged onto window by 99-main.js so inline onclick handlers resolve.
+import { S } from "./00-state.js";
 
-function setCenterPerson(personId) {
-  if (!PEOPLE_MAP[personId]) return;
-  CENTER_ID_A = personId;
-  const union = DATA.unions.find(u => u.partner1_id === personId || u.partner2_id === personId);
-  CENTER_ID_B = union
+export function setCenterPerson(personId) {
+  if (!S.PEOPLE_MAP[personId]) return;
+  S.CENTER_ID_A = personId;
+  const union = S.DATA.unions.find(u => u.partner1_id === personId || u.partner2_id === personId);
+  S.CENTER_ID_B = union
     ? (union.partner1_id === personId ? union.partner2_id : union.partner1_id)
     : personId;
 
   // Rebuild lanes for the new center couple's grandparents
   // Always auto-compute to match the current viewer
-  autoComputeLanes(CENTER_ID_A, CENTER_ID_B);
+  autoComputeLanes(S.CENTER_ID_A, S.CENTER_ID_B);
 
   // Update header dynamically
-  updateDynamicHeader(CENTER_ID_A, CENTER_ID_B);
+  updateDynamicHeader(S.CENTER_ID_A, S.CENTER_ID_B);
 
   localStorage.setItem("ft-viewing-as", personId);
   const url = new URL(window.location);
@@ -37,18 +39,18 @@ function setCenterPerson(personId) {
 let _galleryFiltersInited = false;
 
 // Active facet selections: { year: Set, place: Set, person: Set, status: Set, exif: Set }
-const GALLERY_FILTERS = { year: new Set(), place: new Set(), person: new Set(), status: new Set(), exif: new Set() };
+export const GALLERY_FILTERS = { year: new Set(), place: new Set(), person: new Set(), status: new Set(), exif: new Set() };
 
 // Text search + date range filter state
 let GALLERY_TEXT_SEARCH = "";
 let GALLERY_YEAR_FROM = null;
 let GALLERY_YEAR_TO = null;
 
-function syncGalleryFilterUrl() {
+export function syncGalleryFilterUrl() {
   router.navigate("/photos", { replace: true, query: currentGalleryFilterQuery() });
 }
 
-function toggleGalleryFilter(facet, value) {
+export function toggleGalleryFilter(facet, value) {
   const set = GALLERY_FILTERS[facet];
   if (set.has(value)) set.delete(value);
   else set.add(value);
@@ -58,7 +60,7 @@ function toggleGalleryFilter(facet, value) {
   syncGalleryFilterUrl();
 }
 
-function clearGalleryFilter(facet) {
+export function clearGalleryFilter(facet) {
   GALLERY_FILTERS[facet].clear();
   renderPhotoGallery();
   renderGalleryFacets();
@@ -66,7 +68,7 @@ function clearGalleryFilter(facet) {
   syncGalleryFilterUrl();
 }
 
-function clearAllGalleryFilters() {
+export function clearAllGalleryFilters() {
   for (const k in GALLERY_FILTERS) GALLERY_FILTERS[k].clear();
   GALLERY_TEXT_SEARCH = "";
   GALLERY_YEAR_FROM = null;
@@ -82,11 +84,11 @@ function clearAllGalleryFilters() {
   renderActiveFilterPills();
 }
 
-function getFilteredPhotos() {
-  if (!DATA.photos) return [];
+export function getFilteredPhotos() {
+  if (!S.DATA.photos) return [];
   const { year, place, person, status, exif } = GALLERY_FILTERS;
 
-  return DATA.photos.filter(photo => {
+  return S.DATA.photos.filter(photo => {
     // Year filter
     if (year.size > 0) {
       const photoYear = photo.date ? photo.date.substring(0, 4) : null;
@@ -132,7 +134,7 @@ function getFilteredPhotos() {
       const q = GALLERY_TEXT_SEARCH.toLowerCase();
       const placeMatch = (photo.place || "").toLowerCase().includes(q);
       const peopleMatch = (photo.tagged_people || []).some(tp => {
-        const p = PEOPLE_MAP[tp.person_id];
+        const p = S.PEOPLE_MAP[tp.person_id];
         if (!p) return false;
         const nameMatch = (p.given_name || "").toLowerCase().includes(q) ||
                           (p.surname || "").toLowerCase().includes(q) ||
@@ -156,7 +158,7 @@ function getFilteredPhotos() {
   });
 }
 
-function computeFacetCounts(photos) {
+export function computeFacetCounts(photos) {
   const counts = {
     years: {},
     places: {},
@@ -197,7 +199,7 @@ function computeFacetCounts(photos) {
   return counts;
 }
 
-function renderFacetOption(facet, value, label, count, total) {
+export function renderFacetOption(facet, value, label, count, total) {
   const active = GALLERY_FILTERS[facet].has(value);
   const pct = total > 0 ? Math.round(count / total * 100) : 0;
   return `<button class="facet-option ${active ? "active" : ""}" onclick="toggleGalleryFilter('${facet}', '${value.replace(/'/g, "\\'")}')">
@@ -206,8 +208,8 @@ function renderFacetOption(facet, value, label, count, total) {
   </button>`;
 }
 
-function renderGalleryFacets() {
-  const allPhotos = DATA.photos || [];
+export function renderGalleryFacets() {
+  const allPhotos = S.DATA.photos || [];
   const total = allPhotos.length;
   // Compute counts on the full dataset (not filtered) so users see total distribution
   const counts = computeFacetCounts(allPhotos);
@@ -250,7 +252,7 @@ function renderGalleryFacets() {
   if (peopleEl) {
     const searchTerm = (searchEl?.value || "").toLowerCase();
     const people = Object.entries(counts.people)
-      .map(([id, c]) => ({ id, name: PEOPLE_MAP[id]?.fullName || id, count: c }))
+      .map(([id, c]) => ({ id, name: S.PEOPLE_MAP[id]?.fullName || id, count: c }))
       .filter(p => !searchTerm || p.name.toLowerCase().includes(searchTerm))
       .sort((a, b) => b.count - a.count);
     peopleEl.innerHTML = people
@@ -272,7 +274,7 @@ function renderGalleryFacets() {
   }
 }
 
-function renderActiveFilterPills() {
+export function renderActiveFilterPills() {
   const container = document.getElementById("photos-active-filters");
   if (!container) return;
 
@@ -281,7 +283,7 @@ function renderActiveFilterPills() {
     year: "Year", place: "Place", person: "Person", status: "Status", exif: "EXIF",
   };
   const valueFmt = {
-    person: (v) => PEOPLE_MAP[v]?.fullName || v,
+    person: (v) => S.PEOPLE_MAP[v]?.fullName || v,
     status: (v) => ({ untagged: "Untagged", tagged: "Tagged", "no-date": "No date", "has-date": "Has date", "no-place": "No place", "has-place": "Has place" }[v] || v),
     exif: (v) => ({ "has-gps": "Has GPS", "no-gps": "No GPS", "has-date": "Has EXIF date", "no-date": "No EXIF date" }[v] || v),
   };
@@ -313,7 +315,7 @@ function renderActiveFilterPills() {
   container.innerHTML = pills.join("");
 }
 
-function clearGalleryTextSearch() {
+export function clearGalleryTextSearch() {
   GALLERY_TEXT_SEARCH = "";
   const el = document.getElementById("gallery-text-search");
   if (el) el.value = "";
@@ -322,7 +324,7 @@ function clearGalleryTextSearch() {
   renderActiveFilterPills();
 }
 
-function clearGalleryDateRange() {
+export function clearGalleryDateRange() {
   GALLERY_YEAR_FROM = null;
   GALLERY_YEAR_TO = null;
   const fromEl = document.getElementById("gallery-year-from");
@@ -334,14 +336,14 @@ function clearGalleryDateRange() {
   renderActiveFilterPills();
 }
 
-function renderPhotoGallery() {
+export function renderPhotoGallery() {
   const grid = document.getElementById("photos-grid");
   const badge = document.getElementById("photos-count-badge");
   if (!grid) return;
 
-  const isEditor = !CONFIG?.editorsEnabled || AUTH_USER?.is_editor;
+  const isEditor = !S.CONFIG?.editorsEnabled || S.AUTH_USER?.is_editor;
   const filtered = getFilteredPhotos();
-  const total = DATA.photos ? DATA.photos.length : 0;
+  const total = S.DATA.photos ? S.DATA.photos.length : 0;
 
   if (badge) {
     badge.textContent = filtered.length === total ? `${total}` : `${filtered.length} / ${total}`;
@@ -390,15 +392,15 @@ function renderPhotoGallery() {
 // ── Gallery select mode & quick year picker ───────────────────
 
 let GALLERY_SELECT_MODE = false;
-const GALLERY_SELECTED = new Set();
+export const GALLERY_SELECTED = new Set();
 
-function galleryPhotoClick(event, filePath, photoId) {
+export function galleryPhotoClick(event, filePath, photoId) {
   if (GALLERY_SELECT_MODE) {
     togglePhotoSelection(filePath);
     return;
   }
-  const isEditor = !CONFIG?.editorsEnabled || AUTH_USER?.is_editor;
-  const photo = DATA.photos?.find(p => p.file_path === filePath);
+  const isEditor = !S.CONFIG?.editorsEnabled || S.AUTH_USER?.is_editor;
+  const photo = S.DATA.photos?.find(p => p.file_path === filePath);
   if (photo && !photo.date && isEditor) {
     showQuickYearPicker(photo, event.currentTarget);
     return;
@@ -407,7 +409,7 @@ function galleryPhotoClick(event, filePath, photoId) {
   router.navigate(`/photos/view/${filePath}`);
 }
 
-function toggleSelectMode() {
+export function toggleSelectMode() {
   GALLERY_SELECT_MODE = !GALLERY_SELECT_MODE;
   GALLERY_SELECTED.clear();
   const btn = document.getElementById("gallery-select-btn");
@@ -416,13 +418,13 @@ function toggleSelectMode() {
   renderPhotoGallery();
 }
 
-function togglePhotoSelection(filePath) {
+export function togglePhotoSelection(filePath) {
   if (GALLERY_SELECTED.has(filePath)) GALLERY_SELECTED.delete(filePath);
   else GALLERY_SELECTED.add(filePath);
   renderPhotoGallery();
 }
 
-function renderBulkToolbar() {
+export function renderBulkToolbar() {
   removeBulkToolbar();
   if (GALLERY_SELECTED.size === 0) return;
   const bar = document.createElement("div");
@@ -437,12 +439,12 @@ function renderBulkToolbar() {
   document.body.appendChild(bar);
 }
 
-function removeBulkToolbar() {
+export function removeBulkToolbar() {
   const existing = document.getElementById("gallery-bulk-toolbar");
   if (existing) existing.remove();
 }
 
-async function bulkAssignYear() {
+export async function bulkAssignYear() {
   const yearInput = document.getElementById("bulk-year-input");
   const year = yearInput?.value?.trim();
   if (!year || isNaN(parseInt(year))) {
@@ -451,7 +453,7 @@ async function bulkAssignYear() {
   }
   const photoIds = [];
   for (const fp of GALLERY_SELECTED) {
-    const photo = DATA.photos?.find(p => p.file_path === fp);
+    const photo = S.DATA.photos?.find(p => p.file_path === fp);
     if (photo) photoIds.push(photo.id);
   }
   if (photoIds.length === 0) return;
@@ -466,7 +468,7 @@ async function bulkAssignYear() {
     const result = await res.json();
     // Update local data
     for (const id of result.updated) {
-      const photo = DATA.photos?.find(p => p.id === id);
+      const photo = S.DATA.photos?.find(p => p.id === id);
       if (photo) {
         photo.date = year;
         photo.date_circa = true;
@@ -479,7 +481,7 @@ async function bulkAssignYear() {
   }
 }
 
-function showQuickYearPicker(photo, anchorEl) {
+export function showQuickYearPicker(photo, anchorEl) {
   // Remove any existing picker
   const existing = document.getElementById("quick-year-picker");
   if (existing) existing.remove();
@@ -518,7 +520,7 @@ function showQuickYearPicker(photo, anchorEl) {
   });
 }
 
-async function saveQuickYear(photoId) {
+export async function saveQuickYear(photoId) {
   const input = document.getElementById("qyp-year");
   const year = input?.value?.trim();
   if (!year || isNaN(parseInt(year))) {
@@ -532,7 +534,7 @@ async function saveQuickYear(photoId) {
       body: JSON.stringify({ date: year, date_circa: true }),
     });
     if (!res.ok) throw new Error((await res.json()).error || res.statusText);
-    const photo = DATA.photos?.find(p => p.id === photoId);
+    const photo = S.DATA.photos?.find(p => p.id === photoId);
     if (photo) {
       photo.date = year;
       photo.date_circa = true;
@@ -547,7 +549,7 @@ async function saveQuickYear(photoId) {
 }
 
 // ── Gallery photo upload (Photos tab) ──────────────────────────
-function initGalleryUpload() {
+export function initGalleryUpload() {
   const btn = document.getElementById("gallery-upload-btn");
   const fileInput = document.getElementById("gallery-file-input");
   const dropZone = document.getElementById("gallery-drop-zone");
@@ -573,7 +575,7 @@ function initGalleryUpload() {
   }
 }
 
-async function _galleryUploadFiles(files) {
+export async function _galleryUploadFiles(files) {
   if (!files || files.length === 0) return;
 
   const progressEl = document.getElementById("gallery-upload-progress");
@@ -615,12 +617,12 @@ async function _galleryUploadFiles(files) {
     const resp = await fetch("/api/data");
     if (resp.ok) {
       const newData = await resp.json();
-      DATA.photos = newData.photos;
-      PHOTOS_MAP = {};
-      for (const photo of DATA.photos) {
-        PHOTOS_MAP[photo.file_path] = photo;
+      S.DATA.photos = newData.photos;
+      S.PHOTOS_MAP = {};
+      for (const photo of S.DATA.photos) {
+        S.PHOTOS_MAP[photo.file_path] = photo;
       }
-      ALL_PHOTOS = DATA.photos.map(p => p.file_path);
+      S.ALL_PHOTOS = S.DATA.photos.map(p => p.file_path);
       renderPhotoGallery();
       renderGalleryFacets();
     }
@@ -634,8 +636,8 @@ async function _galleryUploadFiles(files) {
   }
 }
 
-function toggleGalleryEdit(photoPath) {
-  const photoData = PHOTOS_MAP[photoPath];
+export function toggleGalleryEdit(photoPath) {
+  const photoData = S.PHOTOS_MAP[photoPath];
   if (!photoData) return;
 
   const formId = `gallery-edit-${photoData.id}`;
@@ -771,8 +773,8 @@ function toggleGalleryEdit(photoPath) {
   _wireGalleryTagEvents(form, photoPath);
 }
 
-function _buildGalleryTagChips(photoPath) {
-  const photoData = PHOTOS_MAP[photoPath];
+export function _buildGalleryTagChips(photoPath) {
+  const photoData = S.PHOTOS_MAP[photoPath];
   if (!photoData) return "";
   const people = photoData.tagged_people || [];
   let chips = people.map(tp => {
@@ -782,8 +784,8 @@ function _buildGalleryTagChips(photoPath) {
   return `${chips}<button class="ge-tag-add" data-photo-path="${photoPath}">+ Tag</button>`;
 }
 
-function _wireGalleryTagEvents(form, photoPath) {
-  const photoData = PHOTOS_MAP[photoPath];
+export function _wireGalleryTagEvents(form, photoPath) {
+  const photoData = S.PHOTOS_MAP[photoPath];
   if (!photoData) return;
 
   // Remove tag
@@ -836,7 +838,7 @@ function _wireGalleryTagEvents(form, photoPath) {
       input.addEventListener("input", () => {
         const q = input.value.toLowerCase().trim();
         if (!q) { results.innerHTML = ""; return; }
-        const matches = Object.values(PEOPLE_MAP)
+        const matches = Object.values(S.PEOPLE_MAP)
           .filter(p => !alreadyTagged.has(p.id) && p.fullName.toLowerCase().includes(q))
           .slice(0, 6);
         results.innerHTML = matches.map(p =>
@@ -853,7 +855,7 @@ function _wireGalleryTagEvents(form, photoPath) {
                 body: JSON.stringify({ person_id: tagId }),
               });
               if (resp.ok) {
-                const person = PEOPLE_MAP[tagId];
+                const person = S.PEOPLE_MAP[tagId];
                 photoData.tagged_people = [...(photoData.tagged_people || []), {
                   person_id: tagId,
                   given_name: person?.given_name || "",
@@ -884,7 +886,7 @@ function _wireGalleryTagEvents(form, photoPath) {
   });
 }
 
-function initPhotoGalleryFilters() {
+export function initPhotoGalleryFilters() {
   if (_galleryFiltersInited) return;
   _galleryFiltersInited = true;
 
@@ -937,39 +939,39 @@ function initPhotoGalleryFilters() {
   }
 }
 
-function refreshAllViews() {
+export function refreshAllViews() {
   updateStats();
   renderTree();
   renderTimeline(document.getElementById("timeline-filter")?.value || "all");
   // Pre-fill relationship calculator with current viewer
   prefillRelationshipCalculator();
   // Re-render map if it was already initialized
-  if (MAP) renderMap();
+  if (S.MAP) renderMap();
   // Re-render photo gallery
   renderPhotoGallery();
 }
 
-function prefillRelationshipCalculator() {
-  if (!CENTER_ID_A) return;
+export function prefillRelationshipCalculator() {
+  if (!S.CENTER_ID_A) return;
   const pickerA = document.getElementById("picker-a");
   if (!pickerA) return;
   const inputA = pickerA.querySelector(".picker-search");
   if (!inputA) return;
-  const person = PEOPLE_MAP[CENTER_ID_A];
+  const person = S.PEOPLE_MAP[S.CENTER_ID_A];
   if (!person) return;
-  pickerA._selectedId = CENTER_ID_A;
+  pickerA._selectedId = S.CENTER_ID_A;
   inputA.value = person.fullName;
   inputA.dataset.locked = person.fullName;
   computeRelationship();
 }
 
-function updateDynamicHeader(centerA, centerB) {
+export function updateDynamicHeader(centerA, centerB) {
   const titleEl = document.getElementById("family-title");
   const subtitleEl = document.getElementById("family-subtitle");
   if (!titleEl) return;
 
-  const personA = PEOPLE_MAP[centerA];
-  const personB = centerB && centerB !== centerA ? PEOPLE_MAP[centerB] : null;
+  const personA = S.PEOPLE_MAP[centerA];
+  const personB = centerB && centerB !== centerA ? S.PEOPLE_MAP[centerB] : null;
 
   // Build title from surnames
   const surnameA = personA?.surname || "";
@@ -989,12 +991,12 @@ function updateDynamicHeader(centerA, centerB) {
   }
 }
 
-function applyAuth() {
+export function applyAuth() {
   const loggedIn = document.getElementById("auth-logged-in");
   const loggedOut = document.getElementById("auth-logged-out");
   if (!loggedIn || !loggedOut) return;
 
-  if (AUTH_USER) {
+  if (S.AUTH_USER) {
     loggedIn.style.display = "";
     loggedOut.style.display = "none";
 
@@ -1005,24 +1007,24 @@ function applyAuth() {
     const menuEmail = document.getElementById("user-menu-email");
     const menuPhoto = document.getElementById("user-menu-photo");
 
-    const firstName = (AUTH_USER.name || "").split(" ")[0];
+    const firstName = (S.AUTH_USER.name || "").split(" ")[0];
     pillName.textContent = firstName;
 
-    const picUrl = AUTH_USER.picture || "";
+    const picUrl = S.AUTH_USER.picture || "";
     if (picUrl) {
       pillPhoto.src = picUrl;
-      pillPhoto.alt = AUTH_USER.name;
+      pillPhoto.alt = S.AUTH_USER.name;
       pillPhoto.style.display = "";
       menuPhoto.src = picUrl;
-      menuPhoto.alt = AUTH_USER.name;
+      menuPhoto.alt = S.AUTH_USER.name;
       menuPhoto.style.display = "";
     } else {
       pillPhoto.style.display = "none";
       menuPhoto.style.display = "none";
     }
 
-    menuName.textContent = AUTH_USER.name || "";
-    menuEmail.textContent = AUTH_USER.email || "";
+    menuName.textContent = S.AUTH_USER.name || "";
+    menuEmail.textContent = S.AUTH_USER.email || "";
   } else {
     loggedIn.style.display = "none";
     loggedOut.style.display = "";
@@ -1032,7 +1034,7 @@ function applyAuth() {
   }
 
   // Show editor-only toolbar controls
-  const isEditor = !CONFIG?.editorsEnabled || AUTH_USER?.is_editor;
+  const isEditor = !S.CONFIG?.editorsEnabled || S.AUTH_USER?.is_editor;
   const docUploadBtn = document.getElementById("doc-upload-btn");
   if (docUploadBtn) {
     docUploadBtn.style.display = isEditor ? "" : "none";
@@ -1042,7 +1044,7 @@ function applyAuth() {
     gedcomBtn.style.display = isEditor ? "" : "none";
   }
 
-  if (CONFIG?.editorsMisconfigured) {
+  if (S.CONFIG?.editorsMisconfigured) {
     showToast("⚠️ EDITORS is set but Google Sign-In is not configured — no one can edit.", "error");
   }
 }
@@ -1051,7 +1053,7 @@ function applyAuth() {
 let _googleBtnRendered = false;
 let _googleSdkRetries = 0;
 
-function _showSigninUnavailable(show) {
+export function _showSigninUnavailable(show) {
   const el = document.getElementById("auth-signin-unavailable");
   const btn = document.getElementById("google-signin-btn");
   if (!el) return;
@@ -1059,13 +1061,13 @@ function _showSigninUnavailable(show) {
   if (btn) btn.style.display = show ? "none" : "";
 }
 
-function initGoogleSignIn() {
+export function initGoogleSignIn() {
   const btnContainer = document.getElementById("google-signin-btn");
   if (!btnContainer) return;
 
   // No client ID configured on the server → show a clear "unavailable"
   // message instead of an empty slot.
-  if (!CONFIG?.googleClientId) {
+  if (!S.CONFIG?.googleClientId) {
     _showSigninUnavailable(true);
     return;
   }
@@ -1089,7 +1091,7 @@ function initGoogleSignIn() {
 
   try {
     google.accounts.id.initialize({
-      client_id: CONFIG.googleClientId,
+      client_id: S.CONFIG.googleClientId,
       callback: handleGoogleSignIn,
     });
     google.accounts.id.renderButton(
@@ -1104,7 +1106,7 @@ function initGoogleSignIn() {
   }
 }
 
-function initUserPillMenu() {
+export function initUserPillMenu() {
   const pill = document.getElementById("user-pill");
   const menu = document.getElementById("user-menu");
   if (!pill || !menu) return;
@@ -1127,14 +1129,14 @@ function initUserPillMenu() {
   });
 }
 
-function populateViewingAsDropdown(selectId) {
+export function populateViewingAsDropdown(selectId) {
   const sel = document.getElementById(selectId);
   if (!sel) return;
 
   // Clear existing options
   sel.innerHTML = "";
 
-  const sorted = [...DATA.people]
+  const sorted = [...S.DATA.people]
     .filter(p => p.given_name)
     .sort((a, b) => {
       const nameA = `${a.given_name || ""} ${a.surname || ""}`.trim();
@@ -1158,7 +1160,7 @@ function populateViewingAsDropdown(selectId) {
     } else {
       opt.textContent = name;
     }
-    if (p.id === CENTER_ID_A) opt.selected = true;
+    if (p.id === S.CENTER_ID_A) opt.selected = true;
     sel.appendChild(opt);
   }
 
@@ -1168,7 +1170,7 @@ function populateViewingAsDropdown(selectId) {
   });
 }
 
-function initViewingAs() {
+export function initViewingAs() {
   // Check URL param first
   const params = new URLSearchParams(window.location.search);
   const meParam = params.get("me");
@@ -1177,10 +1179,10 @@ function initViewingAs() {
   const savedMe = localStorage.getItem("ft-viewing-as");
 
   // If authenticated, use the auth person as default
-  const authId = AUTH_USER?.person_id;
+  const authId = S.AUTH_USER?.person_id;
   const targetId = meParam || authId || savedMe || null;
 
-  if (targetId && PEOPLE_MAP[targetId]) {
+  if (targetId && S.PEOPLE_MAP[targetId]) {
     setCenterPerson(targetId);
   }
 

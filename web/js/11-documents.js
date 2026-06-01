@@ -1,5 +1,7 @@
-// Part of the family-tree web app. Loaded as an ordered classic script.
-// See index.html for load order. Split from the former monolithic app.js.
+// Part of the family-tree web app (ES module).
+// Shared mutable state lives in S (00-state.js); functions/consts are
+// bridged onto window by 99-main.js so inline onclick handlers resolve.
+import { S } from "./00-state.js";
 
 let CURRENT_DOC_ID = null;
 let CURRENT_PROPOSED = null;
@@ -563,7 +565,7 @@ let CURRENT_PROPOSED = null;
   // Show onboarding after init if tree is empty
   const origInit = window._ft_init_done;
   function maybeShowOnboarding() {
-    if (DATA && DATA.people && DATA.people.length === 0) {
+    if (S.DATA && S.DATA.people && S.DATA.people.length === 0) {
       overlay.classList.remove("hidden");
     }
   }
@@ -686,7 +688,7 @@ let CURRENT_PROPOSED = null;
 
 // ── Review Modal ──────────────────────────────────────────────────────
 
-function openReviewModal(proposed, filename, alreadyApplied) {
+export function openReviewModal(proposed, filename, alreadyApplied) {
   const overlay = document.getElementById("doc-review-overlay");
   const title = document.getElementById("doc-review-title");
   const summary = document.getElementById("doc-review-summary");
@@ -778,10 +780,10 @@ function openReviewModal(proposed, filename, alreadyApplied) {
   overlay.classList.remove("hidden");
 }
 
-function _nameForId(id) {
+export function _nameForId(id) {
   if (!id) return "?";
   // Try to find in existing people
-  const p = PEOPLE_MAP[id];
+  const p = S.PEOPLE_MAP[id];
   if (p) return p.fullName;
   // For new people, try to look up in proposed changes
   if (CURRENT_PROPOSED && CURRENT_PROPOSED.people) {

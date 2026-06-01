@@ -1,19 +1,19 @@
-// Part of the family-tree web app. Loaded as an ordered classic script.
-// See index.html for load order. Split from the former monolithic app.js.
+// Part of the family-tree web app (ES module).
+// Shared mutable state lives in S (00-state.js); functions/consts are
+// bridged onto window by 99-main.js so inline onclick handlers resolve.
+import { S } from "./00-state.js";
 
-let CENTER_ID_A = null;
-let CENTER_ID_B = null;
 
 // Layout constants
-const NODE_W = 160;
-const NODE_H = 52;
-const COUPLE_GAP = 18;
-const H_SPACING = 10;
-const ROW_HEIGHT = 95;
-const BAND_PADDING = 20;
+export const NODE_W = 160;
+export const NODE_H = 52;
+export const COUPLE_GAP = 18;
+export const H_SPACING = 10;
+export const ROW_HEIGHT = 95;
+export const BAND_PADDING = 20;
 
 // Generation band gradient — warm center → cool ancestors
-const GEN_COLORS = [
+export const GEN_COLORS = [
   { gen:  1, color: "#c4956a", label: "Children" },
   { gen:  0, color: "#d4a843", label: "Center" },
   { gen: -1, color: "#d48c6a", label: "Parents" },
@@ -28,7 +28,7 @@ const GEN_COLORS = [
   { gen:-10, color: "#2e9a80", label: "8\u00d7 Great" },
 ];
 
-function getGenMeta(gen) {
+export function getGenMeta(gen) {
   return GEN_COLORS.find((g) => g.gen === gen) || {
     gen,
     color: "#6a8fb5",
@@ -36,12 +36,12 @@ function getGenMeta(gen) {
   };
 }
 
-function buildHierarchy() {
+export function buildHierarchy() {
   // Build parent→children lookup
   const childrenOf = {};
   const hasParent = new Set();
 
-  for (const rel of DATA.relationships) {
+  for (const rel of S.DATA.relationships) {
     if (!childrenOf[rel.parent_id]) childrenOf[rel.parent_id] = new Set();
     childrenOf[rel.parent_id].add(rel.child_id);
     hasParent.add(rel.child_id);
@@ -49,7 +49,7 @@ function buildHierarchy() {
 
   // Build union lookup (partner mapping)
   const unionPartner = {};
-  for (const u of DATA.unions) {
+  for (const u of S.DATA.unions) {
     if (!unionPartner[u.partner1_id]) unionPartner[u.partner1_id] = [];
     unionPartner[u.partner1_id].push(u.partner2_id);
     if (!unionPartner[u.partner2_id]) unionPartner[u.partner2_id] = [];
@@ -65,7 +65,7 @@ function buildHierarchy() {
     if (processed.has(personId) || depth > 10) return null;
     processed.add(personId);
 
-    const person = PEOPLE_MAP[personId];
+    const person = S.PEOPLE_MAP[personId];
     if (!person) return null;
 
     const node = {
@@ -86,7 +86,7 @@ function buildHierarchy() {
     if (partners.length > 0) {
       const partnerId = partners[0];
       processed.add(partnerId);
-      const partnerPerson = PEOPLE_MAP[partnerId];
+      const partnerPerson = S.PEOPLE_MAP[partnerId];
       if (partnerPerson) {
         node.partner = {
           id: partnerId,
@@ -115,7 +115,7 @@ function buildHierarchy() {
   }
 
   // Start from people who have no parents (roots)
-  for (const p of DATA.people) {
+  for (const p of S.DATA.people) {
     if (!hasParent.has(p.id) && !processed.has(p.id)) {
       // Check if this person has a partner who is also a root — merge them
       const partners = unionPartner[p.id] || [];
@@ -127,7 +127,7 @@ function buildHierarchy() {
       const startId =
         p.gender === "male"
           ? p.id
-          : rootPartner && PEOPLE_MAP[rootPartner]?.gender === "male"
+          : rootPartner && S.PEOPLE_MAP[rootPartner]?.gender === "male"
           ? rootPartner
           : p.id;
 
@@ -147,10 +147,10 @@ function buildHierarchy() {
  * 1 = their partners (married in), 2+ = in-law branches.
  *
  * Shared by the tree (visual dimming) and the map (proximity filtering). Pass
- * the data source: the tree uses DATA; the map uses ORIGINAL_DATA so focus-mode
+ * the data source: the tree uses S.DATA; the map uses S.ORIGINAL_DATA so focus-mode
  * filtering doesn't drop ancestors/relatives.
  */
-function computeFogDistance(src) {
+export function computeFogDistance(src) {
   if (!src) return {};
   const parentsOf = {};
   const childrenOf = {};
@@ -178,13 +178,13 @@ function computeFogDistance(src) {
     bloodline.add(pid);
     for (const kid of childrenOf[pid] || new Set()) traceDown(kid);
   }
-  if (CENTER_ID_A) {
-    traceUp(CENTER_ID_A);
-    traceDown(CENTER_ID_A);
+  if (S.CENTER_ID_A) {
+    traceUp(S.CENTER_ID_A);
+    traceDown(S.CENTER_ID_A);
   }
-  if (CENTER_ID_B) {
-    traceUp(CENTER_ID_B);
-    traceDown(CENTER_ID_B);
+  if (S.CENTER_ID_B) {
+    traceUp(S.CENTER_ID_B);
+    traceDown(S.CENTER_ID_B);
   }
   const fog = {};
   for (const id of bloodline) fog[id] = 0;
@@ -234,12 +234,12 @@ function computeFogDistance(src) {
  * Build the butterfly layout data structure.
  * Returns { nodes, links, unions, genRange }
  */
-function buildButterflyLayout() {
+export function buildButterflyLayout() {
   _resolveCenterIds();
 
   const parentsOf = {};
   const childrenOf = {};
-  for (const r of DATA.relationships) {
+  for (const r of S.DATA.relationships) {
     if (!parentsOf[r.child_id]) parentsOf[r.child_id] = [];
     parentsOf[r.child_id].push(r.parent_id);
     if (!childrenOf[r.parent_id]) childrenOf[r.parent_id] = new Set();
@@ -247,7 +247,7 @@ function buildButterflyLayout() {
   }
 
   const unionPartner = {};
-  for (const u of DATA.unions) {
+  for (const u of S.DATA.unions) {
     unionPartner[u.partner1_id] = unionPartner[u.partner1_id] || [];
     unionPartner[u.partner1_id].push(u.partner2_id);
     unionPartner[u.partner2_id] = unionPartner[u.partner2_id] || [];
@@ -276,12 +276,12 @@ function buildButterflyLayout() {
   }
 
   // Gen 0: center couple
-  const centerIdx = addCouple(CENTER_ID_A, CENTER_ID_B, 0, "center", -1);
+  const centerIdx = addCouple(S.CENTER_ID_A, S.CENTER_ID_B, 0, "center", -1);
 
   // Gen +1: children of center couple
   const centerChildren = new Set();
-  (childrenOf[CENTER_ID_A] || new Set()).forEach((c) => centerChildren.add(c));
-  (childrenOf[CENTER_ID_B] || new Set()).forEach((c) => centerChildren.add(c));
+  (childrenOf[S.CENTER_ID_A] || new Set()).forEach((c) => centerChildren.add(c));
+  (childrenOf[S.CENTER_ID_B] || new Set()).forEach((c) => centerChildren.add(c));
   for (const cid of centerChildren) {
     if (!placed.has(cid)) {
       const partner = (unionPartner[cid] || []).find((p) => !placed.has(p)) || null;
@@ -322,7 +322,7 @@ function buildButterflyLayout() {
     }
   }
 
-  // Split CENTER_ID_A's parents into left/right sides for balanced layout.
+  // Split S.CENTER_ID_A's parents into left/right sides for balanced layout.
   // Without this, ALL of one partner's ancestry goes to one side, creating
   // a lopsided tree when that partner has deep ancestry on both parent lines.
   function walkAncestorsSplit(personId, gen, childCoupleIdx) {
@@ -349,8 +349,8 @@ function buildButterflyLayout() {
     }
   }
 
-  walkAncestorsSplit(CENTER_ID_A, 0, centerIdx);
-  if (CENTER_ID_B) walkAncestorsSplit(CENTER_ID_B, 0, centerIdx);
+  walkAncestorsSplit(S.CENTER_ID_A, 0, centerIdx);
+  if (S.CENTER_ID_B) walkAncestorsSplit(S.CENTER_ID_B, 0, centerIdx);
 
   // Walk DOWN from every placed person to include siblings, aunts/uncles
   function walkDescendants(personId, gen, side, parentCoupleIdx) {
@@ -372,7 +372,7 @@ function buildButterflyLayout() {
   }
 
   // Catch remaining connected people (e.g. second spouses)
-  for (const p of DATA.people) {
+  for (const p of S.DATA.people) {
     if (placed.has(p.id)) continue;
     const partners = unionPartner[p.id] || [];
     const placedPartner = partners.find((pid) => placed.has(pid));
@@ -639,7 +639,7 @@ function buildButterflyLayout() {
     if (!pos) continue;
 
     const w = coupleWidth(c);
-    const person = PEOPLE_MAP[c.primaryId];
+    const person = S.PEOPLE_MAP[c.primaryId];
     if (!person) continue;
 
     const primaryX = c.partnerId ? pos.cx - w / 2 : pos.cx - NODE_W / 2;
@@ -651,7 +651,7 @@ function buildButterflyLayout() {
     nodeMap[c.primaryId] = primaryNode;
 
     if (c.partnerId) {
-      const partnerPerson = PEOPLE_MAP[c.partnerId];
+      const partnerPerson = S.PEOPLE_MAP[c.partnerId];
       if (partnerPerson) {
         const partnerX = primaryX + NODE_W + COUPLE_GAP;
         const partnerNode = {
@@ -666,7 +666,7 @@ function buildButterflyLayout() {
 
   // Build links (child → parent)
   const links = [];
-  for (const r of DATA.relationships) {
+  for (const r of S.DATA.relationships) {
     const childNode = nodeMap[r.child_id];
     const parentNode = nodeMap[r.parent_id];
     if (childNode && parentNode) links.push({ from: childNode, to: parentNode });
@@ -691,7 +691,7 @@ function buildButterflyLayout() {
   // ── Compute bloodline distance (fog-of-war) ──
   // Distance 0 = center couple + blood ancestors/descendants; 1 = their
   // partners; 2+ = in-law branches. Shared with the map via computeFogDistance.
-  const fogDistance = computeFogDistance(DATA);
+  const fogDistance = computeFogDistance(S.DATA);
 
   // Assign fogLevel to each node: 0 = clear, 1-4 = increasing fog
   for (const n of nodes) {
@@ -705,7 +705,7 @@ function buildButterflyLayout() {
   return { nodes, links, unions, genRange, couples, couplePositions };
 }
 
-function renderTree() {
+export function renderTree() {
   const svg = d3.select("#tree-svg");
   svg.selectAll("*").remove();
 
@@ -738,8 +738,8 @@ function renderTree() {
   svg.call(zoom);
 
   // Start zoomed in on center couple, user can zoom out
-  const centerNodeA = nodes.find(n => n.id === CENTER_ID_A);
-  const centerNodeB = nodes.find(n => n.id === CENTER_ID_B);
+  const centerNodeA = nodes.find(n => n.id === S.CENTER_ID_A);
+  const centerNodeB = nodes.find(n => n.id === S.CENTER_ID_B);
   if (centerNodeA) {
     const focusX = centerNodeB
       ? (centerNodeA.cx + centerNodeB.cx) / 2
@@ -869,8 +869,8 @@ function renderTree() {
   // ── 4. Node cards ──
   // Sort so center couple (gen 0) renders last → on top in SVG
   const sortedNodes = [...nodes].sort((a, b) => {
-    const aCenter = (a.id === CENTER_ID_A || a.id === CENTER_ID_B) ? 1 : 0;
-    const bCenter = (b.id === CENTER_ID_A || b.id === CENTER_ID_B) ? 1 : 0;
+    const aCenter = (a.id === S.CENTER_ID_A || a.id === S.CENTER_ID_B) ? 1 : 0;
+    const bCenter = (b.id === S.CENTER_ID_A || b.id === S.CENTER_ID_B) ? 1 : 0;
     return aCenter - bCenter;
   });
   const nodeGroups = g
@@ -883,7 +883,7 @@ function renderTree() {
 
   nodeGroups
     .append("rect")
-    .attr("class", (d) => "node-rect" + ((d.id === CENTER_ID_A || d.id === CENTER_ID_B) ? " center-node" : ""))
+    .attr("class", (d) => "node-rect" + ((d.id === S.CENTER_ID_A || d.id === S.CENTER_ID_B) ? " center-node" : ""))
     .attr("width", NODE_W)
     .attr("height", NODE_H)
     .attr("fill", (d) => d.person.gender === "female" ? "var(--node-female-bg)" : "var(--node-male-bg)")
@@ -992,8 +992,8 @@ function renderTree() {
     (_fogAdj[a] || (_fogAdj[a] = new Set())).add(b);
     (_fogAdj[b] || (_fogAdj[b] = new Set())).add(a);
   };
-  for (const r of DATA.relationships) { _addFogEdge(r.parent_id, r.child_id); }
-  for (const u of DATA.unions) { _addFogEdge(u.partner1_id, u.partner2_id); }
+  for (const r of S.DATA.relationships) { _addFogEdge(r.parent_id, r.child_id); }
+  for (const u of S.DATA.unions) { _addFogEdge(u.partner1_id, u.partner2_id); }
 
   let _fogRevealTimer = null;
 
@@ -1137,7 +1137,7 @@ function renderTree() {
   });
 }
 
-function highlightNode(personId) {
+export function highlightNode(personId) {
   d3.selectAll(".node-group").classed("selected", (d) => d.id === personId);
 }
 
@@ -1145,14 +1145,14 @@ function highlightNode(personId) {
 // Focus Mode
 // ═══════════════════════════════════════════════════════════════
 
-function computeFocusSubgraph(personId, hops) {
+export function computeFocusSubgraph(personId, hops) {
   const adj = {};
   const addEdge = (a, b) => {
     (adj[a] || (adj[a] = [])).push(b);
     (adj[b] || (adj[b] = [])).push(a);
   };
-  for (const r of ORIGINAL_DATA.relationships) addEdge(r.parent_id, r.child_id);
-  for (const u of ORIGINAL_DATA.unions) addEdge(u.partner1_id, u.partner2_id);
+  for (const r of S.ORIGINAL_DATA.relationships) addEdge(r.parent_id, r.child_id);
+  for (const u of S.ORIGINAL_DATA.unions) addEdge(u.partner1_id, u.partner2_id);
 
   const visited = new Set([personId]);
   let frontier = [personId];
@@ -1170,11 +1170,11 @@ function computeFocusSubgraph(personId, hops) {
   }
 
   // Always include siblings (co-children of any parent) regardless of hop depth
-  const parents = ORIGINAL_DATA.relationships
+  const parents = S.ORIGINAL_DATA.relationships
     .filter(r => r.child_id === personId)
     .map(r => r.parent_id);
   for (const parentId of parents) {
-    for (const r of ORIGINAL_DATA.relationships) {
+    for (const r of S.ORIGINAL_DATA.relationships) {
       if (r.parent_id === parentId && !visited.has(r.child_id)) {
         visited.add(r.child_id);
       }
@@ -1184,63 +1184,63 @@ function computeFocusSubgraph(personId, hops) {
   return visited;
 }
 
-function applyFocus() {
-  if (!FOCUS_PERSON_ID || FOCUS_DEPTH === "all") {
-    DATA = ORIGINAL_DATA;
-    if (!FOCUS_PERSON_ID) {
-      CENTER_ID_A = ORIGINAL_CENTER_ID_A;
-      CENTER_ID_B = ORIGINAL_CENTER_ID_B;
+export function applyFocus() {
+  if (!S.FOCUS_PERSON_ID || S.FOCUS_DEPTH === "all") {
+    S.DATA = S.ORIGINAL_DATA;
+    if (!S.FOCUS_PERSON_ID) {
+      S.CENTER_ID_A = S.ORIGINAL_CENTER_ID_A;
+      S.CENTER_ID_B = S.ORIGINAL_CENTER_ID_B;
     }
   } else {
-    const inScope = computeFocusSubgraph(FOCUS_PERSON_ID, FOCUS_DEPTH);
-    DATA = {
-      ...ORIGINAL_DATA,
-      people: ORIGINAL_DATA.people.filter(p => inScope.has(p.id)),
-      relationships: ORIGINAL_DATA.relationships.filter(r => inScope.has(r.parent_id) && inScope.has(r.child_id)),
-      unions: ORIGINAL_DATA.unions.filter(u => inScope.has(u.partner1_id) && inScope.has(u.partner2_id)),
-      events: (ORIGINAL_DATA.events || []).filter(e => inScope.has(e.person_id)),
+    const inScope = computeFocusSubgraph(S.FOCUS_PERSON_ID, S.FOCUS_DEPTH);
+    S.DATA = {
+      ...S.ORIGINAL_DATA,
+      people: S.ORIGINAL_DATA.people.filter(p => inScope.has(p.id)),
+      relationships: S.ORIGINAL_DATA.relationships.filter(r => inScope.has(r.parent_id) && inScope.has(r.child_id)),
+      unions: S.ORIGINAL_DATA.unions.filter(u => inScope.has(u.partner1_id) && inScope.has(u.partner2_id)),
+      events: (S.ORIGINAL_DATA.events || []).filter(e => inScope.has(e.person_id)),
     };
-    CENTER_ID_A = FOCUS_PERSON_ID;
-    const focusUnion = ORIGINAL_DATA.unions.find(
-      u => u.partner1_id === FOCUS_PERSON_ID || u.partner2_id === FOCUS_PERSON_ID
+    S.CENTER_ID_A = S.FOCUS_PERSON_ID;
+    const focusUnion = S.ORIGINAL_DATA.unions.find(
+      u => u.partner1_id === S.FOCUS_PERSON_ID || u.partner2_id === S.FOCUS_PERSON_ID
     );
-    CENTER_ID_B = focusUnion
-      ? (focusUnion.partner1_id === FOCUS_PERSON_ID ? focusUnion.partner2_id : focusUnion.partner1_id)
+    S.CENTER_ID_B = focusUnion
+      ? (focusUnion.partner1_id === S.FOCUS_PERSON_ID ? focusUnion.partner2_id : focusUnion.partner1_id)
       : null;
   }
   renderTree();
   updateFocusBanner();
 }
 
-function setFocus(personId) {
-  if (!FOCUS_PERSON_ID) {
-    ORIGINAL_CENTER_ID_A = CENTER_ID_A;
-    ORIGINAL_CENTER_ID_B = CENTER_ID_B;
+export function setFocus(personId) {
+  if (!S.FOCUS_PERSON_ID) {
+    S.ORIGINAL_CENTER_ID_A = S.CENTER_ID_A;
+    S.ORIGINAL_CENTER_ID_B = S.CENTER_ID_B;
   }
-  FOCUS_PERSON_ID = personId;
+  S.FOCUS_PERSON_ID = personId;
   const sel = document.getElementById("focus-depth-select");
   const val = sel?.value || "1";
-  FOCUS_DEPTH = val === "all" ? "all" : parseInt(val, 10);
+  S.FOCUS_DEPTH = val === "all" ? "all" : parseInt(val, 10);
   applyFocus();
 }
 
-function clearFocus() {
-  FOCUS_PERSON_ID = null;
+export function clearFocus() {
+  S.FOCUS_PERSON_ID = null;
   applyFocus();
 }
 
-function updateFocusBanner() {
+export function updateFocusBanner() {
   const banner = document.getElementById("focus-banner");
   if (!banner) return;
-  if (!FOCUS_PERSON_ID) {
+  if (!S.FOCUS_PERSON_ID) {
     banner.classList.add("hidden");
     return;
   }
   banner.classList.remove("hidden");
   const nameEl = document.getElementById("focus-banner-name");
-  if (nameEl) nameEl.innerHTML = `<a class="person-link" data-person-id="${FOCUS_PERSON_ID}" href="javascript:void(0)">${personThumb(FOCUS_PERSON_ID, 20)} ${personName(FOCUS_PERSON_ID)}</a>`;
+  if (nameEl) nameEl.innerHTML = `<a class="person-link" data-person-id="${S.FOCUS_PERSON_ID}" href="javascript:void(0)">${personThumb(S.FOCUS_PERSON_ID, 20)} ${personName(S.FOCUS_PERSON_ID)}</a>`;
   const sel = document.getElementById("focus-depth-select");
-  if (sel) sel.value = FOCUS_DEPTH === "all" ? "all" : String(FOCUS_DEPTH);
+  if (sel) sel.value = S.FOCUS_DEPTH === "all" ? "all" : String(S.FOCUS_DEPTH);
 }
 
 // ═══════════════════════════════════════════════════════════════

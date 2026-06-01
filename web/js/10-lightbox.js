@@ -1,12 +1,14 @@
-// Part of the family-tree web app. Loaded as an ordered classic script.
-// See index.html for load order. Split from the former monolithic app.js.
+// Part of the family-tree web app (ES module).
+// Shared mutable state lives in S (00-state.js); functions/consts are
+// bridged onto window by 99-main.js so inline onclick handlers resolve.
+import { S } from "./00-state.js";
 
-function openLightbox(src, alt, photoPath) {
+export function openLightbox(src, alt, photoPath) {
   const existing = document.getElementById("lightbox");
   if (existing) existing.remove();
 
-  const isEditor = !CONFIG?.editorsEnabled || AUTH_USER?.is_editor;
-  const photoData = photoPath ? PHOTOS_MAP[photoPath] : null;
+  const isEditor = !S.CONFIG?.editorsEnabled || S.AUTH_USER?.is_editor;
+  const photoData = photoPath ? S.PHOTOS_MAP[photoPath] : null;
 
   const overlay = document.createElement("div");
   overlay.id = "lightbox";
@@ -189,7 +191,7 @@ function openLightbox(src, alt, photoPath) {
   }
 }
 
-function _openFaceTagSearch(container, photoData, x, y, w, h, mouseEvent, renderCb) {
+export function _openFaceTagSearch(container, photoData, x, y, w, h, mouseEvent, renderCb) {
   document.querySelectorAll(".face-tag-search").forEach(el => el.remove());
 
   const dropdown = document.createElement("div");
@@ -213,9 +215,9 @@ function _openFaceTagSearch(container, photoData, x, y, w, h, mouseEvent, render
   function showResults(q) {
     let matches;
     if (!q) {
-      matches = taggedIds.map(id => PEOPLE_MAP[id]).filter(Boolean).slice(0, 5);
+      matches = taggedIds.map(id => S.PEOPLE_MAP[id]).filter(Boolean).slice(0, 5);
     } else {
-      matches = Object.values(PEOPLE_MAP)
+      matches = Object.values(S.PEOPLE_MAP)
         .filter(p => p.fullName.toLowerCase().includes(q))
         .slice(0, 5);
     }
@@ -233,7 +235,7 @@ function _openFaceTagSearch(container, photoData, x, y, w, h, mouseEvent, render
           });
           if (resp.ok) {
             const region = await resp.json();
-            const person = PEOPLE_MAP[personId];
+            const person = S.PEOPLE_MAP[personId];
             photoData.face_regions = photoData.face_regions || [];
             photoData.face_regions.push({
               id: region.id,

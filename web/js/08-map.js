@@ -1,7 +1,9 @@
-// Part of the family-tree web app. Loaded as an ordered classic script.
-// See index.html for load order. Split from the former monolithic app.js.
+// Part of the family-tree web app (ES module).
+// Shared mutable state lives in S (00-state.js); functions/consts are
+// bridged onto window by 99-main.js so inline onclick handlers resolve.
+import { S } from "./00-state.js";
 
-const GEOCODE = {
+export const GEOCODE = {
   // ── family layout ──
   "Odessa, Russia":                   [46.48, 30.73],
   "Kamunetz-Podolsk, Russia":         [48.68, 26.58],
@@ -50,23 +52,22 @@ const GEOCODE = {
 
 // Runtime geocode results fetched from the server (Nominatim + DB cache).
 // Populated by prefetchGeocode() on page load; map rendering awaits this.
-const GEOCODE_RUNTIME = {};
-let _geocodeReady = Promise.resolve();
+export const GEOCODE_RUNTIME = {};
 
 // Polling interval for background geocode resolution (ms)
-const _GEOCODE_POLL_MS = 3000;
+export const _GEOCODE_POLL_MS = 3000;
 let _geocodePlacesArr = [];
 
-async function prefetchGeocode() {
+export async function prefetchGeocode() {
   const places = new Set();
-  for (const p of DATA.people) {
+  for (const p of S.DATA.people) {
     if (p.birth_place) places.add(p.birth_place);
     if (p.death_place) places.add(p.death_place);
   }
-  for (const e of DATA.events || []) {
+  for (const e of S.DATA.events || []) {
     if (e.place) places.add(e.place);
   }
-  for (const u of DATA.unions || []) {
+  for (const u of S.DATA.unions || []) {
     if (u.union_place) places.add(u.union_place);
   }
   if (places.size === 0) return;
@@ -74,7 +75,7 @@ async function prefetchGeocode() {
   await _fetchGeocodeAndPoll(_geocodePlacesArr);
 }
 
-async function _fetchGeocodeAndPoll(places) {
+export async function _fetchGeocodeAndPoll(places) {
   try {
     const resp = await fetch("/api/geocode", {
       method: "POST",
@@ -96,7 +97,7 @@ async function _fetchGeocodeAndPoll(places) {
     }
 
     // If the map is visible and we got new results, refresh markers
-    if (newResults && MAP) {
+    if (newResults && S.MAP) {
       // Clear existing markers and arcs before re-plotting
       for (const m of MAP_MARKERS) m.marker.remove();
       for (const a of MAP_ARCS) { a.polyline.remove(); if (a.arrowHead) a.arrowHead.remove(); }
@@ -119,7 +120,7 @@ async function _fetchGeocodeAndPoll(places) {
   }
 }
 
-function geocode(place) {
+export function geocode(place) {
   if (!place) return null;
   // Curated hardcoded table takes priority (hand-verified coordinates)
   if (GEOCODE[place]) return GEOCODE[place];
@@ -136,7 +137,7 @@ function geocode(place) {
   return null;
 }
 
-const EVENT_COLORS = {
+export const EVENT_COLORS = {
   birth:          "#4cd964",
   death:          "#888",
   immigration:    "#e74c3c",
@@ -153,7 +154,6 @@ const EVENT_COLORS = {
   photo:          "#d4a843",
 };
 
-let MAP = null;
 let MAP_MARKERS = [];      // { marker, latlng, events: [{date, year, type, personId, desc, place}] }
 let MAP_ARCS = [];         // { polyline, arrowHead, personId, fromYear, toYear }
 let MAP_ALL_EVENTS = [];   // flat list of {date, year, type, personId, place, desc, latlng}
@@ -165,18 +165,18 @@ let _mapListenersWired = false;
 // Temporal brightness constants (MIN_YEAR computed dynamically from data)
 let MIN_YEAR = 1650;    // will be recalculated from actual data
 let MAX_YEAR = 2026;    // will be recalculated from actual data
-const BRIGHTNESS_FLOOR = 0.12;   // opacity for oldest events
-const BRIGHTNESS_CEIL  = 1.0;    // opacity for newest events
-const RADIUS_FLOOR     = 4;      // marker radius for oldest
-const RADIUS_CEIL      = 13;     // marker radius for newest
-const WEIGHT_FLOOR     = 1;      // arc thickness for oldest
-const WEIGHT_CEIL      = 3.5;    // arc thickness for newest
+export const BRIGHTNESS_FLOOR = 0.12;   // opacity for oldest events
+export const BRIGHTNESS_CEIL  = 1.0;    // opacity for newest events
+export const RADIUS_FLOOR     = 4;      // marker radius for oldest
+export const RADIUS_CEIL      = 13;     // marker radius for newest
+export const WEIGHT_FLOOR     = 1;      // arc thickness for oldest
+export const WEIGHT_CEIL      = 3.5;    // arc thickness for newest
 
 /**
  * Era definitions — each event gets an era tint based on its year.
  * Used to color-code the time period on the map.
  */
-const ERAS = [
+export const ERAS = [
   { label: "Colonial",      start: 0,    end: 1800, color: "#c9a84c" },
   { label: "Antebellum",    start: 1800, end: 1870, color: "#6a8fb5" },
   { label: "Immigration",   start: 1870, end: 1920, color: "#c05040" },
@@ -184,7 +184,7 @@ const ERAS = [
   { label: "Modern",        start: 1970, end: 9999, color: "#8b7cff" },
 ];
 
-function getEra(year) {
+export function getEra(year) {
   if (!year) return ERAS[ERAS.length - 1];
   for (const era of ERAS) {
     if (year >= era.start && year < era.end) return era;
@@ -196,19 +196,19 @@ function getEra(year) {
  * Compute a 0-1 "recency" ratio for a given year relative to the visible range.
  * Older events → 0, events at maxYear → 1.
  */
-function recencyRatio(year, maxYear) {
+export function recencyRatio(year, maxYear) {
   if (!year || !maxYear || maxYear <= MIN_YEAR) return 0.5;
   return Math.max(0, Math.min(1, (year - MIN_YEAR) / (maxYear - MIN_YEAR)));
 }
 
 /** Linearly interpolate between a and b by t ∈ [0,1] */
-function lerp(a, b, t) { return a + (b - a) * t; }
+export function lerp(a, b, t) { return a + (b - a) * t; }
 
 /**
  * Brighten / saturate a hex color toward white based on ratio (0=dim, 1=full).
  * At ratio=0 we darken to ~35% brightness; at ratio=1 we return the original.
  */
-function brightenColor(hex, ratio) {
+export function brightenColor(hex, ratio) {
   // Parse hex
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
@@ -222,14 +222,14 @@ function brightenColor(hex, ratio) {
   return `rgb(${outR},${outG},${outB})`;
 }
 
-function _computeMapFog() {
-  // Compute fog distance from ORIGINAL_DATA so focus-mode filtering doesn't
+export function _computeMapFog() {
+  // Compute fog distance from S.ORIGINAL_DATA so focus-mode filtering doesn't
   // cause ancestors/relatives to disappear from the map. Shared algorithm with
   // the tree layout via computeFogDistance (defined in 04-tree.js).
-  return computeFogDistance(ORIGINAL_DATA || DATA);
+  return computeFogDistance(S.ORIGINAL_DATA || S.DATA);
 }
 
-function buildMapEvents() {
+export function buildMapEvents() {
   MAP_ALL_EVENTS = [];
 
   // The map shows ALL geo data in the database. Fog level is stored on each
@@ -242,8 +242,8 @@ function buildMapEvents() {
     return fog[pid] !== undefined ? Math.min(fog[pid], 4) : 4;
   }
 
-  // Use ORIGINAL_DATA so focus-mode filtering doesn't hide map locations
-  const src = ORIGINAL_DATA || DATA;
+  // Use S.ORIGINAL_DATA so focus-mode filtering doesn't hide map locations
+  const src = S.ORIGINAL_DATA || S.DATA;
   // Births
   for (const p of src.people) {
     if (p.birth_place) {
@@ -351,8 +351,8 @@ function buildMapEvents() {
   }
 }
 
-async function renderMap() {
-  await _geocodeReady;
+export async function renderMap() {
+  await S._geocodeReady;
   // Stop any in-flight time-lapse animation before tearing down the map, so the
   // old interval doesn't keep firing against the rebuilt map / stuck play button.
   if (mapAnimTimer) {
@@ -364,11 +364,11 @@ async function renderMap() {
       oldPlay.innerHTML = "&#9654;";
     }
   }
-  if (MAP) { MAP.remove(); MAP = null; }
+  if (S.MAP) { S.MAP.remove(); S.MAP = null; }
   MAP_MARKERS = [];
   MAP_ARCS = [];
 
-  MAP = L.map("map", {
+  S.MAP = L.map("map", {
     center: [40, -40],
     zoom: 3,
     zoomControl: true,
@@ -383,12 +383,12 @@ async function renderMap() {
   L.tileLayer(tileUrl, {
     maxZoom: 19,
     subdomains: "abcd",
-  }).addTo(MAP);
+  }).addTo(S.MAP);
 
   // Attribution (subtle)
   L.control.attribution({ prefix: false, position: "bottomright" })
     .addAttribution('&copy; <a href="https://carto.com/">CARTO</a>')
-    .addTo(MAP);
+    .addTo(S.MAP);
 
   buildMapEvents();
   plotMapMarkers(MAP_ALL_EVENTS);
@@ -399,7 +399,7 @@ async function renderMap() {
   // Fit bounds
   const allLatLngs = MAP_ALL_EVENTS.map((e) => e.latlng);
   if (allLatLngs.length > 0) {
-    MAP.fitBounds(allLatLngs, { padding: [50, 50], maxZoom: 6 });
+    S.MAP.fitBounds(allLatLngs, { padding: [50, 50], maxZoom: 6 });
   }
 
   // Wire up slider — dynamic range from data
@@ -428,7 +428,7 @@ async function renderMap() {
   }
 }
 
-function plotMapMarkers(events) {
+export function plotMapMarkers(events) {
   // Group events by person + place so each person gets their own dot
   const byPersonPlace = {};
   for (const e of events) {
@@ -475,12 +475,12 @@ function plotMapMarkers(events) {
         fillOpacity,
         color: era.color,
         weight: 2,
-      }).addTo(MAP);
+      }).addTo(S.MAP);
 
       marker.on("mouseover", (e) => {
         const primaryEvent = group.events[0];
         if (primaryEvent) {
-          const containerPt = MAP.latLngToContainerPoint(e.latlng);
+          const containerPt = S.MAP.latLngToContainerPoint(e.latlng);
           const mapEl = document.getElementById("map");
           const mapRect = mapEl.getBoundingClientRect();
           showHovercardAt(primaryEvent.personId, mapRect.left + containerPt.x, mapRect.top + containerPt.y);
@@ -510,12 +510,12 @@ function plotMapMarkers(events) {
   }
 }
 
-function buildPlacePopup(place, events) {
+export function buildPlacePopup(place, events) {
   let html = `<h4>${place}</h4>`;
   for (const e of events) {
     const year = e.year || "?";
     const dotColor = EVENT_COLORS[e.type] || "#6c7cff";
-    const person = PEOPLE_MAP[e.personId];
+    const person = S.PEOPLE_MAP[e.personId];
     const profileSrc = person?._profilePhotoPath;
     let thumbHtml = "";
     if (profileSrc) {
@@ -527,7 +527,7 @@ function buildPlacePopup(place, events) {
     let descHtml = e.desc;
     if (person) descHtml = descHtml.replace(person.fullName, personLink(e.personId));
     if (e.partner2Id) {
-      const p2 = PEOPLE_MAP[e.partner2Id];
+      const p2 = S.PEOPLE_MAP[e.partner2Id];
       if (p2) descHtml = descHtml.replace(p2.fullName, personLink(e.partner2Id));
     }
     html += `<div class="popup-event">
@@ -544,7 +544,7 @@ function buildPlacePopup(place, events) {
 // Photo thumbnail markers on map
 let MAP_PHOTO_MARKERS = [];
 
-function plotPhotoMarkers(events) {
+export function plotPhotoMarkers(events) {
   // Remove old photo markers
   for (const m of MAP_PHOTO_MARKERS) m.remove();
   MAP_PHOTO_MARKERS = [];
@@ -573,7 +573,7 @@ function plotPhotoMarkers(events) {
         iconSize: [40, 40],
         iconAnchor: [20, 20],
       });
-      const marker = L.marker(cluster.latlng, { icon }).addTo(MAP);
+      const marker = L.marker(cluster.latlng, { icon }).addTo(S.MAP);
       marker.on("click", () => {
         openLightbox("/" + firstPhoto.photoPath, "", firstPhoto.photoPath);
       });
@@ -586,7 +586,7 @@ function plotPhotoMarkers(events) {
         iconSize: [40, 40],
         iconAnchor: [20, 20],
       });
-      const marker = L.marker(cluster.latlng, { icon }).addTo(MAP);
+      const marker = L.marker(cluster.latlng, { icon }).addTo(S.MAP);
 
       // Popup with thumbnail grid
       const thumbsHtml = cluster.events.map(e =>
@@ -599,14 +599,14 @@ function plotPhotoMarkers(events) {
 }
 
 // Assign consistent colors to people for arcs
-const PERSON_COLORS = {};
-const ARC_PALETTE = [
+export const PERSON_COLORS = {};
+export const ARC_PALETTE = [
   "#6c7cff", "#ff6b8a", "#f5a623", "#4cd964", "#b066e0",
   "#e74c3c", "#4a90d9", "#d94a8c", "#50e3c2", "#f8e71c",
 ];
 let arcColorIdx = 0;
 
-function getPersonColor(personId) {
+export function getPersonColor(personId) {
   if (!PERSON_COLORS[personId]) {
     PERSON_COLORS[personId] = ARC_PALETTE[arcColorIdx % ARC_PALETTE.length];
     arcColorIdx++;
@@ -614,7 +614,7 @@ function getPersonColor(personId) {
   return PERSON_COLORS[personId];
 }
 
-function plotMigrationArcs(events) {
+export function plotMigrationArcs(events) {
   // Group events by person, sorted chronologically
   const byPerson = {};
   for (const e of events) {
@@ -650,7 +650,7 @@ function plotMigrationArcs(events) {
         weight: arcWeight,
         opacity: arcOpacity,
         dashArray: "6,4",
-      }).addTo(MAP);
+      }).addTo(S.MAP);
 
       // Arrow decorator at the end
       const arrowHead = L.circleMarker(to.latlng, {
@@ -659,7 +659,7 @@ function plotMigrationArcs(events) {
         fillOpacity: lerp(BRIGHTNESS_FLOOR, 0.9, ratio),
         color: arcColor,
         weight: 1,
-      }).addTo(MAP);
+      }).addTo(S.MAP);
 
       // Tooltip on hover
       polyline.bindTooltip(
@@ -678,7 +678,7 @@ function plotMigrationArcs(events) {
   }
 }
 
-function curvedPath(from, to) {
+export function curvedPath(from, to) {
   // Create a quadratic bezier curve between two lat/lng points
   const midLat = (from[0] + to[0]) / 2;
   const midLng = (from[1] + to[1]) / 2;
@@ -700,7 +700,7 @@ function curvedPath(from, to) {
   return points;
 }
 
-function updateMapForYear(maxYear) {
+export function updateMapForYear(maxYear) {
   const filterPersonId = document.getElementById("map-person-filter").value;
 
   // ── Markers: temporal brightness ──
@@ -781,14 +781,14 @@ function updateMapForYear(maxYear) {
   plotPhotoMarkers(filteredPhotoEvents);
 }
 
-function populateMapFilter() {
+export function populateMapFilter() {
   const select = document.getElementById("map-person-filter");
   // Clear existing options except "Everyone"
   while (select.options.length > 1) select.remove(1);
 
   // Only include people who have map events
   const peopleWithEvents = new Set(MAP_ALL_EVENTS.map((e) => e.personId));
-  const sorted = Object.values(PEOPLE_MAP)
+  const sorted = Object.values(S.PEOPLE_MAP)
     .filter((p) => peopleWithEvents.has(p.id))
     .sort((a, b) => a.fullName.localeCompare(b.fullName));
 
@@ -800,7 +800,7 @@ function populateMapFilter() {
   }
 }
 
-function setArcFlowAnimation(enabled) {
+export function setArcFlowAnimation(enabled) {
   for (const a of MAP_ARCS) {
     const el = a.polyline.getElement?.();
     if (el) {
@@ -813,7 +813,7 @@ function setArcFlowAnimation(enabled) {
   }
 }
 
-function toggleMapAnimation() {
+export function toggleMapAnimation() {
   const btn = document.getElementById("map-play");
   const slider = document.getElementById("map-time-slider");
   const yearEndLabel = document.getElementById("slider-year-end");
@@ -859,25 +859,25 @@ function toggleMapAnimation() {
 // Stats Badge
 // ═══════════════════════════════════════════════════════════════
 
-function updateStats() {
+export function updateStats() {
   const badge = document.getElementById("stats-badge");
-  const n = DATA.people.length;
+  const n = S.DATA.people.length;
 
   // Compute year span
-  const years = DATA.people.map((p) => p.birth_date ? parseInt(p.birth_date.substring(0, 4)) : null).filter(Boolean);
+  const years = S.DATA.people.map((p) => p.birth_date ? parseInt(p.birth_date.substring(0, 4)) : null).filter(Boolean);
   const minYear = years.length ? Math.min(...years) : "?";
   const maxYear = years.length ? Math.max(...years) : "?";
 
   // Compute max generation depth
   const parentsOf = {};
-  for (const r of DATA.relationships) {
+  for (const r of S.DATA.relationships) {
     if (!parentsOf[r.child_id]) parentsOf[r.child_id] = [];
     parentsOf[r.child_id].push(r.parent_id);
   }
   const hasParent = new Set(Object.keys(parentsOf));
-  const roots = DATA.people.filter((p) => !hasParent.has(p.id)).map((p) => p.id);
+  const roots = S.DATA.people.filter((p) => !hasParent.has(p.id)).map((p) => p.id);
   const childrenOf = {};
-  for (const r of DATA.relationships) {
+  for (const r of S.DATA.relationships) {
     if (!childrenOf[r.parent_id]) childrenOf[r.parent_id] = new Set();
     childrenOf[r.parent_id].add(r.child_id);
   }

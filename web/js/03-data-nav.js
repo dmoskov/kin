@@ -1,30 +1,32 @@
-// Part of the family-tree web app. Loaded as an ordered classic script.
-// See index.html for load order. Split from the former monolithic app.js.
+// Part of the family-tree web app (ES module).
+// Shared mutable state lives in S (00-state.js); functions/consts are
+// bridged onto window by 99-main.js so inline onclick handlers resolve.
+import { S } from "./00-state.js";
 
-async function loadData() {
+export async function loadData() {
   const resp = await fetch("/api/data");
-  DATA = await resp.json();
-  PEOPLE_MAP = {};
-  for (const p of DATA.people) {
+  S.DATA = await resp.json();
+  S.PEOPLE_MAP = {};
+  for (const p of S.DATA.people) {
     const name = [p.given_name, p.surname].filter(Boolean).join(" ") || p.surname;
-    PEOPLE_MAP[p.id] = { ...p, fullName: name.trim() };
+    S.PEOPLE_MAP[p.id] = { ...p, fullName: name.trim() };
   }
-  ORIGINAL_DATA = DATA;
+  S.ORIGINAL_DATA = S.DATA;
 
-  // Build PHOTOS_MAP from DATA.photos and compute _profilePhotoPath for each person
-  PHOTOS_MAP = {};
-  if (DATA.photos) {
-    for (const photo of DATA.photos) {
-      PHOTOS_MAP[photo.file_path] = photo;
+  // Build S.PHOTOS_MAP from S.DATA.photos and compute _profilePhotoPath for each person
+  S.PHOTOS_MAP = {};
+  if (S.DATA.photos) {
+    for (const photo of S.DATA.photos) {
+      S.PHOTOS_MAP[photo.file_path] = photo;
     }
     // Compute _profilePhotoPath for each person
-    for (const p of DATA.people) {
-      const person = PEOPLE_MAP[p.id];
+    for (const p of S.DATA.people) {
+      const person = S.PEOPLE_MAP[p.id];
       if (!person) continue;
       // Find their profile photo from the photos data
       let profilePath = null;
-      if (DATA.photos) {
-        for (const photo of DATA.photos) {
+      if (S.DATA.photos) {
+        for (const photo of S.DATA.photos) {
           for (const tp of photo.tagged_people || []) {
             if (tp.person_id === p.id && tp.is_profile) {
               profilePath = photo.file_path;
@@ -37,8 +39,8 @@ async function loadData() {
       person._profilePhotoPath = profilePath || (person.photo_paths || [])[0] || null;
       // Compute _profileCrop from the matching tagged_people entry
       person._profileCrop = null;
-      if (person._profilePhotoPath && DATA.photos) {
-        const profilePhoto = PHOTOS_MAP[person._profilePhotoPath];
+      if (person._profilePhotoPath && S.DATA.photos) {
+        const profilePhoto = S.PHOTOS_MAP[person._profilePhotoPath];
         if (profilePhoto) {
           const tp = (profilePhoto.tagged_people || []).find(t => t.person_id === p.id && t.is_profile);
           if (tp && tp.crop_x != null && tp.crop_w != null) {
@@ -48,15 +50,15 @@ async function loadData() {
       }
     }
   } else {
-    for (const p of DATA.people) {
-      const person = PEOPLE_MAP[p.id];
+    for (const p of S.DATA.people) {
+      const person = S.PEOPLE_MAP[p.id];
       if (person) person._profilePhotoPath = (person.photo_paths || [])[0] || null;
     }
   }
 }
 
-function personName(id) {
-  return PEOPLE_MAP[id]?.fullName || id;
+export function personName(id) {
+  return S.PEOPLE_MAP[id]?.fullName || id;
 }
 
 /**
@@ -65,12 +67,12 @@ function personName(id) {
  * @param {string} id - person ID
  * @param {number} [size=24] - pixel size
  */
-function personLink(id, label) {
+export function personLink(id, label) {
   const name = label || personName(id);
   return `<a class="person-link" data-person-id="${id}" href="javascript:void(0)">${name}</a>`;
 }
 
-function croppedImg(src, alt, size, crop, cssClass) {
+export function croppedImg(src, alt, size, crop, cssClass) {
   if (!crop) {
     return `<img class="${cssClass || 'person-thumb'}" src="/${src}" alt="${alt}" style="width:${size}px;height:${size}px" loading="lazy" />`;
   }
@@ -80,8 +82,8 @@ function croppedImg(src, alt, size, crop, cssClass) {
   return `<div class="cropped-thumb ${cssClass || ''}" style="width:${size}px;height:${size}px;border-radius:50%;overflow:hidden;position:relative;display:inline-block;flex-shrink:0"><img src="/${src}" alt="${alt}" style="position:absolute;width:${size * scale}px;height:auto;left:${tx}px;top:${ty}px" loading="lazy" /></div>`;
 }
 
-function personThumb(id, size = 24) {
-  const person = PEOPLE_MAP[id];
+export function personThumb(id, size = 24) {
+  const person = S.PEOPLE_MAP[id];
   if (!person) return "";
   const src = person._profilePhotoPath;
   if (src) {
@@ -96,7 +98,7 @@ function personThumb(id, size = 24) {
 // Router — path-based deep linking
 // ═══════════════════════════════════════════════════════════════
 
-class Router {
+export class Router {
   constructor() {
     this.routes = [];
     this._current = null;   // { route, params, query }
@@ -196,13 +198,13 @@ class Router {
   }
 }
 
-const router = new Router();
+export const router = new Router();
 
 // ═══════════════════════════════════════════════════════════════
 // Tab Navigation
 // ═══════════════════════════════════════════════════════════════
 
-function switchTab(viewName) {
+export function switchTab(viewName) {
   document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
   const tab = document.querySelector(`.tab[data-view="${viewName}"]`);
@@ -211,28 +213,28 @@ function switchTab(viewName) {
   if (view) view.classList.add("active");
 }
 
-function activeViewName() {
+export function activeViewName() {
   const el = document.querySelector(".view.active");
   return el ? el.id.replace("view-", "") : "tree";
 }
 
-function personRoutePrefix() {
+export function personRoutePrefix() {
   const v = activeViewName();
   return v === "tree" || v === "map" || v === "timeline" ? `/${v}` : "/tree";
 }
 
-function closePersonPanel() {
+export function closePersonPanel() {
   document.getElementById("person-panel").classList.add("hidden");
   d3.selectAll(".node-group").classed("selected", false);
-  if (MAP) setTimeout(() => MAP.invalidateSize(), 250);
+  if (S.MAP) setTimeout(() => S.MAP.invalidateSize(), 250);
 }
 
-function closeLightbox() {
+export function closeLightbox() {
   const lb = document.getElementById("lightbox");
   if (lb) lb.remove();
 }
 
-function applyGalleryFiltersFromQuery(query) {
+export function applyGalleryFiltersFromQuery(query) {
   if (query.year) {
     for (const v of query.year.split(",")) GALLERY_FILTERS.year.add(v);
   }
@@ -250,12 +252,12 @@ function applyGalleryFiltersFromQuery(query) {
   renderActiveFilterPills();
 }
 
-function prefillRelPickers(id1, id2) {
+export function prefillRelPickers(id1, id2) {
   const pickerA = document.getElementById("picker-a");
   const pickerB = document.getElementById("picker-b");
   if (!pickerA || !pickerB) return;
-  const personA = PEOPLE_MAP[id1];
-  const personB = PEOPLE_MAP[id2];
+  const personA = S.PEOPLE_MAP[id1];
+  const personB = S.PEOPLE_MAP[id2];
   if (personA) {
     pickerA._selectedId = id1;
     const inputA = pickerA.querySelector(".picker-search");
@@ -268,7 +270,7 @@ function prefillRelPickers(id1, id2) {
   }
 }
 
-function currentGalleryFilterQuery() {
+export function currentGalleryFilterQuery() {
   const q = {};
   if (GALLERY_FILTERS.year.size) q.year = [...GALLERY_FILTERS.year].join(",");
   if (GALLERY_FILTERS.place.size) q.place = [...GALLERY_FILTERS.place].join(",");
@@ -293,7 +295,7 @@ router.register("/tree/person/:personId", {
   layer: "overlay",
   enter({ personId }) {
     switchTab("tree");
-    if (PEOPLE_MAP[personId]) showPersonPanel(personId);
+    if (S.PEOPLE_MAP[personId]) showPersonPanel(personId);
   },
   exit() { closePersonPanel(); },
 });
@@ -302,7 +304,7 @@ router.register("/tree/person/:personId", {
 router.register("/tree/focus/:personId", {
   enter({ personId }) {
     switchTab("tree");
-    if (PEOPLE_MAP[personId]) setFocus(personId);
+    if (S.PEOPLE_MAP[personId]) setFocus(personId);
   },
   exit() { clearFocus(); },
 });
@@ -310,8 +312,8 @@ router.register("/tree/focus/:personId", {
 router.register("/tree/focus/:personId/:depth", {
   enter({ personId, depth }) {
     switchTab("tree");
-    if (PEOPLE_MAP[personId]) {
-      FOCUS_DEPTH = depth === "all" ? "all" : parseInt(depth, 10);
+    if (S.PEOPLE_MAP[personId]) {
+      S.FOCUS_DEPTH = depth === "all" ? "all" : parseInt(depth, 10);
       setFocus(personId);
     }
   },
@@ -332,7 +334,7 @@ router.register("/map/person/:personId", {
   layer: "overlay",
   enter({ personId }) {
     switchTab("map");
-    if (PEOPLE_MAP[personId]) showPersonPanel(personId);
+    if (S.PEOPLE_MAP[personId]) showPersonPanel(personId);
   },
   exit() { closePersonPanel(); },
 });
@@ -342,7 +344,7 @@ router.register("/timeline/person/:personId", {
   layer: "overlay",
   enter({ personId }) {
     switchTab("timeline");
-    if (PEOPLE_MAP[personId]) showPersonPanel(personId);
+    if (S.PEOPLE_MAP[personId]) showPersonPanel(personId);
   },
   exit() { closePersonPanel(); },
 });
@@ -362,7 +364,7 @@ router.register("/photos/view/:path+", {
   layer: "overlay",
   enter({ path }) {
     switchTab("photos");
-    const photoObj = DATA?.photos?.find(p => p.file_path === path);
+    const photoObj = S.DATA?.photos?.find(p => p.file_path === path);
     if (photoObj) openLightbox(`/${path}`, "", path);
   },
   exit() { closeLightbox(); },

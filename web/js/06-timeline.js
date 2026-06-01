@@ -1,14 +1,15 @@
-// Part of the family-tree web app. Loaded as an ordered classic script.
-// See index.html for load order. Split from the former monolithic app.js.
+// Part of the family-tree web app (ES module).
+// Shared mutable state lives in S (00-state.js); functions/consts are
+// bridged onto window by 99-main.js so inline onclick handlers resolve.
+import { S } from "./00-state.js";
 
 let TIMELINE_ALIGNED = localStorage.getItem("timelineAligned") !== "false"; // default: aligned
-let SHOW_TIMELINE_STREAM = localStorage.getItem("showTimelineStream") !== "false";
 
-function gatherTimelineEntries() {
+export function gatherTimelineEntries() {
   let entries = [];
 
   // Births & Deaths
-  for (const p of DATA.people) {
+  for (const p of S.DATA.people) {
     if (p.birth_date) {
       entries.push({
         date: p.birth_date,
@@ -36,7 +37,7 @@ function gatherTimelineEntries() {
   }
 
   // Life events
-  for (const e of DATA.events) {
+  for (const e of S.DATA.events) {
     if (e.event_type === "birth" || e.event_type === "death") continue;
     entries.push({
       date: e.date || "",
@@ -51,7 +52,7 @@ function gatherTimelineEntries() {
   }
 
   // Marriages (assign to first partner's lane, mark cross-lane)
-  for (const u of DATA.unions) {
+  for (const u of S.DATA.unions) {
     if (u.union_date) {
       const lane1 = assignLane(u.partner1_id);
       const lane2 = assignLane(u.partner2_id);
@@ -71,8 +72,8 @@ function gatherTimelineEntries() {
   }
 
   // Photo entries (gated by config)
-  if (CONFIG?.timelinePhotos !== false && DATA.photos) {
-    for (const photo of DATA.photos) {
+  if (S.CONFIG?.timelinePhotos !== false && S.DATA.photos) {
+    for (const photo of S.DATA.photos) {
       if (!photo.date) continue;
       const year = parseInt(photo.date.substring(0, 4));
       if (!year) continue;
@@ -88,7 +89,7 @@ function gatherTimelineEntries() {
         title: caption || `Photo — ${dateDisplay}`,
         desc: photo.place || "",
         place: photo.place,
-        lane: personId ? assignLane(personId) : (LANES[0]?.id || "all"),
+        lane: personId ? assignLane(personId) : (S.LANES[0]?.id || "all"),
         photoPath: photo.file_path,
         dateDisplay: dateDisplay,
       });
@@ -98,7 +99,7 @@ function gatherTimelineEntries() {
   return entries.filter((e) => e.date && e.year);
 }
 
-function renderTimeline(filterPersonId = "all") {
+export function renderTimeline(filterPersonId = "all") {
   const container = document.getElementById("timeline-entries");
 
   let entries = gatherTimelineEntries();
@@ -112,13 +113,13 @@ function renderTimeline(filterPersonId = "all") {
   entries.sort((a, b) => a.date.localeCompare(b.date));
 
   // Use configured lanes, or a single fallback lane when none are defined
-  const activeLanes = LANES.length > 0 ? LANES : [{ id: "all", label: "All", color: "var(--accent)" }];
+  const activeLanes = S.LANES.length > 0 ? S.LANES : [{ id: "all", label: "All", color: "var(--accent)" }];
 
   // Group entries by lane
   const byLane = {};
   for (const lane of activeLanes) byLane[lane.id] = [];
   for (const e of entries) {
-    const laneId = LANES.length > 0 ? e.lane : "all";
+    const laneId = S.LANES.length > 0 ? e.lane : "all";
     if (laneId && byLane[laneId]) byLane[laneId].push(e);
   }
 
@@ -146,7 +147,7 @@ function renderTimeline(filterPersonId = "all") {
 
   // Index entries by decade for the stream column
   const byDecade = {};
-  if (SHOW_TIMELINE_STREAM) {
+  if (S.SHOW_TIMELINE_STREAM) {
     for (const e of entries) {
       const decade = Math.floor(e.year / 10) * 10;
       if (!byDecade[decade]) byDecade[decade] = [];
@@ -155,10 +156,10 @@ function renderTimeline(filterPersonId = "all") {
   }
 
   // Column count: lanes + optional stream column
-  const colCount = activeLanes.length + (SHOW_TIMELINE_STREAM ? 1 : 0);
+  const colCount = activeLanes.length + (S.SHOW_TIMELINE_STREAM ? 1 : 0);
 
   // Decade-row-first layout: each decade is a row spanning all lanes so heights stay aligned
-  let html = `<div class="timeline-grid${SHOW_TIMELINE_STREAM ? " has-stream" : ""}" style="--lane-count:${colCount}">`;
+  let html = `<div class="timeline-grid${S.SHOW_TIMELINE_STREAM ? " has-stream" : ""}" style="--lane-count:${colCount}">`;
 
   // Sticky header row
   html += `<div class="timeline-row timeline-header-row">`;
@@ -170,7 +171,7 @@ function renderTimeline(filterPersonId = "all") {
         <span class="lane-count">${byLane[lane.id].length}</span>
       </div>`;
   }
-  if (SHOW_TIMELINE_STREAM) {
+  if (S.SHOW_TIMELINE_STREAM) {
     html += `<div class="timeline-cell-header tstream-col-header" style="border-bottom-color:var(--accent)">
       <span class="lane-color-dot" style="background:var(--accent)"></span>
       Stream
@@ -203,7 +204,7 @@ function renderTimeline(filterPersonId = "all") {
       html += `</div>`;
     }
     // Stream column for this decade (no decade label — the lane columns already show it)
-    if (SHOW_TIMELINE_STREAM) {
+    if (S.SHOW_TIMELINE_STREAM) {
       const streamEntries = byDecade[decade] || [];
       html += `<div class="timeline-cell tstream-cell${streamEntries.length === 0 ? " timeline-cell-empty" : ""}">`;
       html += buildStreamCellHtml(streamEntries);
@@ -224,7 +225,7 @@ function renderTimeline(filterPersonId = "all") {
   });
 }
 
-function toggleTimelineAlignment() {
+export function toggleTimelineAlignment() {
   TIMELINE_ALIGNED = !TIMELINE_ALIGNED;
   localStorage.setItem("timelineAligned", TIMELINE_ALIGNED);
   const btn = document.getElementById("timeline-align-toggle");
@@ -232,15 +233,15 @@ function toggleTimelineAlignment() {
   renderTimeline(document.getElementById("timeline-filter")?.value || "all");
 }
 
-function toggleTimelineView() {
-  SHOW_TIMELINE_STREAM = !SHOW_TIMELINE_STREAM;
-  localStorage.setItem("showTimelineStream", SHOW_TIMELINE_STREAM);
+export function toggleTimelineView() {
+  S.SHOW_TIMELINE_STREAM = !S.SHOW_TIMELINE_STREAM;
+  localStorage.setItem("showTimelineStream", S.SHOW_TIMELINE_STREAM);
   const btn = document.getElementById("timeline-view-toggle");
-  if (btn) btn.textContent = SHOW_TIMELINE_STREAM ? "Hide Stream" : "Stream";
+  if (btn) btn.textContent = S.SHOW_TIMELINE_STREAM ? "Hide Stream" : "Stream";
   renderTimeline(document.getElementById("timeline-filter")?.value || "all");
 }
 
-function buildStreamCellHtml(entries) {
+export function buildStreamCellHtml(entries) {
   let html = "";
   for (const e of entries) {
     const color = e.type === "photo"
@@ -281,9 +282,9 @@ function buildStreamCellHtml(entries) {
   return html;
 }
 
-function populateTimelineFilter() {
+export function populateTimelineFilter() {
   const select = document.getElementById("timeline-filter");
-  const sorted = Object.values(PEOPLE_MAP).sort((a, b) =>
+  const sorted = Object.values(S.PEOPLE_MAP).sort((a, b) =>
     a.fullName.localeCompare(b.fullName)
   );
   for (const p of sorted) {

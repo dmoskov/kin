@@ -1,5 +1,7 @@
-// Part of the family-tree web app. Loaded as an ordered classic script.
-// See index.html for load order. Split from the former monolithic app.js.
+// Part of the family-tree web app (ES module).
+// Shared mutable state lives in S (00-state.js); functions/consts are
+// bridged onto window by 99-main.js so inline onclick handlers resolve.
+import { S } from "./00-state.js";
 
 /**
  * Family Tree Dashboard
@@ -19,7 +21,7 @@
  * Returns a new File (JPEG) if resized, or the original File if no resize needed
  * or if it's not a resizable image type (e.g. PDF).
  */
-function resizeImageFile(file, maxDim = 4096, quality = 0.85) {
+export function resizeImageFile(file, maxDim = 4096, quality = 0.85) {
   return new Promise((resolve) => {
     // Only resize raster image types
     if (!file.type.startsWith("image/") || file.type === "image/gif") {
@@ -71,31 +73,22 @@ function resizeImageFile(file, maxDim = 4096, quality = 0.85) {
 // Data & Config Loading
 // ═══════════════════════════════════════════════════════════════
 
-let DATA = null;
-let PEOPLE_MAP = {};
-let CONFIG = null;
-let FOCUS_PERSON_ID = null;
-let FOCUS_DEPTH = 1;
-let ORIGINAL_DATA = null;
-let ORIGINAL_CENTER_ID_A = null;
-let ORIGINAL_CENTER_ID_B = null;
-let PHOTOS_MAP = {};
 
-async function loadConfig() {
+export async function loadConfig() {
   try {
     const resp = await fetch("/api/config");
-    CONFIG = await resp.json();
+    S.CONFIG = await resp.json();
   } catch (_) {
-    CONFIG = { familyName: "Family Tree", subtitle: "", heritage: [], palette: {}, timelinePhotos: true, heritageLabels: false };
+    S.CONFIG = { familyName: "Family Tree", subtitle: "", heritage: [], palette: {}, timelinePhotos: true, heritageLabels: false };
   }
 }
 
-function applyConfig() {
-  if (!CONFIG) return;
+export function applyConfig() {
+  if (!S.CONFIG) return;
 
   // Center IDs from config — only as initial defaults (viewer selection takes precedence)
-  if (CONFIG.centerIdA && !CENTER_ID_A) CENTER_ID_A = CONFIG.centerIdA;
-  if (CONFIG.centerIdB && !CENTER_ID_B) CENTER_ID_B = CONFIG.centerIdB;
+  if (S.CONFIG.centerIdA && !S.CENTER_ID_A) S.CENTER_ID_A = S.CONFIG.centerIdA;
+  if (S.CONFIG.centerIdB && !S.CENTER_ID_B) S.CENTER_ID_B = S.CONFIG.centerIdB;
 
   // Config lanes are no longer used — lanes are always auto-computed from the
   // viewer's center couple to keep the experience viewer-relative.
@@ -103,25 +96,25 @@ function applyConfig() {
   // Header personalization (just defaults; updateDynamicHeader overrides when a viewer is set)
   const titleEl = document.getElementById("family-title");
   const subtitleEl = document.getElementById("family-subtitle");
-  if (CONFIG.familyName) titleEl.textContent = CONFIG.familyName;
+  if (S.CONFIG.familyName) titleEl.textContent = S.CONFIG.familyName;
   // If no familyName configured, it will be set dynamically after lanes
   // are computed (see _updateHeaderFromLanes called after autoComputeLanes)
-  if (CONFIG.subtitle) subtitleEl.textContent = CONFIG.subtitle;
+  if (S.CONFIG.subtitle) subtitleEl.textContent = S.CONFIG.subtitle;
   else subtitleEl.style.display = "none";
 
   // Apply fonts
   const root = document.documentElement;
-  if (CONFIG.headerFont) root.style.setProperty("--header-font", CONFIG.headerFont);
-  if (CONFIG.bodyFont) root.style.setProperty("--body-font", CONFIG.bodyFont);
+  if (S.CONFIG.headerFont) root.style.setProperty("--header-font", S.CONFIG.headerFont);
+  if (S.CONFIG.bodyFont) root.style.setProperty("--body-font", S.CONFIG.bodyFont);
 
   // Apply palette (theme-aware)
   applyPalette();
 }
 
-function applyPalette() {
-  if (!CONFIG?.palette) return;
+export function applyPalette() {
+  if (!S.CONFIG?.palette) return;
   const isLight = document.documentElement.getAttribute("data-theme") === "light";
-  const pal = isLight ? CONFIG.palette.light : CONFIG.palette.dark;
+  const pal = isLight ? S.CONFIG.palette.light : S.CONFIG.palette.dark;
   if (!pal) return;
 
   const root = document.documentElement;
@@ -146,9 +139,9 @@ function applyPalette() {
  * Match a place string to a heritage region from config.
  * Returns the matching heritage entry or null.
  */
-function matchHeritage(place) {
-  if (!place || !CONFIG?.heritage?.length) return null;
-  for (const h of CONFIG.heritage) {
+export function matchHeritage(place) {
+  if (!place || !S.CONFIG?.heritage?.length) return null;
+  for (const h of S.CONFIG.heritage) {
     for (const m of (h.match || [])) {
       if (place.includes(m)) return h;
     }

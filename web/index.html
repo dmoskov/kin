@@ -443,24 +443,9 @@
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <!-- app.js was split into ordered modules (classic scripts, shared global scope).
-       Load order matters: state/helpers first, bootstrap (99-main.js) last. -->
-  <script src="/js/01-core.js"></script>
-  <script src="/js/02-lanes.js"></script>
-  <script src="/js/03-data-nav.js"></script>
-  <script src="/js/04-tree.js"></script>
-  <script src="/js/05-panel.js"></script>
-  <script src="/js/06-timeline.js"></script>
-  <script src="/js/07-relationship.js"></script>
-  <script src="/js/08-map.js"></script>
-  <script src="/js/09-init.js"></script>
-  <script src="/js/10-lightbox.js"></script>
-  <script src="/js/11-documents.js"></script>
-  <script src="/js/12-photos.js"></script>
-  <script src="/js/13-google-photos.js"></script>
-  <script src="/js/14-hovercard.js"></script>
-  <script src="/js/15-auth.js"></script>
-  <script src="/js/16-gallery.js"></script>
-  <script src="/js/99-main.js"></script>
+  <!-- App is ES modules: 99-main.js is the entry; it imports every module
+       (preserving side-effect order) and bridges their exports onto window.
+       d3/Leaflet/GSI above remain classic globals the modules read via window. -->
+  <script type="module" src="/js/99-main.js"></script>
 </body>
 </html>

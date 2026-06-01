@@ -62,7 +62,7 @@ if (missingFns.length) fail("missing function globals: " + missingFns.join(", ")
 
 // 2. Data loaded.
 const firstPersonId = await page.evaluate(() =>
-  typeof DATA !== "undefined" && DATA && DATA.people.length ? DATA.people[0].id : null
+  window.S && window.S.DATA && window.S.DATA.people.length ? window.S.DATA.people[0].id : null
 );
 if (!firstPersonId) fail("DATA did not load (no people)");
 
@@ -99,7 +99,6 @@ for (const [view, counter] of tabChecks) {
 await page.evaluate(() => window.switchTab && window.switchTab("map"));
 await page.waitForTimeout(1200);
 const markerState = await page.evaluate(() => ({
-  markers: typeof MAP_ALL_EVENTS !== "undefined" ? MAP_ALL_EVENTS.length : -1,
   leaflet: document.querySelectorAll(".leaflet-marker-icon, #map svg path, #map .leaflet-interactive").length,
 }));
 
@@ -107,7 +106,7 @@ await browser.close();
 
 console.log("Function globals:", JSON.stringify(fns));
 console.log(`firstPerson: ${firstPersonId} | tree groups: ${svgGroups}`);
-console.log(`map events: ${markerState.markers} | leaflet shapes: ${markerState.leaflet}`);
+console.log(`leaflet shapes: ${markerState.leaflet}`);
 
 if (errors.length) {
   console.error("\nErrors:\n  " + errors.join("\n  "));

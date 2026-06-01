@@ -1,15 +1,17 @@
-// Part of the family-tree web app. Loaded as an ordered classic script.
-// See index.html for load order. Split from the former monolithic app.js.
+// Part of the family-tree web app (ES module).
+// Shared mutable state lives in S (00-state.js); functions/consts are
+// bridged onto window by 99-main.js so inline onclick handlers resolve.
+import { S } from "./00-state.js";
 
-function populateRelSelectors() {
-  const sorted = Object.values(PEOPLE_MAP).sort((a, b) =>
+export function populateRelSelectors() {
+  const sorted = Object.values(S.PEOPLE_MAP).sort((a, b) =>
     a.fullName.localeCompare(b.fullName)
   );
   setupPersonPicker("picker-a", sorted, computeRelationship);
   setupPersonPicker("picker-b", sorted, computeRelationship);
 }
 
-function setupPersonPicker(pickerId, people, onChange) {
+export function setupPersonPicker(pickerId, people, onChange) {
   const container = document.getElementById(pickerId);
   const input = container.querySelector(".picker-search");
   const list = container.querySelector(".picker-list");
@@ -59,7 +61,7 @@ function setupPersonPicker(pickerId, people, onChange) {
   renderList("");
 }
 
-function computeRelationship() {
+export function computeRelationship() {
   const pickerA = document.getElementById("picker-a");
   const pickerB = document.getElementById("picker-b");
   const idA = (pickerA && pickerA._selectedId) || "";
@@ -94,17 +96,17 @@ function computeRelationship() {
   `;
 }
 
-function calculateRelationship(idA, idB) {
+export function calculateRelationship(idA, idB) {
   // Build parent map
   const parentsOf = {};
-  for (const r of DATA.relationships) {
+  for (const r of S.DATA.relationships) {
     if (!parentsOf[r.child_id]) parentsOf[r.child_id] = [];
     parentsOf[r.child_id].push(r.parent_id);
   }
 
   // Build spouses map
   const spousesOf = {};
-  for (const u of DATA.unions) {
+  for (const u of S.DATA.unions) {
     if (!spousesOf[u.partner1_id]) spousesOf[u.partner1_id] = [];
     if (!spousesOf[u.partner2_id]) spousesOf[u.partner2_id] = [];
     spousesOf[u.partner1_id].push(u.partner2_id);
@@ -136,7 +138,7 @@ function calculateRelationship(idA, idB) {
     common.sort((a, b) => a[1] + a[2] - (b[1] + b[2]));
     if (common.length === 0) return null;
     const [, dA, dB] = common[0];
-    const g = PEOPLE_MAP[toId]?.gender || "unknown";
+    const g = S.PEOPLE_MAP[toId]?.gender || "unknown";
     if (dA === 0) return descendantLabel(dB, g);
     if (dB === 0) return ancestorLabel(dA, g);
     if (dA === 1 && dB === 1) return g === "male" ? "brother" : g === "female" ? "sister" : "sibling";
@@ -154,8 +156,8 @@ function calculateRelationship(idA, idB) {
   const blood = bloodOnly(idA, idB);
   if (blood) return blood;
 
-  const gA = PEOPLE_MAP[idA]?.gender || "unknown";
-  const gB = PEOPLE_MAP[idB]?.gender || "unknown";
+  const gA = S.PEOPLE_MAP[idA]?.gender || "unknown";
+  const gB = S.PEOPLE_MAP[idB]?.gender || "unknown";
   const spA = spousesOf[idA] || [];
   const spB = spousesOf[idB] || [];
 
@@ -195,7 +197,7 @@ function calculateRelationship(idA, idB) {
   return "no relation found";
 }
 
-function toInLaw(lbl) {
+export function toInLaw(lbl) {
   const map = {
     "father": "father-in-law", "mother": "mother-in-law", "parent": "parent-in-law",
     "brother": "brother-in-law", "sister": "sister-in-law", "sibling": "sibling-in-law",
@@ -209,7 +211,7 @@ function toInLaw(lbl) {
   return null;
 }
 
-function reverseInLaw(lbl, gB) {
+export function reverseInLaw(lbl, gB) {
   if (lbl === "son" || lbl === "daughter" || lbl === "child")
     return gB === "male" ? "son-in-law" : gB === "female" ? "daughter-in-law" : "child-in-law";
   if (lbl === "brother" || lbl === "sister" || lbl === "sibling")
@@ -219,14 +221,14 @@ function reverseInLaw(lbl, gB) {
   return null;
 }
 
-function ancestorLabel(gen, gender) {
+export function ancestorLabel(gen, gender) {
   if (gen === 1) return gender === "male" ? "father" : gender === "female" ? "mother" : "parent";
   if (gen === 2) return gender === "male" ? "grandfather" : gender === "female" ? "grandmother" : "grandparent";
   const prefix = "great-".repeat(gen - 2);
   return gender === "male" ? `${prefix}grandfather` : gender === "female" ? `${prefix}grandmother` : `${prefix}grandparent`;
 }
 
-function descendantLabel(gen, gender) {
+export function descendantLabel(gen, gender) {
   if (gen === 1) return gender === "male" ? "son" : gender === "female" ? "daughter" : "child";
   if (gen === 2) return gender === "male" ? "grandson" : gender === "female" ? "granddaughter" : "grandchild";
   const prefix = "great-".repeat(gen - 2);

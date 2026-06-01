@@ -1,21 +1,23 @@
-// Part of the family-tree web app. Loaded as an ordered classic script.
-// See index.html for load order. Split from the former monolithic app.js.
+// Part of the family-tree web app (ES module).
+// Shared mutable state lives in S (00-state.js); functions/consts are
+// bridged onto window by 99-main.js so inline onclick handlers resolve.
+import { S } from "./00-state.js";
 
 let _googleOAuthToken = null;
 let _pickerPopup = null;
 let _pickerPollTimer = null;
 
-const _PHOTOS_PICKER_SCOPE = "https://www.googleapis.com/auth/photospicker.mediaitems.readonly";
-const _PHOTOS_PICKER_API = "https://photospicker.googleapis.com/v1";
+export const _PHOTOS_PICKER_SCOPE = "https://www.googleapis.com/auth/photospicker.mediaitems.readonly";
+export const _PHOTOS_PICKER_API = "https://photospicker.googleapis.com/v1";
 
 /**
  * Show or hide the "From Google Photos" button based on config.
  * Called during openPhotoPicker.
  */
-function _updateGooglePhotosBtn() {
+export function _updateGooglePhotosBtn() {
   const btn = document.getElementById("google-photos-btn");
   if (!btn) return;
-  if (CONFIG?.googleClientId && CONFIG?.googlePhotosEnabled !== false) {
+  if (S.CONFIG?.googleClientId && S.CONFIG?.googlePhotosEnabled !== false) {
     btn.classList.remove("hidden");
   } else {
     btn.classList.add("hidden");
@@ -26,14 +28,14 @@ function _updateGooglePhotosBtn() {
  * Get an OAuth2 access token for the Photos Picker API.
  * Uses the non-sensitive photospicker.mediaitems.readonly scope.
  */
-function _getPhotosPickerToken() {
+export function _getPhotosPickerToken() {
   return new Promise((resolve, reject) => {
     if (typeof google === "undefined" || !google.accounts?.oauth2) {
       reject(new Error("Google Identity Services not loaded — try refreshing"));
       return;
     }
     const tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: CONFIG.googleClientId,
+      client_id: S.CONFIG.googleClientId,
       scope: _PHOTOS_PICKER_SCOPE,
       callback: (tokenResponse) => {
         if (tokenResponse.error) {
@@ -52,7 +54,7 @@ function _getPhotosPickerToken() {
  * Create a Photos Picker session.
  * Returns { id, pickerUri, expireTime, mediaItemsSet }.
  */
-async function _createPickerSession(token) {
+export async function _createPickerSession(token) {
   const resp = await fetch(`${_PHOTOS_PICKER_API}/sessions`, {
     method: "POST",
     headers: {
@@ -72,7 +74,7 @@ async function _createPickerSession(token) {
  * Poll a picker session until the user finishes picking (mediaItemsSet: true)
  * or the popup is closed.
  */
-function _pollPickerSession(sessionId, token) {
+export function _pollPickerSession(sessionId, token) {
   return new Promise((resolve, reject) => {
     const poll = async () => {
       // If the popup was closed without picking, abort
@@ -112,7 +114,7 @@ function _pollPickerSession(sessionId, token) {
  * Fetch the picked media items from a completed session.
  * Returns an array of { id, baseUrl, mimeType, createTime, ... }.
  */
-async function _getPickedMediaItems(sessionId, token) {
+export async function _getPickedMediaItems(sessionId, token) {
   const items = [];
   let pageToken = null;
 
@@ -141,9 +143,9 @@ async function _getPickedMediaItems(sessionId, token) {
  * Creates a session, opens the picker in a popup, polls for completion,
  * then downloads picked photos server-side.
  */
-async function openGooglePhotosPicker() {
-  if (!PHOTO_PICKER_PERSON) return;
-  const personId = PHOTO_PICKER_PERSON;
+export async function openGooglePhotosPicker() {
+  if (!S.PHOTO_PICKER_PERSON) return;
+  const personId = S.PHOTO_PICKER_PERSON;
 
   const progressEl = document.getElementById("upload-progress");
   const progressText = document.getElementById("upload-progress-text");
@@ -226,13 +228,13 @@ async function openGooglePhotosPicker() {
     }
 
     // Update local caches
-    const person = PEOPLE_MAP[personId];
+    const person = S.PEOPLE_MAP[personId];
     if (person && Array.isArray(result.photo_paths)) {
       person.photo_paths = result.photo_paths;
     }
-    if (ALL_PHOTOS && result.photo_paths) {
+    if (S.ALL_PHOTOS && result.photo_paths) {
       for (const p of result.photo_paths) {
-        if (!ALL_PHOTOS.includes(p)) ALL_PHOTOS.push(p);
+        if (!S.ALL_PHOTOS.includes(p)) S.ALL_PHOTOS.push(p);
       }
     }
 

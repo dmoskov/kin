@@ -1,31 +1,33 @@
-// Part of the family-tree web app. Loaded as an ordered classic script.
-// See index.html for load order. Split from the former monolithic app.js.
+// Part of the family-tree web app (ES module).
+// Shared mutable state lives in S (00-state.js); functions/consts are
+// bridged onto window by 99-main.js so inline onclick handlers resolve.
+import { S } from "./00-state.js";
 
-function showPersonPanel(personId) {
-  const person = PEOPLE_MAP[personId];
+export function showPersonPanel(personId) {
+  const person = S.PEOPLE_MAP[personId];
   if (!person) return;
 
   const panel = document.getElementById("person-panel");
   const content = document.getElementById("panel-content");
 
   // Find family connections
-  const parents = DATA.relationships
+  const parents = S.DATA.relationships
     .filter((r) => r.child_id === personId)
     .map((r) => r.parent_id);
-  const children = DATA.relationships
+  const children = S.DATA.relationships
     .filter((r) => r.parent_id === personId)
     .map((r) => r.child_id);
-  const partners = DATA.unions
+  const partners = S.DATA.unions
     .filter((u) => u.partner1_id === personId || u.partner2_id === personId)
     .map((u) => (u.partner1_id === personId ? u.partner2_id : u.partner1_id));
-  const events = DATA.events
+  const events = S.DATA.events
     .filter((e) => e.person_id === personId)
     .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
 
   // Show viewer-relative relationship if a viewer is set and this isn't the viewer
   let relBadge = "";
-  if (CENTER_ID_A && personId !== CENTER_ID_A) {
-    const relLabel = calculateRelationship(CENTER_ID_A, personId);
+  if (S.CENTER_ID_A && personId !== S.CENTER_ID_A) {
+    const relLabel = calculateRelationship(S.CENTER_ID_A, personId);
     if (relLabel && relLabel !== "no relation found") {
       relBadge = `<div class="panel-rel-badge">Your ${relLabel}</div>`;
     }
@@ -35,7 +37,7 @@ function showPersonPanel(personId) {
     <div class="panel-name">${person.fullName}</div>
     ${relBadge}
     <span class="panel-gender ${person.gender}">${person.gender}</span>
-    ${!CONFIG?.editorsEnabled || AUTH_USER?.is_editor ? `<button class="panel-edit-btn" onclick="openEditPersonForm('${personId}')">Edit</button>` : ""}
+    ${!S.CONFIG?.editorsEnabled || S.AUTH_USER?.is_editor ? `<button class="panel-edit-btn" onclick="openEditPersonForm('${personId}')">Edit</button>` : ""}
     <div id="edit-person-form" class="add-relative-form hidden"></div>
   `;
 
@@ -47,7 +49,7 @@ function showPersonPanel(personId) {
 
   // Heritage badge for panel
   const panelHeritage = matchHeritage(person.birth_place);
-  if (panelHeritage && CONFIG?.heritageLabels !== false) {
+  if (panelHeritage && S.CONFIG?.heritageLabels !== false) {
     html += `<span class="panel-heritage-badge" style="color:${panelHeritage.color};border:1px solid ${panelHeritage.color}40;margin-top:8px">${panelHeritage.region}</span>`;
   }
 
@@ -86,7 +88,7 @@ function showPersonPanel(personId) {
   }
 
   // Add relative buttons (editors only)
-  if (!CONFIG?.editorsEnabled || AUTH_USER?.is_editor) {
+  if (!S.CONFIG?.editorsEnabled || S.AUTH_USER?.is_editor) {
     html += `<div class="panel-section panel-add-relative-section">
       <h3>Add Relative</h3>
       <div class="panel-add-relative-btns">
@@ -120,7 +122,7 @@ function showPersonPanel(personId) {
 
   content.innerHTML = html;
   panel.classList.remove("hidden");
-  if (MAP) setTimeout(() => MAP.invalidateSize(), 250);
+  if (S.MAP) setTimeout(() => S.MAP.invalidateSize(), 250);
 }
 
 document.getElementById("close-panel").addEventListener("click", () => {
@@ -134,7 +136,7 @@ document.getElementById("close-panel").addEventListener("click", () => {
 // Add Relative Form
 // ═══════════════════════════════════════════════════════════════
 
-function openAddRelativeForm(personId, relationship) {
+export function openAddRelativeForm(personId, relationship) {
   const form = document.getElementById("add-relative-form");
   if (!form) return;
 
@@ -188,7 +190,7 @@ function openAddRelativeForm(personId, relationship) {
 
 let _arfSelectedPersonId = null;
 
-function switchAddRelativeMode(personId, relationship, mode) {
+export function switchAddRelativeMode(personId, relationship, mode) {
   const createSection = document.getElementById("arf-create-section");
   const linkSection = document.getElementById("arf-link-section");
   if (!createSection || !linkSection) return;
@@ -215,25 +217,25 @@ function switchAddRelativeMode(personId, relationship, mode) {
   if (errorEl) errorEl.classList.add("hidden");
 }
 
-function _getLinkExcludeIds(personId, relationship) {
+export function _getLinkExcludeIds(personId, relationship) {
   const exclude = new Set([personId]);
   if (relationship === "parent") {
-    DATA.relationships.filter(r => r.child_id === personId).forEach(r => exclude.add(r.parent_id));
+    S.DATA.relationships.filter(r => r.child_id === personId).forEach(r => exclude.add(r.parent_id));
   } else if (relationship === "child") {
-    DATA.relationships.filter(r => r.parent_id === personId).forEach(r => exclude.add(r.child_id));
+    S.DATA.relationships.filter(r => r.parent_id === personId).forEach(r => exclude.add(r.child_id));
   } else if (relationship === "sibling") {
-    const parentIds = DATA.relationships.filter(r => r.child_id === personId).map(r => r.parent_id);
+    const parentIds = S.DATA.relationships.filter(r => r.child_id === personId).map(r => r.parent_id);
     for (const pid of parentIds) {
-      DATA.relationships.filter(r => r.parent_id === pid).forEach(r => exclude.add(r.child_id));
+      S.DATA.relationships.filter(r => r.parent_id === pid).forEach(r => exclude.add(r.child_id));
     }
   } else if (relationship === "partner") {
-    DATA.unions.filter(u => u.partner1_id === personId || u.partner2_id === personId)
+    S.DATA.unions.filter(u => u.partner1_id === personId || u.partner2_id === personId)
       .forEach(u => { exclude.add(u.partner1_id); exclude.add(u.partner2_id); });
   }
   return exclude;
 }
 
-function filterLinkCandidates(personId, relationship) {
+export function filterLinkCandidates(personId, relationship) {
   const input = document.getElementById("arf-search");
   const resultsEl = document.getElementById("arf-search-results");
   if (!input || !resultsEl) return;
@@ -242,7 +244,7 @@ function filterLinkCandidates(personId, relationship) {
   if (!q) { resultsEl.classList.add("hidden"); return; }
 
   const exclude = _getLinkExcludeIds(personId, relationship);
-  const matches = DATA.people.filter(p => {
+  const matches = S.DATA.people.filter(p => {
     if (exclude.has(p.id)) return false;
     const full = ((p.given_name || "") + " " + (p.surname || "")).toLowerCase();
     return full.includes(q);
@@ -267,7 +269,7 @@ function filterLinkCandidates(personId, relationship) {
   resultsEl.classList.remove("hidden");
 }
 
-function selectLinkPerson(selectedId, personId, relationship) {
+export function selectLinkPerson(selectedId, personId, relationship) {
   _arfSelectedPersonId = selectedId;
   const resultsEl = document.getElementById("arf-search-results");
   if (resultsEl) resultsEl.classList.add("hidden");
@@ -276,7 +278,7 @@ function selectLinkPerson(selectedId, personId, relationship) {
 
   const selEl = document.getElementById("arf-selected-person");
   if (selEl) {
-    const p = PEOPLE_MAP[selectedId];
+    const p = S.PEOPLE_MAP[selectedId];
     const dates = [p?.birth_date, p?.death_date].filter(Boolean).join(" – ");
     selEl.innerHTML = `
       ${personThumb(selectedId, 32)}
@@ -292,7 +294,7 @@ function selectLinkPerson(selectedId, personId, relationship) {
   if (btn) btn.disabled = false;
 }
 
-function clearLinkSelection(personId, relationship) {
+export function clearLinkSelection(personId, relationship) {
   _arfSelectedPersonId = null;
   const selEl = document.getElementById("arf-selected-person");
   if (selEl) { selEl.classList.add("hidden"); selEl.innerHTML = ""; }
@@ -301,21 +303,21 @@ function clearLinkSelection(personId, relationship) {
   document.getElementById("arf-search")?.focus();
 }
 
-function _arfShowError(errorEl, msg) {
+export function _arfShowError(errorEl, msg) {
   if (errorEl) {
     errorEl.textContent = msg;
     errorEl.classList.remove("hidden");
   }
 }
 
-function _siblingParentIds(personId) {
-  return DATA.relationships.filter((r) => r.child_id === personId).map((r) => r.parent_id);
+export function _siblingParentIds(personId) {
+  return S.DATA.relationships.filter((r) => r.child_id === personId).map((r) => r.parent_id);
 }
 
 // Create the union/relationship(s) linking relativeId to personId, then reload
 // and refresh. Shared by submitLinkExisting and submitAddRelative. Returns true
 // on success, false after showing an error.
-async function linkRelative(personId, relationship, relativeId, errorEl) {
+export async function linkRelative(personId, relationship, relativeId, errorEl) {
   if (relationship === "partner") {
     try {
       const res = await fetch("/api/unions", {
@@ -369,13 +371,13 @@ async function linkRelative(personId, relationship, relativeId, errorEl) {
   }
 
   await loadData();
-  autoComputeLanes(CENTER_ID_A, CENTER_ID_B);
+  autoComputeLanes(S.CENTER_ID_A, S.CENTER_ID_B);
   refreshAllViews();
   showPersonPanel(personId);
   return true;
 }
 
-async function submitLinkExisting(personId, relationship) {
+export async function submitLinkExisting(personId, relationship) {
   const errorEl = document.getElementById("arf-error");
   if (!_arfSelectedPersonId) {
     _arfShowError(errorEl, "Select a person first.");
@@ -384,7 +386,7 @@ async function submitLinkExisting(personId, relationship) {
   await linkRelative(personId, relationship, _arfSelectedPersonId, errorEl);
 }
 
-async function submitAddRelative(personId, relationship) {
+export async function submitAddRelative(personId, relationship) {
   const givenName = document.getElementById("arf-given").value.trim();
   const surname = document.getElementById("arf-surname").value.trim();
   const gender = document.getElementById("arf-gender").value;
@@ -434,11 +436,11 @@ async function submitAddRelative(personId, relationship) {
 // Edit Person Form
 // ═══════════════════════════════════════════════════════════════
 
-function openEditPersonForm(personId) {
+export function openEditPersonForm(personId) {
   const form = document.getElementById("edit-person-form");
   if (!form) return;
 
-  const person = PEOPLE_MAP[personId];
+  const person = S.PEOPLE_MAP[personId];
   if (!person) return;
 
   const esc = (v) => (v || "").replace(/'/g, "&#39;");
@@ -475,7 +477,7 @@ function openEditPersonForm(personId) {
   document.getElementById("epf-given").focus();
 }
 
-async function submitEditPerson(personId) {
+export async function submitEditPerson(personId) {
   const givenName = document.getElementById("epf-given").value.trim();
   const surname = document.getElementById("epf-surname").value.trim();
   const gender = document.getElementById("epf-gender").value;
@@ -518,7 +520,7 @@ async function submitEditPerson(personId) {
   }
 
   await loadData();
-  autoComputeLanes(CENTER_ID_A, CENTER_ID_B);
+  autoComputeLanes(S.CENTER_ID_A, S.CENTER_ID_B);
   refreshAllViews();
   showPersonPanel(personId);
 }

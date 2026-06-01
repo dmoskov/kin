@@ -1,25 +1,27 @@
-// Part of the family-tree web app. Loaded as an ordered classic script.
-// See index.html for load order. Split from the former monolithic app.js.
+// Part of the family-tree web app (ES module).
+// Shared mutable state lives in S (00-state.js); functions/consts are
+// bridged onto window by 99-main.js so inline onclick handlers resolve.
+import { S } from "./00-state.js";
 
-async function init() {
+export async function init() {
   await loadConfig();
   await loadData();
-  _geocodeReady = prefetchGeocode();  // fire-and-forget; map awaits before rendering
+  S._geocodeReady = prefetchGeocode();  // fire-and-forget; map awaits before rendering
   await checkAuth();
   applyConfig();
   // Set up viewer before the first render — this determines the center couple,
   // lanes, and fog-of-war for ALL views
   initViewingAs();
   // Always auto-compute lanes from the viewer's center couple
-  autoComputeLanes(CENTER_ID_A, CENTER_ID_B);
-  updateDynamicHeader(CENTER_ID_A, CENTER_ID_B);
+  autoComputeLanes(S.CENTER_ID_A, S.CENTER_ID_B);
+  updateDynamicHeader(S.CENTER_ID_A, S.CENTER_ID_B);
   updateStats();
   renderTree();
   renderTimeline();
   populateTimelineFilter();
   // Initialize stream toggle button state
   const viewToggle = document.getElementById("timeline-view-toggle");
-  if (viewToggle) viewToggle.textContent = SHOW_TIMELINE_STREAM ? "Hide Stream" : "Stream";
+  if (viewToggle) viewToggle.textContent = S.SHOW_TIMELINE_STREAM ? "Hide Stream" : "Stream";
   populateRelSelectors();
   prefillRelationshipCalculator();
   initPhotoGalleryFilters();
@@ -30,11 +32,11 @@ async function init() {
   if (typeof window._showOnboardingIfEmpty === "function") window._showOnboardingIfEmpty();
 
   document.getElementById("focus-depth-select")?.addEventListener("change", (e) => {
-    if (FOCUS_PERSON_ID) {
-      FOCUS_DEPTH = e.target.value === "all" ? "all" : parseInt(e.target.value, 10);
+    if (S.FOCUS_PERSON_ID) {
+      S.FOCUS_DEPTH = e.target.value === "all" ? "all" : parseInt(e.target.value, 10);
       applyFocus();
-      const depthStr = FOCUS_DEPTH === "all" ? "all" : String(FOCUS_DEPTH);
-      router.navigate(`/tree/focus/${FOCUS_PERSON_ID}/${depthStr}`, { replace: true });
+      const depthStr = S.FOCUS_DEPTH === "all" ? "all" : String(S.FOCUS_DEPTH);
+      router.navigate(`/tree/focus/${S.FOCUS_PERSON_ID}/${depthStr}`, { replace: true });
     }
   });
 
@@ -46,8 +48,8 @@ async function init() {
       if (!mapInitialized) {
         mapInitialized = true;
         renderMap();
-      } else if (MAP) {
-        MAP.invalidateSize();
+      } else if (S.MAP) {
+        S.MAP.invalidateSize();
       }
     }
   });
@@ -56,7 +58,7 @@ async function init() {
   // Resize handler
   window.addEventListener("resize", () => {
     renderTree();
-    if (MAP) MAP.invalidateSize();
+    if (S.MAP) S.MAP.invalidateSize();
   });
 
   // Apply URL state (deep linking) — suppress history push since we're restoring
@@ -67,14 +69,14 @@ async function init() {
 // Theme Toggle (light / dark)
 // ═══════════════════════════════════════════════════════════════
 
-function initTheme() {
+export function initTheme() {
   const saved = localStorage.getItem("ft-theme");
   const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
   const theme = saved || (prefersDark ? "dark" : "light");
   applyTheme(theme);
 }
 
-function applyTheme(theme) {
+export function applyTheme(theme) {
   const btn = document.getElementById("theme-toggle");
   if (theme === "light") {
     document.documentElement.setAttribute("data-theme", "light");

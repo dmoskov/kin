@@ -1,13 +1,13 @@
-// Part of the family-tree web app. Loaded as an ordered classic script.
-// See index.html for load order. Split from the former monolithic app.js.
+// Part of the family-tree web app (ES module).
+// Shared mutable state lives in S (00-state.js); functions/consts are
+// bridged onto window by 99-main.js so inline onclick handlers resolve.
+import { S } from "./00-state.js";
 
-let PHOTO_PICKER_PERSON = null;
-let ALL_PHOTOS = null;
 let _photoPickerPasteHandler = null;
 
 // ── Toast notification ────────────────────────────────────────────────
 
-function showToast(message, type = "success") {
+export function showToast(message, type = "success") {
   const toast = document.getElementById("toast");
   if (!toast) return;
   toast.textContent = message;
@@ -24,8 +24,8 @@ function showToast(message, type = "success") {
 // Build the inner HTML of the panel's photos section (the photo grid plus the
 // "+ Manage Photos" button). Shared by showPersonPanel (full render) and
 // _renderPanelPhotos (picker-refresh render) so the markup stays in sync.
-function buildPanelPhotosInnerHtml(personId) {
-  const person = PEOPLE_MAP[personId];
+export function buildPanelPhotosInnerHtml(personId) {
+  const person = S.PEOPLE_MAP[personId];
   if (!person) return "";
   const photos = person.photo_paths || [];
   const captions = person.photo_captions || {};
@@ -42,7 +42,7 @@ function buildPanelPhotosInnerHtml(personId) {
       if (captions[src]) {
         html += `<div class="panel-photo-caption">${captions[src]}</div>`;
       }
-      const photoInfo = PHOTOS_MAP[src];
+      const photoInfo = S.PHOTOS_MAP[src];
       if (photoInfo) {
         const others = (photoInfo.tagged_people || []).filter(tp => tp.person_id !== personId);
         if (others.length > 0) {
@@ -61,14 +61,14 @@ function buildPanelPhotosInnerHtml(personId) {
     }
     html += `</div>`;
   }
-  if (!CONFIG?.editorsEnabled || AUTH_USER?.is_editor) {
+  if (!S.CONFIG?.editorsEnabled || S.AUTH_USER?.is_editor) {
     html += `<button class="panel-add-photo-btn" onclick="openPhotoPicker('${personId}')">+ Manage Photos</button>`;
   }
   return html;
 }
 
-function _renderPanelPhotos(personId) {
-  const person = PEOPLE_MAP[personId];
+export function _renderPanelPhotos(personId) {
+  const person = S.PEOPLE_MAP[personId];
   if (!person) return;
   const section = document.querySelector("#panel-content .panel-photos-section");
   if (!section) return; // panel isn't currently showing this person
@@ -77,7 +77,7 @@ function _renderPanelPhotos(personId) {
 
 // Wire up a caption <input> to save on blur/Enter without rebuilding
 // anything on success — so focus and cursor position are never lost.
-function _wireCaptionInput(input, personId) {
+export function _wireCaptionInput(input, personId) {
   let _saving = false;
   let _lastSaved = input.value;
   const saveCaption = async () => {
@@ -98,7 +98,7 @@ function _wireCaptionInput(input, personId) {
         return;
       }
       _lastSaved = caption;
-      const person = PEOPLE_MAP[personId];
+      const person = S.PEOPLE_MAP[personId];
       if (person) {
         person.photo_captions = person.photo_captions || {};
         if (caption) person.photo_captions[photo] = caption;
@@ -120,13 +120,13 @@ function _wireCaptionInput(input, personId) {
   input.addEventListener("click", (e) => e.stopPropagation());
 }
 
-function _isProfilePhoto(personId, photoPath) {
-  const person = PEOPLE_MAP[personId];
+export function _isProfilePhoto(personId, photoPath) {
+  const person = S.PEOPLE_MAP[personId];
   return person && person._profilePhotoPath === photoPath;
 }
 
-function _buildPhotoMetadataFields(photoPath) {
-  const photoData = PHOTOS_MAP[photoPath];
+export function _buildPhotoMetadataFields(photoPath) {
+  const photoData = S.PHOTOS_MAP[photoPath];
   if (!photoData) return "";
   const date = photoData.date || "";
   const circa = photoData.date_circa ? "checked" : "";
@@ -150,8 +150,8 @@ function _buildPhotoMetadataFields(photoPath) {
   `;
 }
 
-function _buildTagChips(photoPath, currentPersonId) {
-  const photoData = PHOTOS_MAP[photoPath];
+export function _buildTagChips(photoPath, currentPersonId) {
+  const photoData = S.PHOTOS_MAP[photoPath];
   if (!photoData) return "";
   const otherPeople = (photoData.tagged_people || []).filter(tp => tp.person_id !== currentPersonId);
   if (otherPeople.length === 0) {
@@ -164,12 +164,12 @@ function _buildTagChips(photoPath, currentPersonId) {
   return `<div class="photo-tag-chips">${chips}<button class="photo-tag-add" data-photo="${photoPath}">+ Tag</button></div>`;
 }
 
-function _openTagSearch(anchorBtn, currentPersonId) {
+export function _openTagSearch(anchorBtn, currentPersonId) {
   // Remove any existing search dropdown
   document.querySelectorAll(".photo-tag-search").forEach(el => el.remove());
 
   const photoPath = anchorBtn.dataset.photo;
-  const photoData = PHOTOS_MAP[photoPath];
+  const photoData = S.PHOTOS_MAP[photoPath];
   if (!photoData) return;
 
   const dropdown = document.createElement("div");
@@ -190,7 +190,7 @@ function _openTagSearch(anchorBtn, currentPersonId) {
   input.addEventListener("input", () => {
     const q = input.value.toLowerCase().trim();
     if (!q) { results.innerHTML = ""; return; }
-    const matches = Object.values(PEOPLE_MAP)
+    const matches = Object.values(S.PEOPLE_MAP)
       .filter(p => !alreadyTagged.has(p.id) && p.fullName.toLowerCase().includes(q))
       .slice(0, 5);
     results.innerHTML = matches.map(p =>
@@ -206,7 +206,7 @@ function _openTagSearch(anchorBtn, currentPersonId) {
             body: JSON.stringify({ person_id: tagId }),
           });
           if (resp.ok) {
-            const person = PEOPLE_MAP[tagId];
+            const person = S.PEOPLE_MAP[tagId];
             photoData.tagged_people = photoData.tagged_people || [];
             photoData.tagged_people.push({
               person_id: tagId,
@@ -238,15 +238,15 @@ function _openTagSearch(anchorBtn, currentPersonId) {
   }, 0);
 }
 
-function _buildPickerGrid(personId) {
-  const person = PEOPLE_MAP[personId];
+export function _buildPickerGrid(personId) {
+  const person = S.PEOPLE_MAP[personId];
   if (!person) return;
 
   const grid = document.getElementById("photo-picker-grid");
   const assigned = new Set(person.photo_paths || []);
   const captions = person.photo_captions || {};
 
-  grid.innerHTML = ALL_PHOTOS.map((photo) => {
+  grid.innerHTML = S.ALL_PHOTOS.map((photo) => {
     const sel = assigned.has(photo) ? "selected" : "";
     const cap = captions[photo] || "";
     return `
@@ -255,7 +255,7 @@ function _buildPickerGrid(personId) {
         <div class="check">&#10003;</div>
         ${sel ? `<button class="photo-profile-star ${_isProfilePhoto(personId, photo) ? 'active' : ''}" data-photo="${photo}" title="Set as profile photo">&#9733;</button>` : ""}
         ${sel ? `<button class="photo-crop-btn" data-photo="${photo}" title="Crop for profile">&#8910;</button>` : ""}
-        ${sel && (PHOTOS_MAP[photo]?.face_regions || []).length > 0 ? `<span class="photo-face-badge" title="Has face tags">&#9786;</span>` : ""}
+        ${sel && (S.PHOTOS_MAP[photo]?.face_regions || []).length > 0 ? `<span class="photo-face-badge" title="Has face tags">&#9786;</span>` : ""}
         ${sel ? `<input class="photo-caption-input" type="text" placeholder="Add caption..." value="${cap.replace(/"/g, '&quot;')}" data-photo="${photo}" />` : ""}
         ${sel ? _buildPhotoMetadataFields(photo) : ""}
         ${sel ? _buildTagChips(photo, personId) : ""}
@@ -290,7 +290,7 @@ function _buildPickerGrid(personId) {
           input.type = "text";
           input.placeholder = "Add caption...";
           input.dataset.photo = photo;
-          input.value = (PEOPLE_MAP[personId]?.photo_captions || {})[photo] || "";
+          input.value = (S.PEOPLE_MAP[personId]?.photo_captions || {})[photo] || "";
           _wireCaptionInput(input, personId);
           item.appendChild(input);
         }
@@ -328,7 +328,7 @@ function _buildPickerGrid(personId) {
 
         // Update local cache from server's authoritative response so
         // the side panel re-renders with the correct set.
-        const p = PEOPLE_MAP[personId];
+        const p = S.PEOPLE_MAP[personId];
         if (p && Array.isArray(data.photo_paths)) {
           p.photo_paths = data.photo_paths;
           if (wasSelected && p.photo_captions) {
@@ -364,7 +364,7 @@ function _buildPickerGrid(personId) {
     star.addEventListener("click", async (e) => {
       e.stopPropagation();
       const photoPath = star.dataset.photo;
-      const photoData = PHOTOS_MAP[photoPath];
+      const photoData = S.PHOTOS_MAP[photoPath];
       if (!photoData) return;
       try {
         const resp = await fetch(`/api/people/${personId}/profile-photo`, {
@@ -373,7 +373,7 @@ function _buildPickerGrid(personId) {
           body: JSON.stringify({ photo_id: photoData.id }),
         });
         if (resp.ok) {
-          const person = PEOPLE_MAP[personId];
+          const person = S.PEOPLE_MAP[personId];
           if (person) person._profilePhotoPath = photoPath;
           grid.querySelectorAll(".photo-profile-star").forEach(s => s.classList.remove("active"));
           star.classList.add("active");
@@ -401,7 +401,7 @@ function _buildPickerGrid(personId) {
       const chip = x.closest(".photo-tag-chip");
       const photoPath = chip.dataset.photo;
       const tagPersonId = chip.dataset.person;
-      const photoData = PHOTOS_MAP[photoPath];
+      const photoData = S.PHOTOS_MAP[photoPath];
       if (!photoData) return;
       try {
         const resp = await fetch(`/api/photos/${photoData.id}/tag/${tagPersonId}`, { method: "DELETE" });
@@ -419,7 +419,7 @@ function _buildPickerGrid(personId) {
   // Wire photo metadata autosave
   grid.querySelectorAll(".photo-meta-fields").forEach((container) => {
     const photoPath = container.dataset.photo;
-    const photoData = PHOTOS_MAP[photoPath];
+    const photoData = S.PHOTOS_MAP[photoPath];
     if (!photoData) return;
 
     const saveMetadata = async () => {
@@ -463,10 +463,10 @@ function _buildPickerGrid(personId) {
   });
 }
 
-function openCropModal(personId, photoPath) {
-  const person = PEOPLE_MAP[personId];
+export function openCropModal(personId, photoPath) {
+  const person = S.PEOPLE_MAP[personId];
   if (!person) return;
-  const photoData = PHOTOS_MAP[photoPath];
+  const photoData = S.PHOTOS_MAP[photoPath];
 
   const existing = document.getElementById("crop-modal");
   if (existing) existing.remove();
@@ -614,9 +614,9 @@ function openCropModal(personId, photoPath) {
   });
 }
 
-async function openPhotoPicker(personId) {
-  PHOTO_PICKER_PERSON = personId;
-  const person = PEOPLE_MAP[personId];
+export async function openPhotoPicker(personId) {
+  S.PHOTO_PICKER_PERSON = personId;
+  const person = S.PEOPLE_MAP[personId];
   if (!person) return;
 
   const overlay = document.getElementById("photo-picker-overlay");
@@ -625,11 +625,11 @@ async function openPhotoPicker(personId) {
   title.textContent = `Photos — ${person.fullName}`;
 
   // Load available photos (cache after first load)
-  if (!ALL_PHOTOS) {
+  if (!S.ALL_PHOTOS) {
     const resp = await fetch("/api/photos");
     const raw = await resp.json();
     // API may return rich objects or flat strings (pre-migration)
-    ALL_PHOTOS = raw.map(p => typeof p === "string" ? p : p.file_path);
+    S.ALL_PHOTOS = raw.map(p => typeof p === "string" ? p : p.file_path);
   }
 
   _buildPickerGrid(personId);
@@ -697,7 +697,7 @@ async function openPhotoPicker(personId) {
   overlay.classList.remove("hidden");
 }
 
-async function _uploadFiles(files, personId, progressEl, progressText) {
+export async function _uploadFiles(files, personId, progressEl, progressText) {
   if (!files || files.length === 0) return;
 
   progressEl.classList.remove("hidden");
@@ -724,7 +724,7 @@ async function _uploadFiles(files, personId, progressEl, progressText) {
 
       if (resp.ok && data.path) {
         // Auto-assign to this person.
-        const assignResp = await fetch(`/api/people/${PHOTO_PICKER_PERSON}/photos`, {
+        const assignResp = await fetch(`/api/people/${S.PHOTO_PICKER_PERSON}/photos`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ photo_paths: [data.path] }),
@@ -732,10 +732,10 @@ async function _uploadFiles(files, personId, progressEl, progressText) {
         const assignData = await assignResp.json().catch(() => ({}));
         if (assignResp.ok) {
           if (Array.isArray(assignData.photo_paths)) {
-            const p = PEOPLE_MAP[PHOTO_PICKER_PERSON];
+            const p = S.PEOPLE_MAP[S.PHOTO_PICKER_PERSON];
             if (p) p.photo_paths = assignData.photo_paths;
           }
-          if (!ALL_PHOTOS.includes(data.path)) ALL_PHOTOS.push(data.path);
+          if (!S.ALL_PHOTOS.includes(data.path)) S.ALL_PHOTOS.push(data.path);
           uploaded++;
         } else {
           errors.push(`${file.name}: ${assignData.error || "could not attach"}`);
@@ -767,13 +767,13 @@ async function _uploadFiles(files, personId, progressEl, progressText) {
   }
 }
 
-function closePhotoPicker() {
+export function closePhotoPicker() {
   if (_photoPickerPasteHandler) {
     document.removeEventListener("paste", _photoPickerPasteHandler);
     _photoPickerPasteHandler = null;
   }
   document.getElementById("photo-picker-overlay").classList.add("hidden");
-  PHOTO_PICKER_PERSON = null;
+  S.PHOTO_PICKER_PERSON = null;
 }
 
 document.getElementById("photo-picker-close").addEventListener("click", closePhotoPicker);

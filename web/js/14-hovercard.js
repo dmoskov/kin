@@ -1,11 +1,13 @@
-// Part of the family-tree web app. Loaded as an ordered classic script.
-// See index.html for load order. Split from the former monolithic app.js.
+// Part of the family-tree web app (ES module).
+// Shared mutable state lives in S (00-state.js); functions/consts are
+// bridged onto window by 99-main.js so inline onclick handlers resolve.
+import { S } from "./00-state.js";
 
 let _hovercardTimer = null;
 let _hovercardVisible = false;
 
-function buildHovercardHtml(personId) {
-  const person = PEOPLE_MAP[personId];
+export function buildHovercardHtml(personId) {
+  const person = S.PEOPLE_MAP[personId];
   if (!person) return "";
 
   const photoHtml = person._profilePhotoPath
@@ -24,17 +26,17 @@ function buildHovercardHtml(personId) {
 
   // Viewer-relative relationship
   let relHtml = "";
-  if (CENTER_ID_A && personId !== CENTER_ID_A) {
-    const relLabel = calculateRelationship(CENTER_ID_A, personId);
+  if (S.CENTER_ID_A && personId !== S.CENTER_ID_A) {
+    const relLabel = calculateRelationship(S.CENTER_ID_A, personId);
     if (relLabel && relLabel !== "no relation found") {
       relHtml = `<div class="hovercard-rel">Your ${relLabel}</div>`;
     }
   }
 
-  const parents = DATA.relationships
+  const parents = S.DATA.relationships
     .filter((r) => r.child_id === personId)
     .map((r) => r.parent_id);
-  const children = DATA.relationships
+  const children = S.DATA.relationships
     .filter((r) => r.parent_id === personId)
     .map((r) => r.child_id);
   const familyCount = parents.length + children.length;
@@ -58,7 +60,7 @@ function buildHovercardHtml(personId) {
   `;
 }
 
-function showHovercardAt(personId, x, y) {
+export function showHovercardAt(personId, x, y) {
   const hc = document.getElementById("hovercard");
   if (!hc) return;
   const html = buildHovercardHtml(personId);
@@ -80,12 +82,12 @@ function showHovercardAt(personId, x, y) {
   hc.style.left = `${left}px`;
 }
 
-function showHovercard(personId, anchorEl) {
+export function showHovercard(personId, anchorEl) {
   const rect = anchorEl.getBoundingClientRect();
   showHovercardAt(personId, rect.left + rect.width / 2, rect.top);
 }
 
-function hideHovercard() {
+export function hideHovercard() {
   clearTimeout(_hovercardTimer);
   _hovercardTimer = null;
   const hc = document.getElementById("hovercard");
@@ -95,7 +97,7 @@ function hideHovercard() {
   }
 }
 
-function scheduleHideHovercard(delay = 150) {
+export function scheduleHideHovercard(delay = 150) {
   clearTimeout(_hovercardTimer);
   _hovercardTimer = setTimeout(() => {
     hideHovercard();

@@ -1,22 +1,23 @@
-// Part of the family-tree web app. Loaded as an ordered classic script.
-// See index.html for load order. Split from the former monolithic app.js.
+// Part of the family-tree web app (ES module).
+// Shared mutable state lives in S (00-state.js); functions/consts are
+// bridged onto window by 99-main.js so inline onclick handlers resolve.
+import { S } from "./00-state.js";
 
-let AUTH_USER = null; // { person_id, name, email } or null
 
-async function checkAuth() {
+export async function checkAuth() {
   try {
     const resp = await fetch("/api/auth/me");
     if (resp.ok) {
-      AUTH_USER = await resp.json();
+      S.AUTH_USER = await resp.json();
       return true;
     }
   } catch (_) {}
-  AUTH_USER = null;
+  S.AUTH_USER = null;
   return false;
 }
 
 /** Called by Google Sign-In when user signs in */
-async function handleGoogleSignIn(response) {
+export async function handleGoogleSignIn(response) {
   try {
     const resp = await fetch("/api/auth/google", {
       method: "POST",
@@ -25,7 +26,7 @@ async function handleGoogleSignIn(response) {
     });
     const data = await resp.json();
     if (resp.ok) {
-      AUTH_USER = data;
+      S.AUTH_USER = data;
       applyAuth();
       // Re-center on the authenticated person (only if they have a real person record)
       if (!data.person_id.startsWith("editor:")) {
@@ -41,11 +42,11 @@ async function handleGoogleSignIn(response) {
   }
 }
 
-async function handleLogout() {
+export async function handleLogout() {
   try {
     await fetch("/api/auth/logout", { method: "POST" });
   } catch (_) {}
-  AUTH_USER = null;
+  S.AUTH_USER = null;
   applyAuth();
 }
 
