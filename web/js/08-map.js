@@ -701,6 +701,8 @@ export function curvedPath(from, to) {
 }
 
 export function updateMapForYear(maxYear) {
+  const badge = document.getElementById("map-year-badge");
+  if (badge) badge.textContent = maxYear;
   const filterPersonId = document.getElementById("map-person-filter").value;
 
   // ── Markers: temporal brightness ──
@@ -817,6 +819,7 @@ export function toggleMapAnimation() {
   const btn = document.getElementById("map-play");
   const slider = document.getElementById("map-time-slider");
   const yearEndLabel = document.getElementById("slider-year-end");
+  const badge = document.getElementById("map-year-badge");
 
   if (mapAnimTimer) {
     // Stop
@@ -825,6 +828,7 @@ export function toggleMapAnimation() {
     btn.classList.remove("playing");
     btn.innerHTML = "&#9654;";
     setArcFlowAnimation(false);
+    badge?.classList.remove("visible");
     return;
   }
 
@@ -835,6 +839,7 @@ export function toggleMapAnimation() {
   btn.classList.add("playing");
   btn.innerHTML = "&#9646;&#9646;";
   setArcFlowAnimation(true);
+  badge?.classList.add("visible");
 
   mapAnimTimer = setInterval(() => {
     // Step faster for wider year ranges (roughly constant animation duration ~6s)
@@ -847,6 +852,7 @@ export function toggleMapAnimation() {
       btn.classList.remove("playing");
       btn.innerHTML = "&#9654;";
       setArcFlowAnimation(false);
+      badge?.classList.remove("visible");
       return;
     }
     slider.value = year;
@@ -899,3 +905,17 @@ export function updateStats() {
 // Init
 // ═══════════════════════════════════════════════════════════════
 
+
+// ── Map legend toggle (collapsible, collapsed by default on small screens) ──
+const _mapLegendToggle = document.getElementById("map-legend-toggle");
+const _mapLegends = document.getElementById("map-legends");
+if (_mapLegendToggle && _mapLegends) {
+  if (window.matchMedia("(max-width: 768px)").matches) {
+    _mapLegends.classList.add("collapsed");
+    _mapLegendToggle.setAttribute("aria-expanded", "false");
+  }
+  _mapLegendToggle.addEventListener("click", () => {
+    const collapsed = _mapLegends.classList.toggle("collapsed");
+    _mapLegendToggle.setAttribute("aria-expanded", String(!collapsed));
+  });
+}

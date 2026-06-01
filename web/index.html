@@ -137,6 +137,7 @@
     <section id="view-map" class="view" role="tabpanel" aria-labelledby="tab-map">
       <div class="map-wrapper">
         <div id="map"></div>
+        <div id="map-year-badge" class="map-year-badge" aria-hidden="true"></div>
         <div class="map-controls">
           <div class="map-filter">
             <select id="map-person-filter">
@@ -149,7 +150,8 @@
             <input type="range" id="map-time-slider" min="1650" max="2026" value="2026" step="1">
             <span class="slider-label" id="slider-year-end">2026</span>
           </div>
-          <div class="map-legends">
+          <button id="map-legend-toggle" class="map-legend-toggle" aria-expanded="true" aria-controls="map-legends">Legend</button>
+          <div class="map-legends" id="map-legends">
             <div class="map-legend">
               <span class="legend-item"><span class="legend-dot" style="background:var(--event-birth)"></span>Birth</span>
               <span class="legend-item"><span class="legend-dot" style="background:#888"></span>Death</span>

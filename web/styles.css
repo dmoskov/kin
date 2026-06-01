@@ -4744,3 +4744,44 @@ select.ge-input { padding: 3px 4px; }
 }
 
 .picker-item-active { background: var(--surface-hover); }
+
+
+/* ── Map: active-year badge + collapsible legend ──────────── */
+.map-year-badge {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  padding: 6px 20px;
+  font-family: var(--header-font);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.map-year-badge.visible { opacity: 0.96; }
+
+.map-legend-toggle { display: none; } /* desktop: legend always shown */
+
+@media (max-width: 768px) {
+  .map-legend-toggle {
+    display: inline-block;
+    padding: 6px 12px;
+    font: inherit;
+    font-size: 12px;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+  }
+  .map-legends.collapsed { display: none; }
+}
