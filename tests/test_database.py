@@ -4,15 +4,13 @@ Every test uses a fresh in-memory database (no file I/O, fast, isolated).
 """
 
 import pytest
-import tempfile
-import os
 
-from models.person import Gender, Person
-from models.relationship import Relationship, RelationshipType, Union
-from models.event import EventType, LifeEvent
-from models.tree import FamilyTree
-from database.connection import init_db, get_connection
+from database.connection import get_connection, init_db
 from database.repository import TreeRepository
+from models.event import EventType, LifeEvent
+from models.person import Gender, Person
+from models.relationship import Relationship, Union
+from models.tree import FamilyTree
 
 
 @pytest.fixture

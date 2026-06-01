@@ -19,17 +19,13 @@ import logging
 import os
 import re
 import time
+from functools import wraps
 from pathlib import Path
 
-from functools import wraps
-
-from flask import Flask, jsonify, request, send_from_directory, abort, session
+from flask import Flask, abort, jsonify, request, send_from_directory, session
 
 from database.connection import init_db
 from database.repository import TreeRepository
-from storage import photo_storage
-
-logger = logging.getLogger(__name__)
 from import_export.json_io import (
     _article_to_dict,
     _citation_to_dict,
@@ -39,6 +35,9 @@ from import_export.json_io import (
     _source_to_dict,
     _union_to_dict,
 )
+from storage import photo_storage
+
+logger = logging.getLogger(__name__)
 
 
 # ── Paths ──────────────────────────────────────────────────────────────
@@ -402,7 +401,7 @@ def api_photos():
 
 # ── Register blueprints ───────────────────────────────────────────────
 
-from routes import ALL_BLUEPRINTS
+from routes import ALL_BLUEPRINTS  # noqa: E402  (imported here so app is defined first)
 
 for bp in ALL_BLUEPRINTS:
     app.register_blueprint(bp)
@@ -417,10 +416,10 @@ def serve(port: int = 8000) -> None:
         print(f"Error: web directory not found at {WEB_DIR}")
         return
 
-    print(f"\n  Family Tree Dashboard")
+    print("\n  Family Tree Dashboard")
     print(f"  http://localhost:{port}")
     print(f"  API: http://localhost:{port}/api/data")
-    print(f"\n  Press Ctrl+C to stop.\n")
+    print("\n  Press Ctrl+C to stop.\n")
 
     app.run(host="0.0.0.0", port=port, debug=True)
 

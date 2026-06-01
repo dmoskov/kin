@@ -16,7 +16,8 @@ import time
 import urllib.parse
 import urllib.request
 
-from database.connection import get_connection, _use_postgres as _is_pg
+from database.connection import _use_postgres as _is_pg
+from database.connection import get_connection
 
 logger = logging.getLogger(__name__)
 

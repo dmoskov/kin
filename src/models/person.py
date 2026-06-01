@@ -4,7 +4,6 @@ The atomic node. Every relationship, event, and traversal starts from a Person.
 """
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
 
 class Gender(Enum):
@@ -36,16 +35,16 @@ class Person:
     given_name: str
     surname: str
     gender: Gender = Gender.UNKNOWN
-    birth_date: Optional[str] = None
-    birth_place: Optional[str] = None
-    death_date: Optional[str] = None
-    death_place: Optional[str] = None
-    maiden_name: Optional[str] = None
+    birth_date: str | None = None
+    birth_place: str | None = None
+    death_date: str | None = None
+    death_place: str | None = None
+    maiden_name: str | None = None
     nicknames: list[str] = field(default_factory=list)
     notes: str = ""
     photo_paths: list[str] = field(default_factory=list)
     photo_captions: dict[str, str] = field(default_factory=dict)
-    email: Optional[str] = None
+    email: str | None = None
 
     @property
     def full_name(self) -> str:
@@ -56,13 +55,13 @@ class Person:
         return self.death_date is None
 
     @property
-    def birth_year(self) -> Optional[int]:
+    def birth_year(self) -> int | None:
         if self.birth_date:
             return int(self.birth_date[:4])
         return None
 
     @property
-    def death_year(self) -> Optional[int]:
+    def death_year(self) -> int | None:
         if self.death_date:
             return int(self.death_date[:4])
         return None

@@ -12,9 +12,9 @@ Uses a synthetic 3-generation family for testing:
   ┌───┴───┐
   Kid Fay  Kid Gus
 """
-from models.person import Person, Gender
+from models.event import EventType, LifeEvent
+from models.person import Gender, Person
 from models.relationship import Relationship, Union
-from models.event import LifeEvent, EventType
 from models.tree import FamilyTree
 
 

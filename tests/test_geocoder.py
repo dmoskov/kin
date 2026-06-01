@@ -10,7 +10,6 @@ import pytest
 
 import geocoder as geocoder_mod
 
-
 # ── Helpers ───────────────────────────────────────────────────────────
 
 

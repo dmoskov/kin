@@ -5,7 +5,6 @@ moves, education. They give the tree its story beyond just birth-marriage-death.
 """
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 
 class EventType(Enum):
@@ -34,14 +33,14 @@ class LifeEvent:
     """
     person_id: str
     event_type: EventType
-    date: Optional[str] = None          # ISO date (partial OK)
-    end_date: Optional[str] = None      # for spans (education, career, residence)
-    place: Optional[str] = None
+    date: str | None = None          # ISO date (partial OK)
+    end_date: str | None = None      # for spans (education, career, residence)
+    place: str | None = None
     description: str = ""
-    source: Optional[str] = None        # where we learned this (document, oral, etc.)
+    source: str | None = None        # where we learned this (document, oral, etc.)
 
     @property
-    def year(self) -> Optional[int]:
+    def year(self) -> int | None:
         if self.date:
             return int(self.date[:4])
         return None

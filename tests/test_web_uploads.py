@@ -15,16 +15,12 @@ they're hermetic and fast.
 from __future__ import annotations
 
 import io
-import json
-import os
 import struct
 import zlib
-from pathlib import Path
 
 import pytest
 
 from models.person import Gender, Person
-
 
 # ── PNG / JPG / GIF / WEBP byte helpers ──────────────────────────────────
 
@@ -86,8 +82,9 @@ def app_client(tmp_path, monkeypatch):
 
     # Import after env is set so the module picks it up, and redirect
     # PRIVATE_DIR to tmp_path.
-    import web_server
     import importlib
+
+    import web_server
     importlib.reload(web_server)
     web_server.PRIVATE_DIR = tmp_path
     web_server.app.config["TESTING"] = True
@@ -340,8 +337,9 @@ class TestPhotoAssociation:
         """Regression guard: source code must not use raw ``conn.execute``
         with '?' placeholders in the photo-association endpoints. Those only
         work on SQLite and silently break in production PostgreSQL."""
-        from routes.photos import api_add_photos, api_remove_photo, api_set_photo_caption
         import inspect
+
+        from routes.photos import api_add_photos, api_remove_photo, api_set_photo_caption
         for name, fn in [
             ("api_add_photos", api_add_photos),
             ("api_remove_photo", api_remove_photo),

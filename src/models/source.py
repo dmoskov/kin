@@ -5,7 +5,6 @@ This enables structured provenance tracking: "Where did we learn this?"
 """
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 
 class SourceType(Enum):
@@ -33,10 +32,10 @@ class Source:
     id: str
     name: str
     source_type: SourceType = SourceType.OTHER
-    author: Optional[str] = None
-    date: Optional[str] = None
+    author: str | None = None
+    date: str | None = None
     description: str = ""
-    url: Optional[str] = None
+    url: str | None = None
 
     def __repr__(self) -> str:
         return f"Source({self.id}, {self.name!r})"

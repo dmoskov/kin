@@ -8,7 +8,6 @@ Everything else (siblings, grandparents, cousins) is computed by traversal.
 """
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 
 class RelationshipType(Enum):
@@ -42,10 +41,10 @@ class Union:
     """
     partner1_id: str
     partner2_id: str
-    union_date: Optional[str] = None     # ISO date
-    union_place: Optional[str] = None
-    end_date: Optional[str] = None       # divorce or death date
-    end_reason: Optional[str] = None     # "divorce", "death", "annulment"
+    union_date: str | None = None     # ISO date
+    union_place: str | None = None
+    end_date: str | None = None       # divorce or death date
+    end_reason: str | None = None     # "divorce", "death", "annulment"
     notes: str = ""
 
     @property

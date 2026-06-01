@@ -5,7 +5,6 @@ parents, marriages) into a single chronological timeline.
 """
 
 from dataclasses import dataclass
-from typing import Optional
 
 from models.event import EventType
 from models.tree import FamilyTree
@@ -15,10 +14,10 @@ from models.tree import FamilyTree
 class TimelineEntry:
     """A single entry in a chronological timeline."""
 
-    date: Optional[str]
+    date: str | None
     description: str
     event_type: str
-    related_person_id: Optional[str] = None
+    related_person_id: str | None = None
 
 
 def person_timeline(tree: FamilyTree, person_id: str) -> list[TimelineEntry]:

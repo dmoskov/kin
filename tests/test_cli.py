@@ -3,16 +3,15 @@
 Commands that hit the database use a temporary SQLite DB.
 """
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from cli import build_parser, main, COMMANDS
+from cli import COMMANDS, build_parser, main
 from database.connection import init_db
 from database.repository import TreeRepository
 from models.person import Gender, Person
 from models.relationship import Relationship
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────
 
@@ -369,6 +368,7 @@ class TestCommands:
         mock_web_server.serve = mock_serve
         with patch.dict("sys.modules", {"web_server": mock_web_server}):
             import importlib
+
             import cli as cli_mod
 
             importlib.reload(cli_mod)

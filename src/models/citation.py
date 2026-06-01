@@ -6,7 +6,6 @@ optionally scoped to a specific field (e.g., "birth_date").
 """
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 
 class EntityType(Enum):
@@ -39,7 +38,7 @@ class Citation:
     source_id: str
     entity_type: EntityType
     entity_id: str
-    field_name: Optional[str] = None
+    field_name: str | None = None
     excerpt: str = ""
     confidence: Confidence = Confidence.CONFIRMED
     notes: str = ""

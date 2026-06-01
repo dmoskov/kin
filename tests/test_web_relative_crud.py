@@ -31,8 +31,9 @@ def app_client(tmp_path, monkeypatch):
 
     init_db(db_path)
 
-    import web_server
     import importlib
+
+    import web_server
 
     importlib.reload(web_server)
     web_server.PRIVATE_DIR = tmp_path

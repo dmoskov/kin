@@ -16,11 +16,10 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Optional
 
+from models.event import EventType, LifeEvent
 from models.person import Gender, Person
 from models.relationship import Relationship, Union
-from models.event import EventType, LifeEvent
 from models.tree import FamilyTree
 
 # Maps GEDCOM month abbreviations to numeric months.
@@ -48,7 +47,7 @@ _LINE_RE = re.compile(
 )
 
 
-def _parse_gedcom_date(raw: str) -> Optional[str]:
+def _parse_gedcom_date(raw: str) -> str | None:
     """Convert a GEDCOM date string to an ISO-ish date (YYYY, YYYY-MM, or YYYY-MM-DD).
 
     Handles formats like:
@@ -100,9 +99,9 @@ def _gedcom_sex_to_gender(sex: str) -> Gender:
     return mapping.get(sex.strip().upper(), Gender.UNKNOWN)
 
 
-def _tokenize(text: str) -> list[tuple[int, Optional[str], str, str]]:
+def _tokenize(text: str) -> list[tuple[int, str | None, str, str]]:
     """Parse raw GEDCOM text into a list of (level, xref, tag, value) tuples."""
-    lines: list[tuple[int, Optional[str], str, str]] = []
+    lines: list[tuple[int, str | None, str, str]] = []
     for raw_line in text.splitlines():
         raw_line = raw_line.strip()
         if not raw_line:
@@ -124,16 +123,16 @@ def _tokenize(text: str) -> list[tuple[int, Optional[str], str, str]]:
 
 
 def _process_indi(
-    tokens: list[tuple[int, Optional[str], str, str]], start: int, xref: str
+    tokens: list[tuple[int, str | None, str, str]], start: int, xref: str
 ) -> tuple[Person, list[LifeEvent]]:
     """Process an INDI record starting at *start* and return a Person + events."""
     given = ""
     surname = ""
     gender = Gender.UNKNOWN
-    birth_date: Optional[str] = None
-    birth_place: Optional[str] = None
-    death_date: Optional[str] = None
-    death_place: Optional[str] = None
+    birth_date: str | None = None
+    birth_place: str | None = None
+    death_date: str | None = None
+    death_place: str | None = None
     notes = ""
     events: list[LifeEvent] = []
 
@@ -206,16 +205,16 @@ def _process_indi(
 
 
 def _process_fam(
-    tokens: list[tuple[int, Optional[str], str, str]],
+    tokens: list[tuple[int, str | None, str, str]],
     start: int,
     xref: str,
-) -> tuple[Optional[Union], list[Relationship], list[LifeEvent]]:
+) -> tuple[Union | None, list[Relationship], list[LifeEvent]]:
     """Process a FAM record. Returns a Union (if two partners), Relationships, and events."""
-    husb: Optional[str] = None
-    wife: Optional[str] = None
+    husb: str | None = None
+    wife: str | None = None
     children: list[str] = []
-    marr_date: Optional[str] = None
-    marr_place: Optional[str] = None
+    marr_date: str | None = None
+    marr_place: str | None = None
     events: list[LifeEvent] = []
 
     i = start + 1
@@ -244,7 +243,7 @@ def _process_fam(
         i += 1
 
     # Build union
-    union: Optional[Union] = None
+    union: Union | None = None
     if husb and wife:
         union = Union(
             partner1_id=husb,

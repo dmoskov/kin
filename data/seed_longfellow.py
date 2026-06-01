@@ -18,12 +18,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from database.connection import init_db
 from database.repository import TreeRepository
-from models.person import Gender, Person
-from models.relationship import Relationship, RelationshipType, Union
 from models.event import EventType, LifeEvent
+from models.person import Gender, Person
+from models.relationship import Relationship, Union
 from models.source import Source, SourceType
 from models.tree import FamilyTree
-
 
 SOURCE_DOC = "longfellow-descendants-2009"
 

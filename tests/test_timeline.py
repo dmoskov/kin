@@ -4,15 +4,15 @@ import sys
 
 sys.path.insert(0, "src")
 
-from models.person import Person, Gender
+from models.event import EventType, LifeEvent
+from models.person import Gender, Person
 from models.relationship import Relationship, Union
-from models.event import LifeEvent, EventType
 from models.tree import FamilyTree
 from traversal.timeline import (
     TimelineEntry,
-    person_timeline,
     family_timeline,
     format_timeline,
+    person_timeline,
 )
 
 

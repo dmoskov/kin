@@ -2,7 +2,6 @@
 
 import json
 import logging
-import os
 import threading
 import uuid
 from pathlib import Path
@@ -11,7 +10,7 @@ from flask import Blueprint, abort, jsonify, request, send_from_directory, sessi
 
 import web_server
 from database.connection import get_connection
-from database.repository import TreeRepository, _execute, _fetchone, _now, _ph
+from database.repository import TreeRepository, _execute, _fetchone, _ph
 from import_export.gedcom_import import parse_gedcom
 
 logger = logging.getLogger(__name__)
@@ -612,7 +611,7 @@ def api_apply_document(doc_id):
     repo.save_source(source)
 
     # Apply people
-    from models.person import Person, Gender
+    from models.person import Gender, Person
 
     for p_data in changes.get("people", []):
         person_id = p_data.get("id", "")
@@ -686,7 +685,7 @@ def api_apply_document(doc_id):
             )
 
     # Apply events
-    from models.event import LifeEvent, EventType
+    from models.event import EventType, LifeEvent
 
     for e_data in changes.get("events", []):
         person_id = e_data.get("person_id", "")

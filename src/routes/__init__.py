@@ -1,11 +1,11 @@
 """Flask blueprints for family tree API routes."""
 
+from routes.articles import articles_bp
 from routes.auth import auth_bp
-from routes.people import people_bp
-from routes.photos import photos_bp
 from routes.documents import documents_bp
 from routes.geocode import geocode_bp
-from routes.articles import articles_bp
+from routes.people import people_bp
+from routes.photos import photos_bp
 
 ALL_BLUEPRINTS = [
     auth_bp,

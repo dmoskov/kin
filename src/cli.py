@@ -23,14 +23,14 @@ import sys
 
 from database.connection import init_db
 from database.repository import TreeRepository
+from import_export.json_io import load_tree, save_tree
+from models.citation import Citation, Confidence, EntityType
+from models.event import EventType, LifeEvent
 from models.person import Gender, Person
 from models.relationship import Relationship, RelationshipType, Union
-from models.event import EventType, LifeEvent
 from models.source import Source, SourceType
-from models.citation import Citation, EntityType, Confidence
 from traversal.relationship_calculator import describe_relationship
-from traversal.timeline import person_timeline, family_timeline, format_timeline
-from import_export.json_io import load_tree, save_tree
+from traversal.timeline import family_timeline, format_timeline, person_timeline
 
 
 def cmd_init(args: argparse.Namespace) -> None:
@@ -197,7 +197,7 @@ def cmd_show(args: argparse.Namespace) -> None:
 
     events = tree.events_for(person.id)
     if events:
-        print(f"\n  Life Events:")
+        print("\n  Life Events:")
         for e in events:
             date = e.date or "?"
             desc = e.description or e.event_type.value
@@ -208,7 +208,7 @@ def cmd_show(args: argparse.Namespace) -> None:
     for sids in field_sources.values():
         all_source_ids.update(sids)
     if all_source_ids:
-        print(f"\n  Sources:")
+        print("\n  Sources:")
         for sid in sorted(all_source_ids):
             src = tree.sources.get(sid)
             if src:
@@ -235,8 +235,8 @@ def cmd_stats(args: argparse.Namespace) -> None:
     s = repo.stats()
     tree = repo.load_tree()
     gens = tree.num_generations if tree.people else 0
-    print(f"\n  Family Tree Statistics")
-    print(f"  =====================")
+    print("\n  Family Tree Statistics")
+    print("  =====================")
     print(f"  People:        {s['people']}")
     print(f"    Living:      {s['living']}")
     print(f"    Deceased:    {s['deceased']}")

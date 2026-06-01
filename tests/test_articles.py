@@ -14,9 +14,8 @@ from __future__ import annotations
 import pytest
 
 from models.article import NewsArticle
-from models.person import Person, Gender
+from models.person import Gender, Person
 from models.tree import FamilyTree
-
 
 # ── Model tests ──────────────────────────────────────────────────────────
 
@@ -226,7 +225,7 @@ class TestArticleJsonIO:
         assert "person_ids" not in d
 
     def test_round_trip_json(self, tmp_path):
-        from import_export.json_io import save_tree, load_tree
+        from import_export.json_io import load_tree, save_tree
 
         tree = FamilyTree()
         tree.add_person(_make_person())
@@ -256,8 +255,9 @@ def app_client(tmp_path, monkeypatch):
 
     init_db(db_path)
 
-    import web_server
     import importlib
+
+    import web_server
 
     importlib.reload(web_server)
     web_server.PRIVATE_DIR = tmp_path

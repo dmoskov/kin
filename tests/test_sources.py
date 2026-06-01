@@ -4,18 +4,19 @@ Covers source CRUD, citation CRUD, the tree round-trip with sources/citations,
 and the migration script's source tag parsing.
 """
 
-import pytest
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from models.person import Gender, Person
-from models.source import Source, SourceType
-from models.citation import Citation, EntityType, Confidence
-from models.tree import FamilyTree
 from database.connection import init_db
 from database.repository import TreeRepository
+from models.citation import Citation, Confidence, EntityType
+from models.person import Person
+from models.source import Source, SourceType
+from models.tree import FamilyTree
 
 
 @pytest.fixture

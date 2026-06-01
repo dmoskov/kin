@@ -6,7 +6,6 @@ import pytest
 
 from storage import LocalStorage, S3Storage, init_storage
 
-
 # ── LocalStorage ──────────────────────────────────────────────────────
 
 

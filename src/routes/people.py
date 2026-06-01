@@ -7,8 +7,8 @@ from flask import Blueprint, jsonify, request
 
 import web_server
 from database.repository import TreeRepository
-from models.person import Gender, Person
 from import_export.json_io import _person_to_dict
+from models.person import Gender, Person
 
 people_bp = Blueprint("people", __name__)
 

@@ -6,13 +6,13 @@ siblings, ancestors, descendants.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
+
+from .article import NewsArticle
+from .citation import Citation, EntityType
+from .event import LifeEvent
 from .person import Person
 from .relationship import Relationship, Union
-from .event import LifeEvent
 from .source import Source
-from .citation import Citation, EntityType
-from .article import NewsArticle
 
 
 @dataclass
@@ -83,7 +83,7 @@ class FamilyTree:
 
     # --- Core queries ---
 
-    def get_person(self, person_id: str) -> Optional[Person]:
+    def get_person(self, person_id: str) -> Person | None:
         return self.people.get(person_id)
 
     def parents_of(self, person_id: str) -> list[Person]:

@@ -1,7 +1,6 @@
 """Photo upload, tagging, metadata, face regions, and profile crop endpoints."""
 
 import logging
-import os
 import tempfile
 from pathlib import Path
 from urllib.error import URLError

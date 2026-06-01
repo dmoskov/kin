@@ -16,15 +16,15 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 from .schema import (
-    PG_SCHEMA_SQL,
+    MIGRATIONS,
     PG_MIGRATIONS,
+    PG_SCHEMA_SQL,
     SCHEMA_SQL,
     SCHEMA_VERSION,
-    MIGRATIONS,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ── Backend detection ──────────────────────────────────────────────────

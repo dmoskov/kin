@@ -15,17 +15,18 @@ Usage:
 """
 
 import json
-from typing import Any, Optional
+from typing import Any
 
+from models.article import NewsArticle
+from models.citation import Citation, Confidence, EntityType
+from models.event import EventType, LifeEvent
 from models.person import Gender, Person
 from models.relationship import Relationship, RelationshipType, Union
-from models.event import EventType, LifeEvent
 from models.source import Source, SourceType
-from models.citation import Citation, EntityType, Confidence
-from models.article import NewsArticle
 from models.tree import FamilyTree
 
-from .connection import get_connection, _use_postgres as _is_pg
+from .connection import _use_postgres as _is_pg
+from .connection import get_connection
 
 
 def _ph(n: int = 1) -> str:
@@ -48,7 +49,7 @@ def _execute(conn: Any, sql: str, params: tuple = ()) -> Any:
     return conn.execute(sql, params)
 
 
-def _fetchone(conn: Any, sql: str, params: tuple = ()) -> Optional[dict]:
+def _fetchone(conn: Any, sql: str, params: tuple = ()) -> dict | None:
     """Execute and fetch one row as a dict."""
     cur = _execute(conn, sql, params)
     row = cur.fetchone()
@@ -106,7 +107,7 @@ def _upsert(
             conflict_set = set(conflict_columns)
             sets = [f"{c}=EXCLUDED.{c}" for c in columns if c not in conflict_set]
             if extra_columns and extra_values:
-                sets.extend(f"{c}={v}" for c, v in zip(extra_columns, extra_values))
+                sets.extend(f"{c}={v}" for c, v in zip(extra_columns, extra_values, strict=False))
             sql = (
                 f"INSERT INTO {table} ({col_list}) VALUES ({ph}) "
                 f"ON CONFLICT ({conflict}) DO UPDATE SET {', '.join(sets)}"
@@ -278,7 +279,7 @@ class TreeRepository:
         finally:
             conn.close()
 
-    def get_person(self, person_id: str) -> Optional[Person]:
+    def get_person(self, person_id: str) -> Person | None:
         """Fetch a single Person by ID."""
         conn = self._conn()
         try:
@@ -386,7 +387,7 @@ class TreeRepository:
         finally:
             conn.close()
 
-    def get_source(self, source_id: str) -> Optional[Source]:
+    def get_source(self, source_id: str) -> Source | None:
         """Fetch a single Source by ID."""
         conn = self._conn()
         try:
@@ -421,7 +422,7 @@ class TreeRepository:
         self,
         entity_type: EntityType,
         entity_id: str,
-        field_name: Optional[str] = None,
+        field_name: str | None = None,
     ) -> list[Citation]:
         """Fetch all citations for a given entity (optionally filtered by field)."""
         conn = self._conn()
@@ -507,7 +508,7 @@ class TreeRepository:
         finally:
             conn.close()
 
-    def get_article(self, article_id: str) -> Optional[NewsArticle]:
+    def get_article(self, article_id: str) -> NewsArticle | None:
         """Fetch a single NewsArticle by ID."""
         conn = self._conn()
         try:
@@ -1055,7 +1056,7 @@ class TreeRepository:
 
     def face_region_for_person_photo(
         self, photo_id: int, person_id: str
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """Return the face region for a specific person on a specific photo."""
         conn = self._conn()
         try:
@@ -1187,7 +1188,7 @@ class TreeRepository:
 
     # ── Internal helpers ────────────────────────────────────────────────
 
-    def get_person_by_email(self, email: str) -> Optional[Person]:
+    def get_person_by_email(self, email: str) -> Person | None:
         """Fetch a single Person by email address."""
         conn = self._conn()
         try:

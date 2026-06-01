@@ -2,13 +2,11 @@
 
 import os
 
-
 from import_export.json_io import load_tree, save_tree, validate_tree
-from models.person import Person, Gender
+from models.event import EventType, LifeEvent
+from models.person import Gender, Person
 from models.relationship import Relationship, Union
-from models.event import LifeEvent, EventType
 from models.tree import FamilyTree
-
 
 EXAMPLE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(__file__)), "data", "example_family.json"
@@ -98,14 +96,14 @@ def test_roundtrip(tmp_path):
 
     # Relationships
     assert len(loaded.relationships) == len(original.relationships)
-    for orig_r, load_r in zip(original.relationships, loaded.relationships):
+    for orig_r, load_r in zip(original.relationships, loaded.relationships, strict=False):
         assert orig_r.parent_id == load_r.parent_id
         assert orig_r.child_id == load_r.child_id
         assert orig_r.rel_type == load_r.rel_type
 
     # Unions
     assert len(loaded.unions) == len(original.unions)
-    for orig_u, load_u in zip(original.unions, loaded.unions):
+    for orig_u, load_u in zip(original.unions, loaded.unions, strict=False):
         assert orig_u.partner1_id == load_u.partner1_id
         assert orig_u.partner2_id == load_u.partner2_id
         assert orig_u.union_date == load_u.union_date
@@ -113,7 +111,7 @@ def test_roundtrip(tmp_path):
 
     # Events
     assert len(loaded.events) == len(original.events)
-    for orig_e, load_e in zip(original.events, loaded.events):
+    for orig_e, load_e in zip(original.events, loaded.events, strict=False):
         assert orig_e.person_id == load_e.person_id
         assert orig_e.event_type == load_e.event_type
         assert orig_e.date == load_e.date

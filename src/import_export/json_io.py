@@ -9,12 +9,12 @@ import re
 from pathlib import Path
 from typing import Any
 
-from models.person import Person, Gender
-from models.relationship import Relationship, RelationshipType, Union
-from models.event import LifeEvent, EventType
-from models.source import Source, SourceType
-from models.citation import Citation, EntityType, Confidence
 from models.article import NewsArticle
+from models.citation import Citation, Confidence, EntityType
+from models.event import EventType, LifeEvent
+from models.person import Gender, Person
+from models.relationship import Relationship, RelationshipType, Union
+from models.source import Source, SourceType
 from models.tree import FamilyTree
 
 

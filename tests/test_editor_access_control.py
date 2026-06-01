@@ -16,7 +16,6 @@ import pytest
 
 from models.person import Gender, Person
 
-
 # ── Fixtures ─────────────────────────────────────────────────────────────
 
 
@@ -55,7 +54,7 @@ def _make_client(tmp_path, monkeypatch, editors_env: str | None = None, google_c
 @pytest.fixture
 def open_client(tmp_path, monkeypatch):
     """Client with no EDITORS set — original open-access behaviour."""
-    client, repo, app = _make_client(tmp_path, monkeypatch, editors_env=None)
+    _, repo, app = _make_client(tmp_path, monkeypatch, editors_env=None)
     with app.test_client() as client:
         yield client, repo, app
 
@@ -63,7 +62,7 @@ def open_client(tmp_path, monkeypatch):
 @pytest.fixture
 def restricted_client(tmp_path, monkeypatch):
     """Client with EDITORS=editor@example.com set."""
-    client, repo, app = _make_client(tmp_path, monkeypatch, editors_env="editor@example.com")
+    _, repo, app = _make_client(tmp_path, monkeypatch, editors_env="editor@example.com")
     with app.test_client() as client:
         yield client, repo, app
 

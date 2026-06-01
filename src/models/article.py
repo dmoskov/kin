@@ -5,7 +5,6 @@ obituaries, and other press coverage that mention a family member.
 """
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -24,11 +23,11 @@ class NewsArticle:
 
     id: str
     title: str
-    url: Optional[str] = None
-    publication: Optional[str] = None
-    date: Optional[str] = None
+    url: str | None = None
+    publication: str | None = None
+    date: str | None = None
     summary: str = ""
-    photo_url: Optional[str] = None
+    photo_url: str | None = None
 
     def __repr__(self) -> str:
         pub = f" ({self.publication})" if self.publication else ""

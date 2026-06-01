@@ -1,9 +1,9 @@
 """Family tree data models."""
 
-from .person import Person, Gender
-from .relationship import Relationship, RelationshipType, Union
-from .event import LifeEvent, EventType
 from .article import NewsArticle
+from .event import EventType, LifeEvent
+from .person import Gender, Person
+from .relationship import Relationship, RelationshipType, Union
 from .tree import FamilyTree
 
 __all__ = [

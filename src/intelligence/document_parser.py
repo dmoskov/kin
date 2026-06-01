@@ -9,8 +9,9 @@ import io
 import json
 import logging
 import os
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -82,10 +83,10 @@ def _get_client():
     """Get Anthropic client, importing lazily."""
     try:
         import anthropic
-    except ImportError:
+    except ImportError as err:
         raise RuntimeError(
             "anthropic package not installed. Run: pip install anthropic"
-        )
+        ) from err
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
@@ -98,10 +99,10 @@ def _extract_pdf_text(file_path: str) -> str:
     """Extract text from a PDF using pdfplumber."""
     try:
         import pdfplumber
-    except ImportError:
+    except ImportError as err:
         raise RuntimeError(
             "pdfplumber package not installed. Run: pip install pdfplumber"
-        )
+        ) from err
 
     text_parts = []
     with pdfplumber.open(file_path) as pdf:
@@ -191,7 +192,7 @@ Extract all people, relationships, dates, places, and events. Match people to ex
             try:
                 import pdfplumber
                 with pdfplumber.open(file_path) as pdf:
-                    for i, page in enumerate(pdf.pages[:10]):  # max 10 pages
+                    for page in pdf.pages[:10]:  # max 10 pages
                         img = page.to_image(resolution=200)
                         import io
                         buf = io.BytesIO()
@@ -283,8 +284,8 @@ def _plan_chunks(file_path: str) -> list[dict]:
     """
     try:
         import pdfplumber
-    except ImportError:
-        raise RuntimeError("pdfplumber package not installed. Run: pip install pdfplumber")
+    except ImportError as err:
+        raise RuntimeError("pdfplumber package not installed. Run: pip install pdfplumber") from err
 
     page_info: list[dict] = []
     with pdfplumber.open(file_path) as pdf:
@@ -547,7 +548,7 @@ def parse_document_chunked(
     file_path: str,
     existing_people: list[dict],
     filename: str = "",
-    on_progress: Optional[Callable] = None,
+    on_progress: Callable | None = None,
     done_results: list[dict] | None = None,
 ) -> dict[str, Any]:
     """Main entry point for chunked document parsing.
