@@ -1,0 +1,286 @@
+"""Person CRUD and relationship/union creation endpoints."""
+
+import re
+import uuid
+
+from flask import Blueprint, jsonify, request
+
+import web_server
+from database.repository import TreeRepository
+from models.person import Gender, Person
+from import_export.json_io import _person_to_dict
+
+people_bp = Blueprint("people", __name__)
+
+
+# Fields a client is allowed to provide on create / update. Anything else
+# in the request body is ignored silently so older clients don't break.
+_PERSON_WRITABLE_FIELDS = {
+    "given_name",
+    "surname",
+    "gender",
+    "birth_date",
+    "birth_place",
+    "death_date",
+    "death_place",
+    "maiden_name",
+    "nicknames",
+    "notes",
+    "email",
+}
+
+# Gender is an enum; accept the string value or fall back to UNKNOWN.
+_VALID_GENDERS = {g.value for g in Gender}
+
+
+def _coerce_person_payload(
+    body: dict, *, partial: bool
+) -> tuple[dict, str | None, int]:
+    """Validate + normalize a person payload.
+
+    Returns ``(normalized, error_message, status_code)``. On success
+    ``error_message`` is None and ``status_code`` is 0.
+
+    ``partial=True`` (used by PUT) allows missing fields; ``partial=False``
+    (used by POST) requires at least given_name or surname (otherwise the
+    resulting card has no label at all).
+    """
+    if not isinstance(body, dict):
+        return {}, "body must be a JSON object", 400
+
+    out: dict = {}
+    for key, value in body.items():
+        if key not in _PERSON_WRITABLE_FIELDS:
+            continue
+        # Normalize empty strings to None for optional fields so clients
+        # don't need to distinguish "" from missing.
+        if key in ("given_name", "surname"):
+            if value is None:
+                value = ""
+            if not isinstance(value, str):
+                return {}, f"{key} must be a string", 400
+            value = value.strip()
+        elif key == "gender":
+            if value is None:
+                value = Gender.UNKNOWN.value
+            if not isinstance(value, str) or value not in _VALID_GENDERS:
+                return (
+                    {},
+                    (f"gender must be one of: {', '.join(sorted(_VALID_GENDERS))}"),
+                    400,
+                )
+        elif key == "nicknames":
+            if value is None:
+                value = []
+            if not isinstance(value, list) or not all(
+                isinstance(n, str) for n in value
+            ):
+                return {}, "nicknames must be a list of strings", 400
+        elif key == "notes":
+            if value is None:
+                value = ""
+            if not isinstance(value, str):
+                return {}, "notes must be a string", 400
+        else:
+            # Optional scalar fields (dates, places, maiden_name, email).
+            # Allow empty string → None so clients can clear them.
+            if isinstance(value, str):
+                value = value.strip() or None
+            elif value is not None and not isinstance(value, str):
+                return {}, f"{key} must be a string or null", 400
+        out[key] = value
+
+    if not partial:
+        gn = (out.get("given_name") or "").strip()
+        sn = (out.get("surname") or "").strip()
+        if not gn and not sn:
+            return {}, "given_name or surname is required", 400
+
+    # Basic date sanity check — we accept partial dates (YYYY or YYYY-MM)
+    # and full ISO dates, but nothing else.
+    for date_field in ("birth_date", "death_date"):
+        v = out.get(date_field)
+        if v and not re.match(r"^\d{4}(-\d{2}(-\d{2})?)?$", v):
+            return {}, f"{date_field} must be YYYY, YYYY-MM, or YYYY-MM-DD", 400
+
+    return out, None, 0
+
+
+@people_bp.route("/api/people", methods=["POST"])
+@web_server.require_editor
+def api_create_person():
+    """Create a new person.
+
+    Body: JSON object with at least ``given_name`` or ``surname``. Optional
+    fields: ``id`` (auto-generated if omitted), ``gender``, ``birth_date``,
+    ``birth_place``, ``death_date``, ``death_place``, ``maiden_name``,
+    ``nicknames``, ``notes``, ``email``.
+
+    Returns 201 with the created person on success. Returns 409 if an
+    explicit ``id`` already exists, 400 for validation errors.
+    """
+    body = request.get_json(silent=True) or {}
+    fields, err, status = _coerce_person_payload(body, partial=False)
+    if err:
+        return jsonify({"error": err, "code": "bad_request"}), status
+
+    # ID: accept client-provided for deterministic seeding, otherwise mint
+    # a fresh UUID-based slug that won't collide with anything.
+    pid = (body.get("id") or "").strip() if isinstance(body.get("id"), str) else ""
+    if not pid:
+        pid = f"person_{uuid.uuid4().hex[:12]}"
+
+    repo = TreeRepository()
+    if repo.get_person(pid) is not None:
+        return jsonify(
+            {
+                "error": f"person id already exists: {pid}",
+                "code": "conflict",
+            }
+        ), 409
+
+    person = Person(
+        id=pid,
+        given_name=fields.get("given_name", ""),
+        surname=fields.get("surname", ""),
+        gender=Gender(fields.get("gender", Gender.UNKNOWN.value)),
+        birth_date=fields.get("birth_date"),
+        birth_place=fields.get("birth_place"),
+        death_date=fields.get("death_date"),
+        death_place=fields.get("death_place"),
+        maiden_name=fields.get("maiden_name"),
+        nicknames=fields.get("nicknames", []),
+        notes=fields.get("notes", ""),
+        email=fields.get("email"),
+    )
+    repo.save_person(person)
+    return jsonify(_person_to_dict(person)), 201
+
+
+@people_bp.route("/api/people/<person_id>", methods=["PUT", "PATCH"])
+@web_server.require_editor
+def api_update_person(person_id):
+    """Update an existing person. Partial updates are supported.
+
+    Body: JSON object with any subset of writable fields. Fields not
+    included in the body are left unchanged. Pass an empty string (or
+    null) for an optional scalar field to clear it.
+
+    Returns 200 with the updated person on success, 404 if not found.
+    """
+    body = request.get_json(silent=True) or {}
+    fields, err, status = _coerce_person_payload(body, partial=True)
+    if err:
+        return jsonify({"error": err, "code": "bad_request"}), status
+
+    repo = TreeRepository()
+    person = repo.get_person(person_id)
+    if person is None:
+        return jsonify({"error": "person not found", "code": "not_found"}), 404
+
+    # Apply only the fields actually present in the request so callers can
+    # PATCH without clobbering other columns. `gender` needs enum coercion.
+    for key, value in fields.items():
+        if key == "gender":
+            person.gender = Gender(value)
+        else:
+            setattr(person, key, value)
+
+    repo.save_person(person)
+    return jsonify(_person_to_dict(person))
+
+
+@people_bp.route("/api/people/<person_id>", methods=["DELETE"])
+@web_server.require_editor
+def api_delete_person(person_id):
+    """Delete a person. Cascades to their relationships, unions, events,
+    and citations via FK ON DELETE CASCADE (see schema).
+
+    Returns 204 on success, 404 if the person didn't exist.
+    """
+    repo = TreeRepository()
+    if repo.get_person(person_id) is None:
+        return jsonify({"error": "person not found", "code": "not_found"}), 404
+
+    # delete_person returns True if a row was actually deleted. We already
+    # confirmed existence above, so a False here would indicate a race.
+    ok = repo.delete_person(person_id)
+    if not ok:
+        return jsonify({"error": "delete failed", "code": "server_error"}), 500
+    return ("", 204)
+
+
+@people_bp.route("/api/relationships", methods=["POST"])
+@web_server.require_editor
+def api_create_relationship():
+    """Create a parent-child relationship.
+
+    Body: {"parent_id": "...", "child_id": "..."}
+
+    Returns 201 on success, 400 for missing fields, 404 if either person
+    doesn't exist.
+    """
+    from models.relationship import Relationship, RelationshipType
+
+    body = request.get_json(silent=True) or {}
+    parent_id = (body.get("parent_id") or "").strip()
+    child_id = (body.get("child_id") or "").strip()
+    if not parent_id or not child_id:
+        return jsonify(
+            {"error": "parent_id and child_id are required", "code": "bad_request"}
+        ), 400
+    if parent_id == child_id:
+        return jsonify(
+            {"error": "parent_id and child_id must differ", "code": "bad_request"}
+        ), 400
+
+    repo = TreeRepository()
+    if repo.get_person(parent_id) is None:
+        return jsonify(
+            {"error": f"person not found: {parent_id}", "code": "not_found"}
+        ), 404
+    if repo.get_person(child_id) is None:
+        return jsonify(
+            {"error": f"person not found: {child_id}", "code": "not_found"}
+        ), 404
+
+    rel = Relationship(
+        parent_id=parent_id, child_id=child_id, rel_type=RelationshipType.BIOLOGICAL
+    )
+    repo.save_relationship(rel)
+    return jsonify({"parent_id": parent_id, "child_id": child_id}), 201
+
+
+@people_bp.route("/api/unions", methods=["POST"])
+@web_server.require_editor
+def api_create_union():
+    """Create a partnership/union between two people.
+
+    Body: {"partner1_id": "...", "partner2_id": "..."}
+
+    Returns 201 on success, 400 for missing fields, 404 if either person
+    doesn't exist.
+    """
+    from models.relationship import Union
+
+    body = request.get_json(silent=True) or {}
+    p1 = (body.get("partner1_id") or "").strip()
+    p2 = (body.get("partner2_id") or "").strip()
+    if not p1 or not p2:
+        return jsonify(
+            {"error": "partner1_id and partner2_id are required", "code": "bad_request"}
+        ), 400
+    if p1 == p2:
+        return jsonify(
+            {"error": "partner1_id and partner2_id must differ", "code": "bad_request"}
+        ), 400
+
+    repo = TreeRepository()
+    if repo.get_person(p1) is None:
+        return jsonify({"error": f"person not found: {p1}", "code": "not_found"}), 404
+    if repo.get_person(p2) is None:
+        return jsonify({"error": f"person not found: {p2}", "code": "not_found"}), 404
+
+    union = Union(partner1_id=p1, partner2_id=p2)
+    repo.save_union(union)
+    return jsonify({"partner1_id": p1, "partner2_id": p2}), 201

@@ -340,10 +340,13 @@ class TestPhotoAssociation:
         """Regression guard: source code must not use raw ``conn.execute``
         with '?' placeholders in the photo-association endpoints. Those only
         work on SQLite and silently break in production PostgreSQL."""
-        import web_server
+        from routes.photos import api_add_photos, api_remove_photo, api_set_photo_caption
         import inspect
-        for name in ("api_add_photos", "api_remove_photo", "api_set_photo_caption"):
-            fn = getattr(web_server, name)
+        for name, fn in [
+            ("api_add_photos", api_add_photos),
+            ("api_remove_photo", api_remove_photo),
+            ("api_set_photo_caption", api_set_photo_caption),
+        ]:
             src = inspect.getsource(fn)
             assert "conn.execute(" not in src, (
                 f"{name} uses raw conn.execute — must go through TreeRepository"
