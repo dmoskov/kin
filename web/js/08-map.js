@@ -223,69 +223,10 @@ function brightenColor(hex, ratio) {
 }
 
 function _computeMapFog() {
-  // Compute fog distance independently from ORIGINAL_DATA so that focus mode
-  // filtering doesn't cause ancestors/relatives to disappear from the map.
-  const src = ORIGINAL_DATA || DATA;
-  if (!src) return {};
-  const parentsOf = {};
-  const childrenOf = {};
-  for (const r of src.relationships) {
-    if (!parentsOf[r.child_id]) parentsOf[r.child_id] = [];
-    parentsOf[r.child_id].push(r.parent_id);
-    if (!childrenOf[r.parent_id]) childrenOf[r.parent_id] = new Set();
-    childrenOf[r.parent_id].add(r.child_id);
-  }
-  const unionPartner = {};
-  for (const u of src.unions) {
-    unionPartner[u.partner1_id] = unionPartner[u.partner1_id] || [];
-    unionPartner[u.partner1_id].push(u.partner2_id);
-    unionPartner[u.partner2_id] = unionPartner[u.partner2_id] || [];
-    unionPartner[u.partner2_id].push(u.partner1_id);
-  }
-  const bloodline = new Set();
-  function traceUp(pid) {
-    if (bloodline.has(pid)) return;
-    bloodline.add(pid);
-    for (const par of (parentsOf[pid] || [])) traceUp(par);
-  }
-  function traceDown(pid) {
-    if (bloodline.has(pid)) return;
-    bloodline.add(pid);
-    for (const kid of (childrenOf[pid] || new Set())) traceDown(kid);
-  }
-  if (CENTER_ID_A) { traceUp(CENTER_ID_A); traceDown(CENTER_ID_A); }
-  if (CENTER_ID_B) { traceUp(CENTER_ID_B); traceDown(CENTER_ID_B); }
-  const fog = {};
-  for (const id of bloodline) fog[id] = 0;
-  // Partners of bloodline = distance 1
-  for (const u of src.unions) {
-    if (bloodline.has(u.partner1_id) && !bloodline.has(u.partner2_id)) {
-      if (fog[u.partner2_id] === undefined) fog[u.partner2_id] = 1;
-    }
-    if (bloodline.has(u.partner2_id) && !bloodline.has(u.partner1_id)) {
-      if (fog[u.partner1_id] === undefined) fog[u.partner1_id] = 1;
-    }
-  }
-  // BFS outward
-  let frontier = Object.entries(fog).filter(([_, d]) => d === 1).map(([id]) => id);
-  let dist = 1;
-  while (frontier.length > 0 && dist < 10) {
-    const next = [];
-    for (const pid of frontier) {
-      for (const par of (parentsOf[pid] || [])) {
-        if (fog[par] === undefined) { fog[par] = dist + 1; next.push(par); }
-      }
-      for (const kid of (childrenOf[pid] || new Set())) {
-        if (fog[kid] === undefined) { fog[kid] = dist + 1; next.push(kid); }
-      }
-      for (const partner of (unionPartner[pid] || [])) {
-        if (fog[partner] === undefined) { fog[partner] = dist + 1; next.push(partner); }
-      }
-    }
-    frontier = next;
-    dist++;
-  }
-  return fog;
+  // Compute fog distance from ORIGINAL_DATA so focus-mode filtering doesn't
+  // cause ancestors/relatives to disappear from the map. Shared algorithm with
+  // the tree layout via computeFogDistance (defined in 04-tree.js).
+  return computeFogDistance(ORIGINAL_DATA || DATA);
 }
 
 function buildMapEvents() {

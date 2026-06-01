@@ -142,6 +142,95 @@ function buildHierarchy() {
 }
 
 /**
+ * Compute "fog of war" distance from the center couple's bloodline outward.
+ * Distance 0 = bloodline (center couple + blood ancestors/descendants),
+ * 1 = their partners (married in), 2+ = in-law branches.
+ *
+ * Shared by the tree (visual dimming) and the map (proximity filtering). Pass
+ * the data source: the tree uses DATA; the map uses ORIGINAL_DATA so focus-mode
+ * filtering doesn't drop ancestors/relatives.
+ */
+function computeFogDistance(src) {
+  if (!src) return {};
+  const parentsOf = {};
+  const childrenOf = {};
+  for (const r of src.relationships) {
+    if (!parentsOf[r.child_id]) parentsOf[r.child_id] = [];
+    parentsOf[r.child_id].push(r.parent_id);
+    if (!childrenOf[r.parent_id]) childrenOf[r.parent_id] = new Set();
+    childrenOf[r.parent_id].add(r.child_id);
+  }
+  const unionPartner = {};
+  for (const u of src.unions) {
+    unionPartner[u.partner1_id] = unionPartner[u.partner1_id] || [];
+    unionPartner[u.partner1_id].push(u.partner2_id);
+    unionPartner[u.partner2_id] = unionPartner[u.partner2_id] || [];
+    unionPartner[u.partner2_id].push(u.partner1_id);
+  }
+  const bloodline = new Set();
+  function traceUp(pid) {
+    if (bloodline.has(pid)) return;
+    bloodline.add(pid);
+    for (const par of parentsOf[pid] || []) traceUp(par);
+  }
+  function traceDown(pid) {
+    if (bloodline.has(pid)) return;
+    bloodline.add(pid);
+    for (const kid of childrenOf[pid] || new Set()) traceDown(kid);
+  }
+  if (CENTER_ID_A) {
+    traceUp(CENTER_ID_A);
+    traceDown(CENTER_ID_A);
+  }
+  if (CENTER_ID_B) {
+    traceUp(CENTER_ID_B);
+    traceDown(CENTER_ID_B);
+  }
+  const fog = {};
+  for (const id of bloodline) fog[id] = 0;
+  // Partners of bloodline = distance 1
+  for (const u of src.unions) {
+    if (bloodline.has(u.partner1_id) && !bloodline.has(u.partner2_id)) {
+      if (fog[u.partner2_id] === undefined) fog[u.partner2_id] = 1;
+    }
+    if (bloodline.has(u.partner2_id) && !bloodline.has(u.partner1_id)) {
+      if (fog[u.partner1_id] === undefined) fog[u.partner1_id] = 1;
+    }
+  }
+  // BFS outward through parent/child/union edges
+  let frontier = Object.entries(fog)
+    .filter(([_, d]) => d === 1)
+    .map(([id]) => id);
+  let dist = 1;
+  while (frontier.length > 0 && dist < 10) {
+    const next = [];
+    for (const pid of frontier) {
+      for (const par of parentsOf[pid] || []) {
+        if (fog[par] === undefined) {
+          fog[par] = dist + 1;
+          next.push(par);
+        }
+      }
+      for (const kid of childrenOf[pid] || new Set()) {
+        if (fog[kid] === undefined) {
+          fog[kid] = dist + 1;
+          next.push(kid);
+        }
+      }
+      for (const partner of unionPartner[pid] || []) {
+        if (fog[partner] === undefined) {
+          fog[partner] = dist + 1;
+          next.push(partner);
+        }
+      }
+    }
+    frontier = next;
+    dist++;
+  }
+  return fog;
+}
+
+/**
  * Build the butterfly layout data structure.
  * Returns { nodes, links, unions, genRange }
  */
@@ -600,72 +689,9 @@ function buildButterflyLayout() {
   }
 
   // ── Compute bloodline distance (fog-of-war) ──
-  // Distance 0 = center couple + their direct blood ancestors/descendants
-  //              (reachable through parent-child edges only from CENTER_ID_A/B)
-  // Distance 1 = partners of bloodline members (married into the family)
-  // Distance 2 = ancestors of those partners (in-law family trees)
-  // Distance 3+ = deeper in-law branches
-  const bloodline = new Set();
-  // Trace blood ancestors of CENTER_ID_A
-  function traceBloodUp(pid) {
-    if (bloodline.has(pid)) return;
-    bloodline.add(pid);
-    for (const par of (parentsOf[pid] || [])) traceBloodUp(par);
-  }
-  // Trace blood descendants of CENTER_ID_A/B
-  function traceBloodDown(pid) {
-    if (bloodline.has(pid)) return;
-    bloodline.add(pid);
-    for (const kid of (childrenOf[pid] || new Set())) traceBloodDown(kid);
-  }
-  if (CENTER_ID_A) { traceBloodUp(CENTER_ID_A); traceBloodDown(CENTER_ID_A); }
-  if (CENTER_ID_B) { traceBloodUp(CENTER_ID_B); traceBloodDown(CENTER_ID_B); }
-
-  // BFS from bloodline through union edges to compute fog distance
-  const fogDistance = {};
-  for (const id of bloodline) fogDistance[id] = 0;
-
-  // Partners of bloodline = distance 1
-  for (const u of DATA.unions) {
-    if (bloodline.has(u.partner1_id) && !bloodline.has(u.partner2_id)) {
-      if (fogDistance[u.partner2_id] === undefined) fogDistance[u.partner2_id] = 1;
-    }
-    if (bloodline.has(u.partner2_id) && !bloodline.has(u.partner1_id)) {
-      if (fogDistance[u.partner1_id] === undefined) fogDistance[u.partner1_id] = 1;
-    }
-  }
-
-  // BFS outward from distance-1 nodes through parent-child + union edges
-  let frontier = Object.entries(fogDistance).filter(([_, d]) => d === 1).map(([id]) => id);
-  let currentDist = 1;
-  while (frontier.length > 0 && currentDist < 10) {
-    const nextFrontier = [];
-    for (const pid of frontier) {
-      // Parents (going up in-law tree)
-      for (const par of (parentsOf[pid] || [])) {
-        if (fogDistance[par] === undefined) {
-          fogDistance[par] = currentDist + 1;
-          nextFrontier.push(par);
-        }
-      }
-      // Children (going down in-law tree)
-      for (const kid of (childrenOf[pid] || new Set())) {
-        if (fogDistance[kid] === undefined) {
-          fogDistance[kid] = currentDist + 1;
-          nextFrontier.push(kid);
-        }
-      }
-      // Union partners
-      for (const partnerId of (unionPartner[pid] || [])) {
-        if (fogDistance[partnerId] === undefined) {
-          fogDistance[partnerId] = currentDist + 1;
-          nextFrontier.push(partnerId);
-        }
-      }
-    }
-    frontier = nextFrontier;
-    currentDist++;
-  }
+  // Distance 0 = center couple + blood ancestors/descendants; 1 = their
+  // partners; 2+ = in-law branches. Shared with the map via computeFogDistance.
+  const fogDistance = computeFogDistance(DATA);
 
   // Assign fogLevel to each node: 0 = clear, 1-4 = increasing fog
   for (const n of nodes) {
