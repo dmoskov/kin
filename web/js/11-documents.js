@@ -97,63 +97,7 @@ let CURRENT_PROPOSED = null;
       resumeBtn.classList.add("hidden");
       errorBox.classList.add("hidden");
       setStep("doc-step-analyze", "active", "Resuming...");
-
-      let parseResp;
-      try {
-        parseResp = await fetch(`/api/documents/${CURRENT_DOC_ID}/parse`, { method: "POST" });
-      } catch (err) {
-        setStep("doc-step-analyze", "error", "Connection lost");
-        showError("Resume failed", `Could not connect to server: ${err.message}`);
-        return;
-      }
-
-      let parseData;
-      try {
-        parseData = await parseResp.json();
-      } catch (err) {
-        setStep("doc-step-analyze", "error", "Invalid response");
-        showError("Resume failed", "The server returned an invalid response.");
-        return;
-      }
-
-      if (!parseResp.ok) {
-        setStep("doc-step-analyze", "error", `HTTP ${parseResp.status}`);
-        showError("Resume failed", parseData.error || "An unknown error occurred.");
-        return;
-      }
-
-      const total = parseData.total_chunks || 1;
-      const chunkProgressEl = document.getElementById("doc-chunk-progress");
-      const chunkFill = document.getElementById("doc-chunk-fill");
-      const chunkText = document.getElementById("doc-chunk-text");
-
-      if (total > 1 && chunkProgressEl) {
-        chunkProgressEl.classList.remove("hidden");
-        const done = parseData.chunks_done || 0;
-        const pct = Math.round((done / total) * 100);
-        if (chunkFill) chunkFill.style.width = pct + "%";
-        if (chunkText) chunkText.textContent = `${done} / ${total} sections`;
-        setStep("doc-step-analyze", "active", `Resuming from section ${done + 1} of ${total}...`);
-      }
-
-      const pollResult = await pollParseStatus(CURRENT_DOC_ID, total, chunkFill, chunkText);
-      if (!pollResult) {
-        // pollParseStatus already showed the error or stalled state
-        return;
-      }
-
-      parseData = pollResult;
-      const pc = parseData.proposed_changes;
-      const peopleCount = (pc?.people || []).length;
-      const eventCount = (pc?.events || []).length;
-      const unionCount = (pc?.unions || []).length;
-      setStep("doc-step-analyze", "done", `Found ${peopleCount} people, ${eventCount} events, ${unionCount} unions`);
-
-      setTimeout(() => {
-        closeModal();
-        CURRENT_PROPOSED = pc;
-        openReviewModal(pc, "Resumed document");
-      }, 800);
+      await runResumeFlow(CURRENT_DOC_ID, "Resumed document");
     });
   }
 
@@ -333,6 +277,64 @@ let CURRENT_PROPOSED = null;
     return null;
   }
 
+  // Shared resume sequence: (re)trigger parsing for a document, show chunk
+  // progress, poll to completion, then open the review modal. Used by the
+  // Resume button and resume-from-history. The caller is responsible for its
+  // own preamble (hiding UI, setting the prepare/upload steps). docId should
+  // already equal CURRENT_DOC_ID.
+  async function runResumeFlow(docId, label) {
+    let parseResp;
+    try {
+      parseResp = await fetch(`/api/documents/${docId}/parse`, { method: "POST" });
+    } catch (err) {
+      setStep("doc-step-analyze", "error", "Connection lost");
+      showError("Resume failed", `Could not connect to server: ${err.message}`);
+      return;
+    }
+    let parseData;
+    try {
+      parseData = await parseResp.json();
+    } catch (_) {
+      setStep("doc-step-analyze", "error", "Invalid response");
+      showError("Resume failed", "The server returned an invalid response.");
+      return;
+    }
+    if (!parseResp.ok) {
+      setStep("doc-step-analyze", "error", `HTTP ${parseResp.status}`);
+      showError("Resume failed", parseData.error || "An unknown error occurred.");
+      return;
+    }
+
+    const total = parseData.total_chunks || 1;
+    const chunkProgressEl = document.getElementById("doc-chunk-progress");
+    const chunkFill = document.getElementById("doc-chunk-fill");
+    const chunkText = document.getElementById("doc-chunk-text");
+
+    if (total > 1 && chunkProgressEl) {
+      chunkProgressEl.classList.remove("hidden");
+      const done = parseData.chunks_done || 0;
+      const pct = Math.round((done / total) * 100);
+      if (chunkFill) chunkFill.style.width = pct + "%";
+      if (chunkText) chunkText.textContent = `${done} / ${total} sections`;
+      setStep("doc-step-analyze", "active", `Resuming from section ${done + 1} of ${total}...`);
+    }
+
+    const pollResult = await pollParseStatus(docId, total, chunkFill, chunkText);
+    if (!pollResult) return; // pollParseStatus already showed the error/stalled state
+
+    const pc = pollResult.proposed_changes;
+    const peopleCount = (pc?.people || []).length;
+    const eventCount = (pc?.events || []).length;
+    const unionCount = (pc?.unions || []).length;
+    setStep("doc-step-analyze", "done", `Found ${peopleCount} people, ${eventCount} events, ${unionCount} unions`);
+
+    setTimeout(() => {
+      closeModal();
+      CURRENT_PROPOSED = pc;
+      openReviewModal(pc, label);
+    }, 800);
+  }
+
   // ── Document History ──────────────────────────────────────────────
 
   function timeAgo(dateStr) {
@@ -430,60 +432,7 @@ let CURRENT_PROPOSED = null;
     setStep("doc-step-prepare", "done", doc.filename);
     setStep("doc-step-upload", "done", doc.file_type || "uploaded");
     setStep("doc-step-analyze", "active", "Resuming...");
-
-    (async () => {
-      let parseResp;
-      try {
-        parseResp = await fetch(`/api/documents/${doc.id}/parse`, { method: "POST" });
-      } catch (err) {
-        setStep("doc-step-analyze", "error", "Connection lost");
-        showError("Resume failed", `Could not connect to server: ${err.message}`);
-        return;
-      }
-      let parseData;
-      try {
-        parseData = await parseResp.json();
-      } catch (_) {
-        setStep("doc-step-analyze", "error", "Invalid response");
-        showError("Resume failed", "The server returned an invalid response.");
-        return;
-      }
-      if (!parseResp.ok) {
-        setStep("doc-step-analyze", "error", `HTTP ${parseResp.status}`);
-        showError("Resume failed", parseData.error || "An unknown error occurred.");
-        return;
-      }
-
-      const total = parseData.total_chunks || 1;
-      const chunkProgressEl = document.getElementById("doc-chunk-progress");
-      const chunkFill = document.getElementById("doc-chunk-fill");
-      const chunkText = document.getElementById("doc-chunk-text");
-
-      if (total > 1 && chunkProgressEl) {
-        chunkProgressEl.classList.remove("hidden");
-        const done = parseData.chunks_done || 0;
-        const pct = Math.round((done / total) * 100);
-        if (chunkFill) chunkFill.style.width = pct + "%";
-        if (chunkText) chunkText.textContent = `${done} / ${total} sections`;
-        setStep("doc-step-analyze", "active", `Resuming from section ${done + 1} of ${total}...`);
-      }
-
-      const pollResult = await pollParseStatus(CURRENT_DOC_ID, total, chunkFill, chunkText);
-      if (!pollResult) return;
-
-      parseData = pollResult;
-      const pc = parseData.proposed_changes;
-      const peopleCount = (pc?.people || []).length;
-      const eventCount = (pc?.events || []).length;
-      const unionCount = (pc?.unions || []).length;
-      setStep("doc-step-analyze", "done", `Found ${peopleCount} people, ${eventCount} events, ${unionCount} unions`);
-
-      setTimeout(() => {
-        closeModal();
-        CURRENT_PROPOSED = pc;
-        openReviewModal(pc, doc.filename || "Resumed document");
-      }, 800);
-    })();
+    runResumeFlow(doc.id, doc.filename || "Resumed document");
   }
 
   async function viewResultsFromHistory(doc) {
