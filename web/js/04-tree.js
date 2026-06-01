@@ -203,13 +203,12 @@ function buildButterflyLayout() {
   // Walk UP from a person to place their ancestors.
   // Ancestors are stored as tree-children of their descendant (butterfly/inverted direction).
   // This keeps the center couple as the tree root with both parent lines as subtrees.
-  function walkAncestors(personId, gen, side, childCoupleIdx) {
+  // Group a person's not-yet-placed parents into {primaryId, partnerId} couples.
+  // Shared by walkAncestors and walkAncestorsSplit.
+  function buildParentPairs(personId) {
     const parents = (parentsOf[personId] || []).filter((p) => !placed.has(p));
-    if (parents.length === 0) return;
-
-    const parentPairs = [];
     const usedParents = new Set();
-
+    const parentPairs = [];
     for (const pid of parents) {
       if (usedParents.has(pid)) continue;
       const partners = (unionPartner[pid] || []).filter(
@@ -220,6 +219,12 @@ function buildButterflyLayout() {
       if (partnerId) usedParents.add(partnerId);
       parentPairs.push({ primaryId: pid, partnerId });
     }
+    return parentPairs;
+  }
+
+  function walkAncestors(personId, gen, side, childCoupleIdx) {
+    const parentPairs = buildParentPairs(personId);
+    if (parentPairs.length === 0) return;
 
     for (const pair of parentPairs) {
       const idx = addCouple(pair.primaryId, pair.partnerId, gen - 1, side, childCoupleIdx);
@@ -232,21 +237,8 @@ function buildButterflyLayout() {
   // Without this, ALL of one partner's ancestry goes to one side, creating
   // a lopsided tree when that partner has deep ancestry on both parent lines.
   function walkAncestorsSplit(personId, gen, childCoupleIdx) {
-    const parents = (parentsOf[personId] || []).filter((p) => !placed.has(p));
-    if (parents.length === 0) return;
-
-    const usedParents = new Set();
-    const parentPairs = [];
-    for (const pid of parents) {
-      if (usedParents.has(pid)) continue;
-      const partners = (unionPartner[pid] || []).filter(
-        (p) => parents.includes(p) && !usedParents.has(p) && p !== pid
-      );
-      const partnerId = partners[0] || null;
-      usedParents.add(pid);
-      if (partnerId) usedParents.add(partnerId);
-      parentPairs.push({ primaryId: pid, partnerId });
-    }
+    const parentPairs = buildParentPairs(personId);
+    if (parentPairs.length === 0) return;
 
     if (parentPairs.length === 1 && parentPairs[0].partnerId) {
       // Single parent couple: split the two parents into right/left sides
