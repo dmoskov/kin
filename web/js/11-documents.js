@@ -24,6 +24,7 @@ let CURRENT_PROPOSED = null;
 
   const historyEl = document.getElementById("doc-history");
   const historyList = document.getElementById("doc-history-list");
+  const filePreviewEl = document.getElementById("doc-file-preview");
 
   function openModal() {
     resetDocUI();
@@ -35,16 +36,74 @@ let CURRENT_PROPOSED = null;
     overlay.classList.add("hidden");
   }
 
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      if (!document.getElementById("doc-review-overlay")?.classList.contains("hidden")) {
+        document.getElementById("doc-review-overlay").classList.add("hidden");
+      } else if (!overlay.classList.contains("hidden")) {
+        closeModal();
+      }
+    }
+  });
+
+  document.addEventListener("dragover", (e) => {
+    if (!e.target.closest(".doc-drop-zone") && !e.target.closest("#gedcom-drop-zone")) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "none";
+    }
+  });
+  document.addEventListener("drop", (e) => {
+    if (!e.target.closest(".doc-drop-zone") && !e.target.closest("#gedcom-drop-zone")) {
+      e.preventDefault();
+    }
+  });
+
   function resetDocUI() {
     progressEl.classList.add("hidden");
     errorBox.classList.add("hidden");
     dropZone.style.display = "";
+    if (filePreviewEl) { filePreviewEl.classList.add("hidden"); filePreviewEl.innerHTML = ""; }
     setStep("doc-step-prepare", "pending", "");
     setStep("doc-step-upload", "pending", "");
     setStep("doc-step-analyze", "pending", "");
     const chunkProgress = document.getElementById("doc-chunk-progress");
     if (chunkProgress) chunkProgress.classList.add("hidden");
     if (resumeBtn) resumeBtn.classList.add("hidden");
+  }
+
+  function showFilePreview(file) {
+    if (!filePreviewEl) return;
+    filePreviewEl.innerHTML = "";
+    filePreviewEl.classList.remove("hidden");
+
+    const isImage = file.type.startsWith("image/");
+    if (isImage) {
+      const img = document.createElement("img");
+      img.className = "doc-file-preview-thumb";
+      img.alt = file.name;
+      const url = URL.createObjectURL(file);
+      img.src = url;
+      img.onload = () => URL.revokeObjectURL(url);
+      filePreviewEl.appendChild(img);
+    } else {
+      const iconBox = document.createElement("div");
+      iconBox.className = "doc-file-preview-icon";
+      iconBox.textContent = "PDF";
+      filePreviewEl.appendChild(iconBox);
+    }
+
+    const info = document.createElement("div");
+    info.className = "doc-file-preview-info";
+    const nameEl = document.createElement("div");
+    nameEl.className = "doc-file-preview-name";
+    nameEl.textContent = file.name;
+    nameEl.title = file.name;
+    const metaEl = document.createElement("div");
+    metaEl.className = "doc-file-preview-meta";
+    metaEl.textContent = `${formatSize(file.size)} · ${isImage ? "Image" : "PDF"}`;
+    info.appendChild(nameEl);
+    info.appendChild(metaEl);
+    filePreviewEl.appendChild(info);
   }
 
   function setStep(id, status, detail) {
@@ -112,6 +171,7 @@ let CURRENT_PROPOSED = null;
     dropZone.style.display = "none";
     progressEl.classList.remove("hidden");
     errorBox.classList.add("hidden");
+    showFilePreview(originalFile);
 
     // ── Step 1: Prepare ──
     setStep("doc-step-prepare", "active", `${originalFile.name} (${formatSize(originalFile.size)})`);
@@ -688,6 +748,53 @@ let CURRENT_PROPOSED = null;
 
 // ── Review Modal ──────────────────────────────────────────────────────
 
+function _escAttr(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
+
+function _genderIcon(g) {
+  if (!g) return "";
+  const gl = g.toLowerCase();
+  if (gl === "male" || gl === "m") return `<span class="gender-icon" style="color:var(--male)">&#9794;</span>`;
+  if (gl === "female" || gl === "f") return `<span class="gender-icon" style="color:var(--female)">&#9792;</span>`;
+  return "";
+}
+
+function _buildStatsBar(proposed) {
+  const statsEl = document.getElementById("doc-review-stats");
+  if (!statsEl) return;
+  const people = (proposed.people || []).length;
+  const rels = (proposed.relationships || []).length;
+  const events = (proposed.events || []).length;
+  const unions = (proposed.unions || []).length;
+  let html = "";
+  if (people) html += `<span class="doc-review-stat"><span class="doc-review-stat-icon">&#128100;</span> <span class="doc-review-stat-count">${people}</span> people</span>`;
+  if (rels) html += `<span class="doc-review-stat"><span class="doc-review-stat-icon">&#128279;</span> <span class="doc-review-stat-count">${rels}</span> relationships</span>`;
+  if (events) html += `<span class="doc-review-stat"><span class="doc-review-stat-icon">&#128197;</span> <span class="doc-review-stat-count">${events}</span> events</span>`;
+  if (unions) html += `<span class="doc-review-stat"><span class="doc-review-stat-icon">&#128141;</span> <span class="doc-review-stat-count">${unions}</span> unions</span>`;
+  statsEl.innerHTML = html;
+}
+
+function _wireCollapsible(container) {
+  container.querySelectorAll(".review-section-title").forEach(titleEl => {
+    titleEl.addEventListener("click", () => {
+      const section = titleEl.closest(".review-section");
+      section.classList.toggle("collapsed");
+    });
+  });
+}
+
+function _wireToggles(container) {
+  container.querySelectorAll(".review-toggle").forEach(cb => {
+    cb.addEventListener("change", () => {
+      const card = cb.closest(".review-card");
+      card.classList.toggle("excluded", !cb.checked);
+      const inputs = card.querySelectorAll("input:not(.review-toggle)");
+      inputs.forEach(inp => { inp.disabled = !cb.checked; });
+    });
+  });
+}
+
 export function openReviewModal(proposed, filename, alreadyApplied) {
   const overlay = document.getElementById("doc-review-overlay");
   const title = document.getElementById("doc-review-title");
@@ -701,7 +808,9 @@ export function openReviewModal(proposed, filename, alreadyApplied) {
   }
 
   title.textContent = `Review — ${filename}`;
-  summary.textContent = proposed.summary || "AI extracted the following information.";
+  summary.textContent = proposed.summary || "AI extracted the following information from this document. Review the details below, uncheck any items you want to skip, then click Apply.";
+
+  _buildStatsBar(proposed);
 
   let html = "";
 
@@ -709,74 +818,95 @@ export function openReviewModal(proposed, filename, alreadyApplied) {
   const people = proposed.people || [];
   if (people.length > 0) {
     html += `<div class="review-section">`;
-    html += `<div class="review-section-title">People (${people.length})</div>`;
+    html += `<div class="review-section-title"><span class="review-section-arrow">&#9660;</span> People (${people.length})</div>`;
+    html += `<div class="review-section-cards">`;
     for (let i = 0; i < people.length; i++) {
       const p = people[i];
       const badge = p.is_new
         ? `<span class="new-badge">NEW</span>`
         : `<span class="update-badge">UPDATE</span>`;
-      html += `<div class="review-card">`;
-      html += `<div><span class="value">${p.given_name || ""} ${p.surname || ""}</span>${badge}</div>`;
-      html += `<div><span class="label">ID: </span><input value="${p.id || ""}" data-path="people.${i}.id" /></div>`;
-      if (p.birth_date) html += `<div><span class="label">Born: </span><input value="${p.birth_date}" data-path="people.${i}.birth_date" /></div>`;
-      if (p.birth_place) html += `<div><span class="label">Birth place: </span><input value="${p.birth_place}" data-path="people.${i}.birth_place" /></div>`;
-      if (p.death_date) html += `<div><span class="label">Died: </span><input value="${p.death_date}" data-path="people.${i}.death_date" /></div>`;
-      if (p.death_place) html += `<div><span class="label">Death place: </span><input value="${p.death_place}" data-path="people.${i}.death_place" /></div>`;
-      if (p.maiden_name) html += `<div><span class="label">Maiden name: </span><input value="${p.maiden_name}" data-path="people.${i}.maiden_name" /></div>`;
-      if (p.notes) html += `<div><span class="label">Notes: </span><input value="${p.notes.replace(/"/g, '&quot;')}" data-path="people.${i}.notes" /></div>`;
+      const gIcon = _genderIcon(p.gender);
+      html += `<div class="review-card" data-review-index="${i}" data-review-type="people">`;
+      html += `<div class="review-card-header"><input type="checkbox" class="review-toggle" checked data-path="people.${i}._include" />${gIcon}<span class="value">${_escAttr(p.given_name || "")} ${_escAttr(p.surname || "")}</span>${badge}</div>`;
+      html += `<div><span class="label">ID: </span><input value="${_escAttr(p.id || "")}" data-path="people.${i}.id" /></div>`;
+      if (p.birth_date) html += `<div><span class="label">Born: </span><input value="${_escAttr(p.birth_date)}" data-path="people.${i}.birth_date" /></div>`;
+      if (p.birth_place) html += `<div><span class="label">Birth place: </span><input value="${_escAttr(p.birth_place)}" data-path="people.${i}.birth_place" /></div>`;
+      if (p.death_date) html += `<div><span class="label">Died: </span><input value="${_escAttr(p.death_date)}" data-path="people.${i}.death_date" /></div>`;
+      if (p.death_place) html += `<div><span class="label">Death place: </span><input value="${_escAttr(p.death_place)}" data-path="people.${i}.death_place" /></div>`;
+      if (p.maiden_name) html += `<div><span class="label">Maiden name: </span><input value="${_escAttr(p.maiden_name)}" data-path="people.${i}.maiden_name" /></div>`;
+      if (p.notes) html += `<div><span class="label">Notes: </span><input value="${_escAttr(p.notes)}" data-path="people.${i}.notes" /></div>`;
       html += `</div>`;
     }
-    html += `</div>`;
+    html += `</div></div>`;
   }
 
   // Relationships section
   const rels = proposed.relationships || [];
   if (rels.length > 0) {
     html += `<div class="review-section">`;
-    html += `<div class="review-section-title">Relationships (${rels.length})</div>`;
-    for (const r of rels) {
+    html += `<div class="review-section-title"><span class="review-section-arrow">&#9660;</span> Relationships (${rels.length})</div>`;
+    html += `<div class="review-section-cards">`;
+    for (let i = 0; i < rels.length; i++) {
+      const r = rels[i];
       const pName = _nameForId(r.parent_id);
       const cName = _nameForId(r.child_id);
-      html += `<div class="review-card">${pName} &rarr; ${cName} <span class="label">(${r.rel_type || "biological"})</span></div>`;
+      html += `<div class="review-card" data-review-index="${i}" data-review-type="relationships">`;
+      html += `<div class="review-card-header"><input type="checkbox" class="review-toggle" checked data-path="relationships.${i}._include" />${_escAttr(pName)} &rarr; ${_escAttr(cName)} <span class="label">(${r.rel_type || "biological"})</span></div>`;
+      html += `</div>`;
     }
-    html += `</div>`;
+    html += `</div></div>`;
   }
 
   // Events section
   const events = proposed.events || [];
   if (events.length > 0) {
     html += `<div class="review-section">`;
-    html += `<div class="review-section-title">Events (${events.length})</div>`;
-    for (const ev of events) {
+    html += `<div class="review-section-title"><span class="review-section-arrow">&#9660;</span> Events (${events.length})</div>`;
+    html += `<div class="review-section-cards">`;
+    for (let i = 0; i < events.length; i++) {
+      const ev = events[i];
       const eName = _nameForId(ev.person_id);
-      html += `<div class="review-card">${eName}: ${ev.event_type}${ev.date ? " — " + ev.date : ""}${ev.place ? " @ " + ev.place : ""}${ev.description ? "<br/>" + ev.description : ""}</div>`;
+      html += `<div class="review-card" data-review-index="${i}" data-review-type="events">`;
+      html += `<div class="review-card-header"><input type="checkbox" class="review-toggle" checked data-path="events.${i}._include" />${_escAttr(eName)}: ${_escAttr(ev.event_type)}${ev.date ? " — " + _escAttr(ev.date) : ""}${ev.place ? " @ " + _escAttr(ev.place) : ""}</div>`;
+      if (ev.description) html += `<div style="margin-top:4px;font-size:12px;color:var(--text-muted)">${_escAttr(ev.description)}</div>`;
+      html += `</div>`;
     }
-    html += `</div>`;
+    html += `</div></div>`;
   }
 
   // Unions section
   const unions = proposed.unions || [];
   if (unions.length > 0) {
     html += `<div class="review-section">`;
-    html += `<div class="review-section-title">Marriages/Partnerships (${unions.length})</div>`;
-    for (const u of unions) {
+    html += `<div class="review-section-title"><span class="review-section-arrow">&#9660;</span> Marriages/Partnerships (${unions.length})</div>`;
+    html += `<div class="review-section-cards">`;
+    for (let i = 0; i < unions.length; i++) {
+      const u = unions[i];
       const p1 = _nameForId(u.partner1_id);
       const p2 = _nameForId(u.partner2_id);
-      html += `<div class="review-card">${p1} &amp; ${p2}${u.union_date ? " — " + u.union_date : ""}</div>`;
+      html += `<div class="review-card" data-review-index="${i}" data-review-type="unions">`;
+      html += `<div class="review-card-header"><input type="checkbox" class="review-toggle" checked data-path="unions.${i}._include" />${_escAttr(p1)} &amp; ${_escAttr(p2)}${u.union_date ? " — " + _escAttr(u.union_date) : ""}</div>`;
+      html += `</div>`;
     }
-    html += `</div>`;
+    html += `</div></div>`;
   }
 
   // Notes
   if (proposed.notes) {
-    html += `<div class="review-notes">${proposed.notes}</div>`;
+    html += `<div class="review-notes">${_escAttr(proposed.notes)}</div>`;
   }
 
   if (!html) {
-    html = `<p style="color:var(--text-muted);text-align:center;padding:24px 0;">No structured data was extracted from this document.</p>`;
+    html = `<div style="text-align:center;padding:32px 0;">
+      <div style="font-size:32px;margin-bottom:8px;opacity:0.4">&#128270;</div>
+      <p style="color:var(--text-muted);margin:0;">No structured data was extracted from this document.</p>
+      <p style="color:var(--text-muted);font-size:12px;margin-top:6px;">Try uploading a clearer image or a document with readable text.</p>
+    </div>`;
   }
 
   body.innerHTML = html;
+  _wireCollapsible(body);
+  _wireToggles(body);
   overlay.classList.remove("hidden");
 }
 
@@ -793,6 +923,28 @@ export function _nameForId(id) {
   return id;
 }
 
+function _filterExcluded(proposed) {
+  const filtered = { ...proposed };
+  for (const key of ["people", "relationships", "events", "unions"]) {
+    if (Array.isArray(filtered[key])) {
+      filtered[key] = filtered[key].filter(item => item._include !== false);
+      filtered[key].forEach(item => delete item._include);
+    }
+  }
+  return filtered;
+}
+
+function _showApplySuccess(message) {
+  const el = document.createElement("div");
+  el.className = "doc-apply-success";
+  el.innerHTML = `<div class="doc-apply-success-inner">
+    <div class="doc-apply-success-check">&#10003;</div>
+    <div class="doc-apply-success-text">${_escAttr(message)}</div>
+  </div>`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1700);
+}
+
 // Review modal: Apply button
 document.getElementById("doc-review-apply")?.addEventListener("click", async () => {
   if (!CURRENT_DOC_ID || !CURRENT_PROPOSED) return;
@@ -806,7 +958,15 @@ document.getElementById("doc-review-apply")?.addEventListener("click", async () 
   for (const inp of inputs) {
     const path = inp.dataset.path;
     const parts = path.split(".");
-    // e.g. "people.0.birth_date"
+    if (parts[parts.length - 1] === "_include") {
+      let obj = CURRENT_PROPOSED;
+      for (let i = 0; i < parts.length - 1; i++) {
+        const key = isNaN(parts[i]) ? parts[i] : parseInt(parts[i]);
+        obj = obj[key];
+      }
+      obj._include = inp.checked;
+      continue;
+    }
     let obj = CURRENT_PROPOSED;
     for (let i = 0; i < parts.length - 1; i++) {
       const key = isNaN(parts[i]) ? parts[i] : parseInt(parts[i]);
@@ -815,11 +975,13 @@ document.getElementById("doc-review-apply")?.addEventListener("click", async () 
     obj[parts[parts.length - 1]] = inp.value;
   }
 
+  const toApply = _filterExcluded(CURRENT_PROPOSED);
+
   try {
     const resp = await fetch(`/api/documents/${CURRENT_DOC_ID}/apply`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(CURRENT_PROPOSED),
+      body: JSON.stringify(toApply),
     });
     const data = await resp.json();
 
@@ -830,7 +992,9 @@ document.getElementById("doc-review-apply")?.addEventListener("click", async () 
       if (a.relationships) parts.push(`${a.relationships} relationships`);
       if (a.events) parts.push(`${a.events} events`);
       if (a.unions) parts.push(`${a.unions} unions`);
-      showToast(`Applied: ${parts.join(", ") || "no changes"}`);
+      const msg = parts.join(", ") || "no changes";
+      showToast(`Applied: ${msg}`);
+      _showApplySuccess(`Applied: ${msg}`);
 
       // Refresh data
       await loadData();
