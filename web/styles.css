@@ -65,8 +65,10 @@ body {
   font-family: var(--body-font);
   background: var(--bg);
   color: var(--text);
-  min-height: 100vh;
+  height: 100vh;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ── Header ─────────────────────────────────────────────────── */
@@ -80,6 +82,7 @@ header {
   background: var(--surface);
   z-index: 10;
   position: relative;
+  flex-shrink: 0;
 }
 
 .header-left {
@@ -143,7 +146,8 @@ nav {
 
 main {
   display: flex;
-  height: calc(100vh - 65px);
+  flex: 1;
+  min-height: 0;
   position: relative;
 }
 
