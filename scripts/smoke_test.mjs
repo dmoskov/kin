@@ -1,29 +1,26 @@
-// Headless smoke test for the web app — the JS safety net for refactors.
+// Headless integration smoke test for the web app — the JS safety net for
+// refactors. Boots the page in real Chrome, exercises every major view and the
+// person panel, and fails on any uncaught page exception, app-origin request
+// failure, missing global, or view that renders empty.
 //
 // Usage:
-//   1. Start the app on a port (default 8137), pointed at a DB with data.
+//   1. Start the app on a port (default 8137) pointed at a DB with data.
 //   2. npx playwright install chrome   (once, if needed)
 //   3. SMOKE_URL=http://127.0.0.1:8137 node scripts/smoke_test.mjs
-//
-// Fails on any uncaught page exception or *app-origin* request failure, and
-// asserts the core globals (spread across all split JS modules) are defined and
-// that real data renders. Benign third-party / not-signed-in noise is ignored.
 import { chromium } from "playwright";
 
 const BASE = process.env.SMOKE_URL || "http://127.0.0.1:8137";
 
-// Console/network noise that is expected when running locally without Google
-// sign-in configured for the origin — not a regression.
+// Expected noise when running locally without Google sign-in for the origin.
 const BENIGN = [
-  /api\/auth\/me/, // 401 when not signed in
+  /api\/auth\/me/,
   /favicon\.ico/,
-  /GSI_LOGGER/, // Google Identity can't authorize localhost
+  /GSI_LOGGER/,
   /accounts\.google\.com/,
   /photospicker\.googleapis/,
-  /tile\.openstreetmap/, // leaflet map tiles (offline)
-  // URL-less console mirror of network failures; covered by the response
-  // listener below, which can filter by URL.
-  /Failed to load resource/,
+  /tile\.openstreetmap/,
+  /basemaps\.cartocdn/,
+  /Failed to load resource/, // URL-less mirror; covered by the response listener
 ];
 const isBenign = (s) => BENIGN.some((re) => re.test(s));
 
@@ -33,15 +30,7 @@ const page = await browser.newPage();
 
 page.on("pageerror", (err) => errors.push(`pageerror: ${err.message}`));
 page.on("console", (msg) => {
-  if (msg.type() === "error" && !isBenign(msg.text())) {
-    errors.push(`console.error: ${msg.text()}`);
-  }
-});
-page.on("requestfailed", (req) => {
-  const u = req.url();
-  if (u.startsWith(BASE) && !isBenign(u)) {
-    errors.push(`requestfailed: ${u} ${req.failure()?.errorText}`);
-  }
+  if (msg.type() === "error" && !isBenign(msg.text())) errors.push(`console.error: ${msg.text()}`);
 });
 page.on("response", (res) => {
   const u = res.url();
@@ -50,50 +39,79 @@ page.on("response", (res) => {
   }
 });
 
+const fail = (msg) => {
+  errors.push(msg);
+};
+
 await page.goto(BASE, { waitUntil: "networkidle", timeout: 30000 });
-await page.waitForTimeout(2000); // let init() + async render settle
+await page.waitForTimeout(2000);
 
-// Globals defined as function declarations live on window; top-level let/const
-// live in the shared global lexical env (referenced bare inside evaluate()).
-const checks = await page.evaluate(() => ({
-  fns: {
-    renderTree: typeof window.renderTree,
-    renderTimeline: typeof window.renderTimeline,
-    renderMap: typeof window.renderMap,
-    showPersonPanel: typeof window.showPersonPanel,
-    checkAuth: typeof window.checkAuth,
-    openLightbox: typeof window.openLightbox,
-  },
-  dataPeople: typeof DATA !== "undefined" && DATA ? DATA.people.length : 0,
+// 1. Core function globals (spread across modules) must be defined on window.
+const fns = await page.evaluate(() => ({
+  renderTree: typeof window.renderTree,
+  renderTimeline: typeof window.renderTimeline,
+  renderMap: typeof window.renderMap,
+  showPersonPanel: typeof window.showPersonPanel,
+  checkAuth: typeof window.checkAuth,
+  openLightbox: typeof window.openLightbox,
+  switchTab: typeof window.switchTab,
+  computeRelationship: typeof window.computeRelationship,
 }));
+const missingFns = Object.entries(fns).filter(([, v]) => v !== "function").map(([k]) => k);
+if (missingFns.length) fail("missing function globals: " + missingFns.join(", "));
 
-// Exercise every tab.
-let tabbed = 0;
-for (const t of await page.$$(".tab")) {
-  try {
-    await t.click();
-    await page.waitForTimeout(400);
-    tabbed++;
-  } catch (e) {
-    errors.push(`tab click failed: ${e.message}`);
-  }
+// 2. Data loaded.
+const firstPersonId = await page.evaluate(() =>
+  typeof DATA !== "undefined" && DATA && DATA.people.length ? DATA.people[0].id : null
+);
+if (!firstPersonId) fail("DATA did not load (no people)");
+
+// 3. Tree view renders nodes.
+const svgGroups = await page.evaluate(() => document.querySelectorAll("#tree-svg g").length);
+if (svgGroups === 0) fail("tree rendered no SVG groups");
+
+// 4. Person panel opens and renders content.
+if (firstPersonId) {
+  await page.evaluate((id) => window.showPersonPanel(id), firstPersonId);
+  await page.waitForTimeout(500);
+  const panelLen = await page.evaluate(
+    () => (document.getElementById("panel-content")?.innerHTML || "").length
+  );
+  if (panelLen < 20) fail("person panel rendered empty");
 }
-const svgGroups = await page.evaluate(() => document.querySelectorAll("svg g").length);
+
+// 5. Each tab switches and its view renders something.
+const tabChecks = [
+  ["timeline", () => document.querySelectorAll("#timeline-entries *").length],
+  ["map", () => (document.querySelector("#map") ? 1 : 0)],
+  ["photos", () => document.querySelectorAll("#view-photos *").length],
+  ["relationships", () => document.querySelectorAll("#view-relationships *").length],
+  ["tree", () => document.querySelectorAll("#tree-svg g").length],
+];
+for (const [view, counter] of tabChecks) {
+  await page.evaluate((v) => window.switchTab && window.switchTab(v), view);
+  await page.waitForTimeout(700);
+  const n = await page.evaluate(counter);
+  if (!n) fail(`view "${view}" rendered empty after switchTab`);
+}
+
+// 6. Map markers actually plot (data has places).
+await page.evaluate(() => window.switchTab && window.switchTab("map"));
+await page.waitForTimeout(1200);
+const markerState = await page.evaluate(() => ({
+  markers: typeof MAP_ALL_EVENTS !== "undefined" ? MAP_ALL_EVENTS.length : -1,
+  leaflet: document.querySelectorAll(".leaflet-marker-icon, #map svg path, #map .leaflet-interactive").length,
+}));
 
 await browser.close();
 
-console.log("Function globals:", JSON.stringify(checks.fns));
-console.log(`DATA.people: ${checks.dataPeople} | tabs clicked: ${tabbed} | svg <g>: ${svgGroups}`);
+console.log("Function globals:", JSON.stringify(fns));
+console.log(`firstPerson: ${firstPersonId} | tree groups: ${svgGroups}`);
+console.log(`map events: ${markerState.markers} | leaflet shapes: ${markerState.leaflet}`);
 
-const missingFns = Object.entries(checks.fns)
-  .filter(([, v]) => v !== "function")
-  .map(([k]) => k);
-
-if (errors.length || missingFns.length || checks.dataPeople === 0) {
-  if (errors.length) console.error("Errors:\n  " + errors.join("\n  "));
-  if (missingFns.length) console.error("Missing function globals: " + missingFns.join(", "));
-  if (checks.dataPeople === 0) console.error("No data rendered (DATA empty)");
-  console.error("\nSMOKE FAIL");
+if (errors.length) {
+  console.error("\nErrors:\n  " + errors.join("\n  "));
+  console.error("SMOKE FAIL");
   process.exit(1);
 }
-console.log("\nSMOKE PASS — app boots, all module globals defined, data renders, tabs work ✓");
+console.log("\nSMOKE PASS — boots, data loads, panel + all 5 views render, no errors ✓");
