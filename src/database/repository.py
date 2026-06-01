@@ -130,8 +130,26 @@ def _upsert(
                 f"ON CONFLICT ({conflict}) DO NOTHING"
             )
     else:
-        prefix = "INSERT OR REPLACE" if update else "INSERT OR IGNORE"
-        sql = f"{prefix} INTO {table} ({col_list}) VALUES ({ph})"
+        # SQLite: use a real upsert (ON CONFLICT DO UPDATE) rather than
+        # INSERT OR REPLACE. INSERT OR REPLACE deletes the conflicting row and
+        # re-inserts it, which (with PRAGMA foreign_keys=ON) cascade-deletes
+        # child rows and resets columns not in the supplied list. ON CONFLICT
+        # DO UPDATE updates in place, matching the PostgreSQL branch.
+        if update:
+            conflict = ", ".join(conflict_columns)
+            conflict_set = set(conflict_columns)
+            sets = [f"{c}=excluded.{c}" for c in columns if c not in conflict_set]
+            if extra_columns and extra_values:
+                sets.extend(
+                    f"{c}={v}"
+                    for c, v in zip(extra_columns, extra_values, strict=False)
+                )
+            sql = (
+                f"INSERT INTO {table} ({col_list}) VALUES ({ph}) "
+                f"ON CONFLICT ({conflict}) DO UPDATE SET {', '.join(sets)}"
+            )
+        else:
+            sql = f"INSERT OR IGNORE INTO {table} ({col_list}) VALUES ({ph})"
 
     _execute(conn, sql, values)
 
@@ -188,10 +206,11 @@ class TreeRepository:
             extra_columns=["updated_at"],
             extra_values=[_now()],
         )
-        try:
-            self._sync_person_photos(conn, person)
-        except Exception:
-            pass
+        # Dual-write the normalized photos/person_photos tables. Let failures
+        # propagate so the surrounding transaction rolls back rather than
+        # committing a half-written person (and, on PostgreSQL, to avoid
+        # committing an already-aborted transaction).
+        self._sync_person_photos(conn, person)
 
     def _do_save_relationship(self, conn: Any, rel: Relationship) -> None:
         _upsert(
@@ -364,6 +383,82 @@ class TreeRepository:
         finally:
             conn.close()
 
+    def auto_link_siblings(self) -> int:
+        """Ensure all children of a union share both parents.
+
+        For every union, looks up children linked to *either* partner
+        and ensures each child has a parent-child relationship to
+        *both* partners.  This handles full siblings (same two parents)
+        and correctly avoids linking half-siblings to a step-parent.
+
+        Returns the number of new relationships created.
+        """
+        conn = self._conn()
+        try:
+            # Load all unions and relationships
+            unions = _fetchall(conn, "SELECT partner1_id, partner2_id FROM unions")
+            rels = _fetchall(conn, "SELECT parent_id, child_id FROM relationships")
+
+            # Build parent→children and child→parents maps
+            parent_to_children: dict[str, set[str]] = {}
+            child_to_parents: dict[str, set[str]] = {}
+            for r in rels:
+                parent_to_children.setdefault(r["parent_id"], set()).add(r["child_id"])
+                child_to_parents.setdefault(r["child_id"], set()).add(r["parent_id"])
+
+            created = 0
+            for u in unions:
+                p1, p2 = u["partner1_id"], u["partner2_id"]
+                children_of_p1 = parent_to_children.get(p1, set())
+                children_of_p2 = parent_to_children.get(p2, set())
+
+                # Children linked to both partners = full siblings (already OK)
+                # Children linked to only one partner AND the other partner
+                # is in a union with them → should also be linked to the other
+                for child_id in children_of_p1:
+                    if p2 not in child_to_parents.get(child_id, set()):
+                        # Check: does this child have p1 as a parent AND
+                        # the other parent (if any) is p2's partner?
+                        # i.e., only link if the child doesn't already have
+                        # a *different* second parent (half-sibling case)
+                        other_parents = child_to_parents.get(child_id, set()) - {p1}
+                        if len(other_parents) == 0:
+                            # Child only has one parent (p1), and p1+p2 are partners
+                            # → safe to add p2
+                            self._do_save_relationship(
+                                conn,
+                                Relationship(
+                                    parent_id=p2,
+                                    child_id=child_id,
+                                    rel_type=RelationshipType.BIOLOGICAL,
+                                ),
+                            )
+                            child_to_parents.setdefault(child_id, set()).add(p2)
+                            parent_to_children.setdefault(p2, set()).add(child_id)
+                            created += 1
+
+                for child_id in children_of_p2:
+                    if p1 not in child_to_parents.get(child_id, set()):
+                        other_parents = child_to_parents.get(child_id, set()) - {p2}
+                        if len(other_parents) == 0:
+                            self._do_save_relationship(
+                                conn,
+                                Relationship(
+                                    parent_id=p1,
+                                    child_id=child_id,
+                                    rel_type=RelationshipType.BIOLOGICAL,
+                                ),
+                            )
+                            child_to_parents.setdefault(child_id, set()).add(p1)
+                            parent_to_children.setdefault(p1, set()).add(child_id)
+                            created += 1
+
+            if created > 0:
+                conn.commit()
+            return created
+        finally:
+            conn.close()
+
     # ── Unions ──────────────────────────────────────────────────────────
 
     def save_union(self, union: Union) -> None:
@@ -488,30 +583,13 @@ class TreeRepository:
             article.photo_url,
         )
         try:
-            if _is_pg():
-                _execute(
-                    conn,
-                    f"""
-                    INSERT INTO news_articles
-                        (id, title, url, publication, date, summary, photo_url)
-                    VALUES ({_ph(7)})
-                    ON CONFLICT (id) DO UPDATE SET
-                        title=EXCLUDED.title, url=EXCLUDED.url,
-                        publication=EXCLUDED.publication, date=EXCLUDED.date,
-                        summary=EXCLUDED.summary, photo_url=EXCLUDED.photo_url
-                """,
-                    params,
-                )
-            else:
-                _execute(
-                    conn,
-                    f"""
-                    INSERT OR REPLACE INTO news_articles
-                        (id, title, url, publication, date, summary, photo_url)
-                    VALUES ({_ph(7)})
-                """,
-                    params,
-                )
+            _upsert(
+                conn,
+                "news_articles",
+                ["id", "title", "url", "publication", "date", "summary", "photo_url"],
+                params,
+                ["id"],
+            )
             conn.commit()
         finally:
             conn.close()

@@ -298,6 +298,14 @@ def serve_photo(filename):
 def api_data():
     """Return the full family tree as JSON (read from DB on each request)."""
     repo = TreeRepository()
+    # Auto-link siblings: if a child is linked to only one partner in a union,
+    # automatically add the other partner as parent too.
+    try:
+        linked = repo.auto_link_siblings()
+        if linked:
+            print(f"[auto_link_siblings] Created {linked} new parent-child relationships")
+    except Exception as e:
+        print(f"[auto_link_siblings] Warning: {e}")
     tree = repo.load_tree()
     all_photos = repo.list_all_photos()
     photos_list = []
