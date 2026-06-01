@@ -1,0 +1,239 @@
+// Part of the family-tree web app. Loaded as an ordered classic script.
+// See index.html for load order. Split from the former monolithic app.js.
+
+function populateRelSelectors() {
+  const sorted = Object.values(PEOPLE_MAP).sort((a, b) =>
+    a.fullName.localeCompare(b.fullName)
+  );
+  setupPersonPicker("picker-a", sorted, computeRelationship);
+  setupPersonPicker("picker-b", sorted, computeRelationship);
+}
+
+function setupPersonPicker(pickerId, people, onChange) {
+  const container = document.getElementById(pickerId);
+  const input = container.querySelector(".picker-search");
+  const list = container.querySelector(".picker-list");
+  container._selectedId = null;
+
+  function renderList(filter) {
+    const q = (filter || "").toLowerCase().trim();
+    const filtered = q
+      ? people.filter((p) => p.fullName.toLowerCase().includes(q))
+      : people;
+    list.innerHTML = "";
+    for (const p of filtered) {
+      const item = document.createElement("div");
+      item.className =
+        "picker-item" +
+        (p.id === container._selectedId ? " picker-item-selected" : "");
+      item.dataset.id = p.id;
+      item.textContent = p.fullName;
+      item.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        if (container._selectedId === p.id) {
+          container._selectedId = null;
+          input.value = "";
+          input.dataset.locked = "";
+          renderList("");
+        } else {
+          container._selectedId = p.id;
+          input.value = p.fullName;
+          input.dataset.locked = p.fullName;
+          renderList(p.fullName);
+        }
+        onChange();
+      });
+      list.appendChild(item);
+    }
+  }
+
+  input.addEventListener("input", () => {
+    if (input.value !== input.dataset.locked) {
+      container._selectedId = null;
+      input.dataset.locked = "";
+      onChange();
+    }
+    renderList(input.value);
+  });
+
+  renderList("");
+}
+
+function computeRelationship() {
+  const pickerA = document.getElementById("picker-a");
+  const pickerB = document.getElementById("picker-b");
+  const idA = (pickerA && pickerA._selectedId) || "";
+  const idB = (pickerB && pickerB._selectedId) || "";
+  const result = document.getElementById("rel-result");
+
+  if (!idA || !idB) {
+    result.classList.add("hidden");
+    return;
+  }
+
+  if (idA && idB) {
+    router.navigate(`/relationships/${idA}/${idB}`, { replace: true });
+  }
+
+  if (idA === idB) {
+    result.classList.remove("hidden");
+    result.innerHTML = `<div class="rel-label">Self</div><div class="rel-desc">That's the same person!</div>`;
+    return;
+  }
+
+  // Client-side relationship calculation (simplified LCA)
+  const label = calculateRelationship(idA, idB);
+  result.classList.remove("hidden");
+  result.innerHTML = `
+    <div class="rel-label">${label}</div>
+    <div class="rel-people">
+      <div class="rel-person"><a class="person-link" data-person-id="${idA}" href="javascript:void(0)">${personThumb(idA, 48)}<span>${personName(idA)}</span></a></div>
+      <span class="rel-connector">${label}</span>
+      <div class="rel-person"><a class="person-link" data-person-id="${idB}" href="javascript:void(0)">${personThumb(idB, 48)}<span>${personName(idB)}</span></a></div>
+    </div>
+  `;
+}
+
+function calculateRelationship(idA, idB) {
+  // Build parent map
+  const parentsOf = {};
+  for (const r of DATA.relationships) {
+    if (!parentsOf[r.child_id]) parentsOf[r.child_id] = [];
+    parentsOf[r.child_id].push(r.parent_id);
+  }
+
+  // Build spouses map
+  const spousesOf = {};
+  for (const u of DATA.unions) {
+    if (!spousesOf[u.partner1_id]) spousesOf[u.partner1_id] = [];
+    if (!spousesOf[u.partner2_id]) spousesOf[u.partner2_id] = [];
+    spousesOf[u.partner1_id].push(u.partner2_id);
+    spousesOf[u.partner2_id].push(u.partner1_id);
+  }
+
+  function ancestorsWithDist(pid) {
+    const dist = { [pid]: 0 };
+    const queue = [pid];
+    while (queue.length > 0) {
+      const current = queue.shift();
+      for (const parent of parentsOf[current] || []) {
+        if (!(parent in dist)) {
+          dist[parent] = dist[current] + 1;
+          queue.push(parent);
+        }
+      }
+    }
+    return dist;
+  }
+
+  function bloodOnly(fromId, toId) {
+    const ancA = ancestorsWithDist(fromId);
+    const ancB = ancestorsWithDist(toId);
+    const common = [];
+    for (const id in ancA) {
+      if (id in ancB) common.push([id, ancA[id], ancB[id]]);
+    }
+    common.sort((a, b) => a[1] + a[2] - (b[1] + b[2]));
+    if (common.length === 0) return null;
+    const [, dA, dB] = common[0];
+    const g = PEOPLE_MAP[toId]?.gender || "unknown";
+    if (dA === 0) return descendantLabel(dB, g);
+    if (dB === 0) return ancestorLabel(dA, g);
+    if (dA === 1 && dB === 1) return g === "male" ? "brother" : g === "female" ? "sister" : "sibling";
+    if (dA === 1 && dB === 2) return g === "male" ? "nephew" : g === "female" ? "niece" : "niece/nephew";
+    if (dA === 2 && dB === 1) return g === "male" ? "uncle" : g === "female" ? "aunt" : "uncle/aunt";
+    const degree = Math.min(dA, dB) - 1;
+    const removed = Math.abs(dA - dB);
+    const ordinals = ["", "first", "second", "third", "fourth", "fifth"];
+    let lbl = `${ordinals[degree] || degree + "th"} cousin`;
+    if (removed > 0) lbl += removed === 1 ? " once removed" : removed === 2 ? " twice removed" : ` ${removed} times removed`;
+    return lbl;
+  }
+
+  // 1. Blood relation
+  const blood = bloodOnly(idA, idB);
+  if (blood) return blood;
+
+  const gA = PEOPLE_MAP[idA]?.gender || "unknown";
+  const gB = PEOPLE_MAP[idB]?.gender || "unknown";
+  const spA = spousesOf[idA] || [];
+  const spB = spousesOf[idB] || [];
+
+  // 2. Direct spouse
+  if (spA.includes(idB)) return gB === "male" ? "husband" : gB === "female" ? "wife" : "spouse";
+
+  // 3. B is A's spouse's blood relative → in-law
+  for (const sA of spA) {
+    const lbl = bloodOnly(sA, idB);
+    if (lbl) {
+      const inLaw = toInLaw(lbl);
+      if (inLaw) return inLaw;
+    }
+  }
+
+  // 4. A is B's spouse's blood relative → reverse in-law
+  for (const sB of spB) {
+    const lbl = bloodOnly(idA, sB);
+    if (lbl) {
+      const inLaw = reverseInLaw(lbl, gB);
+      if (inLaw) return inLaw;
+    }
+  }
+
+  // 5. A's spouse's blood relative is B's spouse → co-in-law (e.g. wife's sister's husband)
+  for (const sA of spA) {
+    for (const sB of spB) {
+      const lbl = bloodOnly(sA, sB);
+      if (lbl) {
+        const wA = gA === "male" ? "wife" : gA === "female" ? "husband" : "spouse";
+        const wB = gB === "male" ? "husband" : gB === "female" ? "wife" : "spouse";
+        return `${wA}'s ${lbl}'s ${wB}`;
+      }
+    }
+  }
+
+  return "no relation found";
+}
+
+function toInLaw(lbl) {
+  const map = {
+    "father": "father-in-law", "mother": "mother-in-law", "parent": "parent-in-law",
+    "brother": "brother-in-law", "sister": "sister-in-law", "sibling": "sibling-in-law",
+    "grandfather": "grandfather-in-law", "grandmother": "grandmother-in-law", "grandparent": "grandparent-in-law",
+    "uncle": "uncle-in-law", "aunt": "aunt-in-law", "uncle/aunt": "uncle/aunt-in-law",
+    "nephew": "nephew-in-law", "niece": "niece-in-law", "niece/nephew": "niece/nephew-in-law",
+  };
+  if (map[lbl]) return map[lbl];
+  if (lbl.includes("cousin")) return lbl + "-in-law";
+  if (/great-.*grand(father|mother|parent)/.test(lbl)) return lbl + "-in-law";
+  return null;
+}
+
+function reverseInLaw(lbl, gB) {
+  if (lbl === "son" || lbl === "daughter" || lbl === "child")
+    return gB === "male" ? "son-in-law" : gB === "female" ? "daughter-in-law" : "child-in-law";
+  if (lbl === "brother" || lbl === "sister" || lbl === "sibling")
+    return gB === "male" ? "brother-in-law" : gB === "female" ? "sister-in-law" : "sibling-in-law";
+  if (lbl === "grandson" || lbl === "granddaughter" || lbl === "grandchild")
+    return gB === "male" ? "grandson-in-law" : gB === "female" ? "granddaughter-in-law" : "grandchild-in-law";
+  return null;
+}
+
+function ancestorLabel(gen, gender) {
+  if (gen === 1) return gender === "male" ? "father" : gender === "female" ? "mother" : "parent";
+  if (gen === 2) return gender === "male" ? "grandfather" : gender === "female" ? "grandmother" : "grandparent";
+  const prefix = "great-".repeat(gen - 2);
+  return gender === "male" ? `${prefix}grandfather` : gender === "female" ? `${prefix}grandmother` : `${prefix}grandparent`;
+}
+
+function descendantLabel(gen, gender) {
+  if (gen === 1) return gender === "male" ? "son" : gender === "female" ? "daughter" : "child";
+  if (gen === 2) return gender === "male" ? "grandson" : gender === "female" ? "granddaughter" : "grandchild";
+  const prefix = "great-".repeat(gen - 2);
+  return gender === "male" ? `${prefix}grandson` : gender === "female" ? `${prefix}granddaughter` : `${prefix}grandchild`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Map View (Leaflet)
+// ═══════════════════════════════════════════════════════════════
+

@@ -1,0 +1,104 @@
+// Part of the family-tree web app. Loaded as an ordered classic script.
+// See index.html for load order. Split from the former monolithic app.js.
+
+async function init() {
+  await loadConfig();
+  await loadData();
+  _geocodeReady = prefetchGeocode();  // fire-and-forget; map awaits before rendering
+  await checkAuth();
+  applyConfig();
+  // Set up viewer before the first render — this determines the center couple,
+  // lanes, and fog-of-war for ALL views
+  initViewingAs();
+  // Always auto-compute lanes from the viewer's center couple
+  autoComputeLanes(CENTER_ID_A, CENTER_ID_B);
+  updateDynamicHeader(CENTER_ID_A, CENTER_ID_B);
+  updateStats();
+  renderTree();
+  renderTimeline();
+  populateTimelineFilter();
+  // Initialize stream toggle button state
+  const viewToggle = document.getElementById("timeline-view-toggle");
+  if (viewToggle) viewToggle.textContent = SHOW_TIMELINE_STREAM ? "Hide Stream" : "Stream";
+  populateRelSelectors();
+  prefillRelationshipCalculator();
+  initPhotoGalleryFilters();
+  initGalleryUpload();
+  renderPhotoGallery();
+
+  // Show onboarding wizard if tree is empty
+  if (typeof window._showOnboardingIfEmpty === "function") window._showOnboardingIfEmpty();
+
+  document.getElementById("focus-depth-select")?.addEventListener("change", (e) => {
+    if (FOCUS_PERSON_ID) {
+      FOCUS_DEPTH = e.target.value === "all" ? "all" : parseInt(e.target.value, 10);
+      applyFocus();
+      const depthStr = FOCUS_DEPTH === "all" ? "all" : String(FOCUS_DEPTH);
+      router.navigate(`/tree/focus/${FOCUS_PERSON_ID}/${depthStr}`, { replace: true });
+    }
+  });
+
+  // Lazy-init map when tab is first shown (Leaflet needs a visible container)
+  let mapInitialized = false;
+  const observer = new MutationObserver(() => {
+    const mapView = document.getElementById("view-map");
+    if (mapView && mapView.classList.contains("active")) {
+      if (!mapInitialized) {
+        mapInitialized = true;
+        renderMap();
+      } else if (MAP) {
+        MAP.invalidateSize();
+      }
+    }
+  });
+  observer.observe(document.getElementById("view-map"), { attributes: true, attributeFilter: ["class"] });
+
+  // Resize handler
+  window.addEventListener("resize", () => {
+    renderTree();
+    if (MAP) MAP.invalidateSize();
+  });
+
+  // Apply URL state (deep linking) — suppress history push since we're restoring
+  router.apply();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Theme Toggle (light / dark)
+// ═══════════════════════════════════════════════════════════════
+
+function initTheme() {
+  const saved = localStorage.getItem("ft-theme");
+  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const theme = saved || (prefersDark ? "dark" : "light");
+  applyTheme(theme);
+}
+
+function applyTheme(theme) {
+  const btn = document.getElementById("theme-toggle");
+  if (theme === "light") {
+    document.documentElement.setAttribute("data-theme", "light");
+    btn.innerHTML = "&#9728;";   // ☀ sun
+    btn.title = "Switch to dark mode";
+  } else {
+    document.documentElement.removeAttribute("data-theme");
+    btn.innerHTML = "&#9790;";   // ☾ moon
+    btn.title = "Switch to light mode";
+  }
+  localStorage.setItem("ft-theme", theme);
+}
+
+document.getElementById("theme-toggle").addEventListener("click", () => {
+  const current = document.documentElement.getAttribute("data-theme");
+  applyTheme(current === "light" ? "dark" : "light");
+  // Re-apply config palette for the new theme
+  applyPalette();
+  // Re-render tree to pick up CSS variable changes in SVG
+  renderTree();
+});
+
+
+// ═══════════════════════════════════════════════════════════════
+// Lightbox
+// ═══════════════════════════════════════════════════════════════
+

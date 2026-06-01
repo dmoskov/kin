@@ -1,0 +1,1231 @@
+// Part of the family-tree web app. Loaded as an ordered classic script.
+// See index.html for load order. Split from the former monolithic app.js.
+
+let CENTER_ID_A = null;
+let CENTER_ID_B = null;
+
+// Layout constants
+const NODE_W = 160;
+const NODE_H = 52;
+const COUPLE_GAP = 18;
+const H_SPACING = 10;
+const ROW_HEIGHT = 95;
+const BAND_PADDING = 20;
+
+// Generation band gradient — warm center → cool ancestors
+const GEN_COLORS = [
+  { gen:  1, color: "#c4956a", label: "Children" },
+  { gen:  0, color: "#d4a843", label: "Center" },
+  { gen: -1, color: "#d48c6a", label: "Parents" },
+  { gen: -2, color: "#c47c6a", label: "Grandparents" },
+  { gen: -3, color: "#a07c8a", label: "Great-Grandparents" },
+  { gen: -4, color: "#8a7ca0", label: "2\u00d7 Great" },
+  { gen: -5, color: "#7c8ab0", label: "3\u00d7 Great" },
+  { gen: -6, color: "#6a8fb5", label: "4\u00d7 Great" },
+  { gen: -7, color: "#5a9eb0", label: "5\u00d7 Great" },
+  { gen: -8, color: "#4aa0a0", label: "6\u00d7 Great" },
+  { gen: -9, color: "#3aa090", label: "7\u00d7 Great" },
+  { gen:-10, color: "#2e9a80", label: "8\u00d7 Great" },
+];
+
+function getGenMeta(gen) {
+  return GEN_COLORS.find((g) => g.gen === gen) || {
+    gen,
+    color: "#6a8fb5",
+    label: `${Math.abs(gen) - 2}\u00d7 Great`,
+  };
+}
+
+function buildHierarchy() {
+  // Build parent→children lookup
+  const childrenOf = {};
+  const hasParent = new Set();
+
+  for (const rel of DATA.relationships) {
+    if (!childrenOf[rel.parent_id]) childrenOf[rel.parent_id] = new Set();
+    childrenOf[rel.parent_id].add(rel.child_id);
+    hasParent.add(rel.child_id);
+  }
+
+  // Build union lookup (partner mapping)
+  const unionPartner = {};
+  for (const u of DATA.unions) {
+    if (!unionPartner[u.partner1_id]) unionPartner[u.partner1_id] = [];
+    unionPartner[u.partner1_id].push(u.partner2_id);
+    if (!unionPartner[u.partner2_id]) unionPartner[u.partner2_id] = [];
+    unionPartner[u.partner2_id].push(u.partner1_id);
+  }
+
+  // Find family units (couples with children)
+  // Strategy: group by "couple node" — pick the male partner or first partner as primary
+  const processed = new Set();
+  const roots = [];
+
+  function buildNode(personId, depth = 0) {
+    if (processed.has(personId) || depth > 10) return null;
+    processed.add(personId);
+
+    const person = PEOPLE_MAP[personId];
+    if (!person) return null;
+
+    const node = {
+      id: personId,
+      name: person.fullName,
+      gender: person.gender,
+      birthDate: person.birth_date,
+      deathDate: person.death_date,
+      data: person,
+      children: [],
+      partner: null,
+    };
+
+    // Find partner(s)
+    const partners = (unionPartner[personId] || []).filter(
+      (pid) => !processed.has(pid)
+    );
+    if (partners.length > 0) {
+      const partnerId = partners[0];
+      processed.add(partnerId);
+      const partnerPerson = PEOPLE_MAP[partnerId];
+      if (partnerPerson) {
+        node.partner = {
+          id: partnerId,
+          name: partnerPerson.fullName,
+          gender: partnerPerson.gender,
+          data: partnerPerson,
+        };
+      }
+    }
+
+    // Collect children from both partners
+    const childIds = new Set();
+    if (childrenOf[personId]) {
+      childrenOf[personId].forEach((c) => childIds.add(c));
+    }
+    if (node.partner && childrenOf[node.partner.id]) {
+      childrenOf[node.partner.id].forEach((c) => childIds.add(c));
+    }
+
+    for (const cid of childIds) {
+      const childNode = buildNode(cid, depth + 1);
+      if (childNode) node.children.push(childNode);
+    }
+
+    return node;
+  }
+
+  // Start from people who have no parents (roots)
+  for (const p of DATA.people) {
+    if (!hasParent.has(p.id) && !processed.has(p.id)) {
+      // Check if this person has a partner who is also a root — merge them
+      const partners = unionPartner[p.id] || [];
+      const rootPartner = partners.find(
+        (pid) => !hasParent.has(pid) && !processed.has(pid)
+      );
+
+      // Pick the first one (male preference for layout consistency)
+      const startId =
+        p.gender === "male"
+          ? p.id
+          : rootPartner && PEOPLE_MAP[rootPartner]?.gender === "male"
+          ? rootPartner
+          : p.id;
+
+      const node = buildNode(startId);
+      if (node) roots.push(node);
+    }
+  }
+
+  // If we have multiple root trees, create a virtual root
+  if (roots.length === 1) return roots[0];
+  return { id: "_root", name: "", virtual: true, children: roots, gender: "unknown" };
+}
+
+/**
+ * Build the butterfly layout data structure.
+ * Returns { nodes, links, unions, genRange }
+ */
+function buildButterflyLayout() {
+  _resolveCenterIds();
+
+  const parentsOf = {};
+  const childrenOf = {};
+  for (const r of DATA.relationships) {
+    if (!parentsOf[r.child_id]) parentsOf[r.child_id] = [];
+    parentsOf[r.child_id].push(r.parent_id);
+    if (!childrenOf[r.parent_id]) childrenOf[r.parent_id] = new Set();
+    childrenOf[r.parent_id].add(r.child_id);
+  }
+
+  const unionPartner = {};
+  for (const u of DATA.unions) {
+    unionPartner[u.partner1_id] = unionPartner[u.partner1_id] || [];
+    unionPartner[u.partner1_id].push(u.partner2_id);
+    unionPartner[u.partner2_id] = unionPartner[u.partner2_id] || [];
+    unionPartner[u.partner2_id].push(u.partner1_id);
+  }
+
+  const couples = [];
+  const personCoupleIdx = {};
+  const placed = new Set();
+  const coupleChildren = {};  // coupleIdx → [child coupleIdx, ...]
+
+  function addCouple(primaryId, partnerId, gen, side, treePar) {
+    const idx = couples.length;
+    couples.push({ primaryId, partnerId, gen, side, treeParent: treePar ?? -1 });
+    placed.add(primaryId);
+    personCoupleIdx[primaryId] = idx;
+    if (partnerId) {
+      placed.add(partnerId);
+      personCoupleIdx[partnerId] = idx;
+    }
+    if (treePar !== undefined && treePar >= 0) {
+      if (!coupleChildren[treePar]) coupleChildren[treePar] = [];
+      coupleChildren[treePar].push(idx);
+    }
+    return idx;
+  }
+
+  // Gen 0: center couple
+  const centerIdx = addCouple(CENTER_ID_A, CENTER_ID_B, 0, "center", -1);
+
+  // Gen +1: children of center couple
+  const centerChildren = new Set();
+  (childrenOf[CENTER_ID_A] || new Set()).forEach((c) => centerChildren.add(c));
+  (childrenOf[CENTER_ID_B] || new Set()).forEach((c) => centerChildren.add(c));
+  for (const cid of centerChildren) {
+    if (!placed.has(cid)) {
+      const partner = (unionPartner[cid] || []).find((p) => !placed.has(p)) || null;
+      addCouple(cid, partner, 1, "center", centerIdx);
+    }
+  }
+
+  // Walk UP from a person to place their ancestors.
+  // Ancestors are stored as tree-children of their descendant (butterfly/inverted direction).
+  // This keeps the center couple as the tree root with both parent lines as subtrees.
+  function walkAncestors(personId, gen, side, childCoupleIdx) {
+    const parents = (parentsOf[personId] || []).filter((p) => !placed.has(p));
+    if (parents.length === 0) return;
+
+    const parentPairs = [];
+    const usedParents = new Set();
+
+    for (const pid of parents) {
+      if (usedParents.has(pid)) continue;
+      const partners = (unionPartner[pid] || []).filter(
+        (p) => parents.includes(p) && !usedParents.has(p) && p !== pid
+      );
+      const partnerId = partners[0] || null;
+      usedParents.add(pid);
+      if (partnerId) usedParents.add(partnerId);
+      parentPairs.push({ primaryId: pid, partnerId });
+    }
+
+    for (const pair of parentPairs) {
+      const idx = addCouple(pair.primaryId, pair.partnerId, gen - 1, side, childCoupleIdx);
+      walkAncestors(pair.primaryId, gen - 1, side, idx);
+      if (pair.partnerId) walkAncestors(pair.partnerId, gen - 1, side, idx);
+    }
+  }
+
+  // Split CENTER_ID_A's parents into left/right sides for balanced layout.
+  // Without this, ALL of one partner's ancestry goes to one side, creating
+  // a lopsided tree when that partner has deep ancestry on both parent lines.
+  function walkAncestorsSplit(personId, gen, childCoupleIdx) {
+    const parents = (parentsOf[personId] || []).filter((p) => !placed.has(p));
+    if (parents.length === 0) return;
+
+    const usedParents = new Set();
+    const parentPairs = [];
+    for (const pid of parents) {
+      if (usedParents.has(pid)) continue;
+      const partners = (unionPartner[pid] || []).filter(
+        (p) => parents.includes(p) && !usedParents.has(p) && p !== pid
+      );
+      const partnerId = partners[0] || null;
+      usedParents.add(pid);
+      if (partnerId) usedParents.add(partnerId);
+      parentPairs.push({ primaryId: pid, partnerId });
+    }
+
+    if (parentPairs.length === 1 && parentPairs[0].partnerId) {
+      // Single parent couple: split the two parents into right/left sides
+      const pair = parentPairs[0];
+      const idx = addCouple(pair.primaryId, pair.partnerId, gen - 1, "right", childCoupleIdx);
+      // Primary parent's ancestors → right side (positioned left)
+      walkAncestors(pair.primaryId, gen - 1, "right", idx);
+      // Partner parent's ancestors → left side (positioned right)
+      walkAncestors(pair.partnerId, gen - 1, "left", idx);
+    } else {
+      // Multiple parent pairs or single parent: alternate sides
+      for (let pi = 0; pi < parentPairs.length; pi++) {
+        const pair = parentPairs[pi];
+        const side = pi % 2 === 0 ? "right" : "left";
+        const idx = addCouple(pair.primaryId, pair.partnerId, gen - 1, side, childCoupleIdx);
+        walkAncestors(pair.primaryId, gen - 1, side, idx);
+        if (pair.partnerId) walkAncestors(pair.partnerId, gen - 1, side, idx);
+      }
+    }
+  }
+
+  walkAncestorsSplit(CENTER_ID_A, 0, centerIdx);
+  if (CENTER_ID_B) walkAncestorsSplit(CENTER_ID_B, 0, centerIdx);
+
+  // Walk DOWN from every placed person to include siblings, aunts/uncles
+  function walkDescendants(personId, gen, side, parentCoupleIdx) {
+    const kids = childrenOf[personId] || new Set();
+    for (const cid of kids) {
+      if (placed.has(cid)) continue;
+      const partner = (unionPartner[cid] || []).find((p) => !placed.has(p)) || null;
+      const idx = addCouple(cid, partner, gen + 1, side, parentCoupleIdx);
+      walkDescendants(cid, gen + 1, side, idx);
+      if (partner) walkDescendants(partner, gen + 1, side, idx);
+    }
+  }
+
+  const snapshotLen = couples.length;
+  for (let i = 0; i < snapshotLen; i++) {
+    const c = couples[i];
+    walkDescendants(c.primaryId, c.gen, c.side, i);
+    if (c.partnerId) walkDescendants(c.partnerId, c.gen, c.side, i);
+  }
+
+  // Catch remaining connected people (e.g. second spouses)
+  for (const p of DATA.people) {
+    if (placed.has(p.id)) continue;
+    const partners = unionPartner[p.id] || [];
+    const placedPartner = partners.find((pid) => placed.has(pid));
+    if (placedPartner) {
+      const pcIdx = personCoupleIdx[placedPartner];
+      const partnerCouple = couples[pcIdx];
+      if (partnerCouple) addCouple(p.id, null, partnerCouple.gen, partnerCouple.side, partnerCouple.treeParent);
+    }
+    const pars = parentsOf[p.id] || [];
+    const placedParent = pars.find((pid) => placed.has(pid));
+    if (!placed.has(p.id) && placedParent) {
+      const ppIdx = personCoupleIdx[placedParent];
+      const parentCouple = couples[ppIdx];
+      if (parentCouple) addCouple(p.id, null, parentCouple.gen + 1, parentCouple.side, ppIdx);
+    }
+  }
+
+  // ── Compute positions (compact layer-by-layer layout) ──
+  //
+  // Uses a Sugiyama-style barycenter algorithm instead of recursive subtree-
+  // width allocation. Each generation is positioned independently:
+  //   1. Place roots compactly
+  //   2. Top-down: place each child at its parent's x, resolve overlaps
+  //   3. Bottom-up: re-center each parent over its children, resolve overlaps
+  //   4. Repeat for convergence
+  //
+  // This produces dramatically more compact layouts because ancestors are only
+  // spread as far as needed to avoid overlaps — not pre-allocated for all
+  // leaf-level descendants.
+
+  const genRange = { min: 0, max: 0 };
+  for (const c of couples) {
+    genRange.min = Math.min(genRange.min, c.gen);
+    genRange.max = Math.max(genRange.max, c.gen);
+  }
+
+  function coupleWidth(c) {
+    return c.partnerId ? NODE_W * 2 + COUPLE_GAP : NODE_W;
+  }
+
+  function genY(gen) {
+    return (gen - genRange.min) * ROW_HEIGHT + BAND_PADDING;
+  }
+
+  const couplePositions = new Map();
+
+  // ── Build natural parent→child trees for ancestor lines ──
+
+  function buildNaturalTree(lineIndices) {
+    const inLine = new Set(lineIndices);
+    const natKids = {};
+    const hasParent = new Set();
+
+    for (const idx of lineIndices) {
+      const c = couples[idx];
+      const bioKids = new Set();
+      if (childrenOf[c.primaryId]) childrenOf[c.primaryId].forEach(k => bioKids.add(k));
+      if (c.partnerId && childrenOf[c.partnerId]) childrenOf[c.partnerId].forEach(k => bioKids.add(k));
+
+      for (const kidId of bioKids) {
+        const kidIdx = personCoupleIdx[kidId];
+        if (kidIdx !== undefined && inLine.has(kidIdx) && kidIdx !== idx) {
+          if (!natKids[idx]) natKids[idx] = [];
+          if (!natKids[idx].includes(kidIdx)) {
+            natKids[idx].push(kidIdx);
+            hasParent.add(kidIdx);
+          }
+        }
+      }
+    }
+
+    const roots = lineIndices.filter(i => !hasParent.has(i));
+    return { natKids, roots };
+  }
+
+  // ── Layer-by-layer positioning (barycenter method) ──
+  // Works for any tree expressed as a childrenMap. Multiple top-down + bottom-up
+  // passes converge to a compact, balanced layout.
+
+  function positionLayered(allIndicesArr, childrenMap) {
+    const allIndices = new Set(allIndicesArr);
+    if (allIndices.size === 0) return;
+
+    // Build parent map
+    const parentOf = {};
+    for (const idx of allIndices) {
+      for (const kid of (childrenMap[idx] || [])) {
+        if (allIndices.has(kid)) parentOf[kid] = idx;
+      }
+    }
+
+    // Group by generation
+    const byGen = {};
+    for (const idx of allIndices) {
+      const g = couples[idx].gen;
+      if (!byGen[g]) byGen[g] = [];
+      byGen[g].push(idx);
+    }
+
+    const gens = Object.keys(byGen).map(Number).sort((a, b) => a - b);
+    if (gens.length === 0) return;
+
+    // Resolve overlaps in a generation, then re-center the group so the
+    // median stays stable (prevents rightward drift).
+    function resolveOverlaps(group) {
+      if (group.length <= 1) return;
+      group.sort((a, b) => couplePositions.get(a).cx - couplePositions.get(b).cx);
+      // Remember center of mass before
+      const cmBefore = group.reduce((s, i) => s + couplePositions.get(i).cx, 0) / group.length;
+      // Push apart
+      for (let i = 1; i < group.length; i++) {
+        const prev = couplePositions.get(group[i - 1]);
+        const curr = couplePositions.get(group[i]);
+        const minGap = (coupleWidth(couples[group[i - 1]]) + coupleWidth(couples[group[i]])) / 2 + H_SPACING;
+        if (curr.cx - prev.cx < minGap) {
+          curr.cx = prev.cx + minGap;
+        }
+      }
+      // Re-center group around original center of mass
+      const cmAfter = group.reduce((s, i) => s + couplePositions.get(i).cx, 0) / group.length;
+      const drift = cmAfter - cmBefore;
+      for (const idx of group) couplePositions.get(idx).cx -= drift;
+    }
+
+    // Initial placement: roots packed compactly, centered at x=0
+    const rootGroup = byGen[gens[0]];
+    let rx = 0;
+    for (const idx of rootGroup) {
+      const w = coupleWidth(couples[idx]);
+      couplePositions.set(idx, { cx: rx + w / 2, y: genY(couples[idx].gen) });
+      rx += w + H_SPACING;
+    }
+    if (rootGroup.length > 0) {
+      const avg = rootGroup.reduce((s, i) => s + couplePositions.get(i).cx, 0) / rootGroup.length;
+      for (const idx of rootGroup) couplePositions.get(idx).cx -= avg;
+    }
+
+    // Run 3 iterations of top-down + bottom-up for convergence
+    for (let iter = 0; iter < 3; iter++) {
+      // Top-down: each child at parent's x
+      for (let gi = 1; gi < gens.length; gi++) {
+        const group = byGen[gens[gi]];
+        for (const idx of group) {
+          const par = parentOf[idx];
+          const parPos = par !== undefined ? couplePositions.get(par) : null;
+          const cx = parPos ? parPos.cx : 0;
+          if (couplePositions.has(idx)) {
+            couplePositions.get(idx).cx = cx;
+          } else {
+            couplePositions.set(idx, { cx, y: genY(couples[idx].gen) });
+          }
+        }
+        resolveOverlaps(group);
+      }
+
+      // Bottom-up: each parent at average of children
+      for (let gi = gens.length - 1; gi >= 0; gi--) {
+        const group = byGen[gens[gi]];
+        for (const idx of group) {
+          const kids = (childrenMap[idx] || []).filter(k => allIndices.has(k) && couplePositions.has(k));
+          if (kids.length === 0) continue;
+          couplePositions.get(idx).cx = kids.reduce((s, k) => s + couplePositions.get(k).cx, 0) / kids.length;
+        }
+        resolveOverlaps(group);
+      }
+    }
+  }
+
+  // Helper: collect all indices reachable from roots
+  function collectAll(roots, childrenMap) {
+    const all = [];
+    const visited = new Set();
+    function walk(idx) {
+      if (visited.has(idx)) return;
+      visited.add(idx);
+      all.push(idx);
+      for (const kid of (childrenMap[idx] || [])) walk(kid);
+    }
+    for (const r of roots) walk(r);
+    return all;
+  }
+
+  // Helper: shift all positioned indices by dx
+  function shiftAll(indices, dx) {
+    for (const idx of indices) {
+      const pos = couplePositions.get(idx);
+      if (pos) pos.cx += dx;
+    }
+  }
+
+  // Helper: get horizontal extent
+  function getExtent(indices) {
+    let min = Infinity, max = -Infinity;
+    for (const idx of indices) {
+      const pos = couplePositions.get(idx);
+      if (pos) {
+        const hw = coupleWidth(couples[idx]) / 2;
+        min = Math.min(min, pos.cx - hw);
+        max = Math.max(max, pos.cx + hw);
+      }
+    }
+    return { min, max };
+  }
+
+  // ── Group couples by side ──
+  const rightLine = []; // partner A's family (side="right") → positioned LEFT
+  const leftLine = [];  // partner B's family (side="left")  → positioned RIGHT
+  for (let i = 0; i < couples.length; i++) {
+    if (i === centerIdx) continue;
+    if (couples[i].side === "right") rightLine.push(i);
+    else if (couples[i].side === "left") leftLine.push(i);
+  }
+
+  // ── Position center couple + descendants at x=0 ──
+  const descKids = {};
+  function collectDescKids(idx) {
+    const kids = (coupleChildren[idx] || []).filter(k => couples[k].gen > couples[idx].gen);
+    if (kids.length > 0) descKids[idx] = kids;
+    for (const k of kids) collectDescKids(k);
+  }
+  collectDescKids(centerIdx);
+  const descAll = collectAll([centerIdx], descKids);
+  positionLayered(descAll, descKids);
+
+  // ── Position partner A's family to the LEFT ──
+  if (rightLine.length > 0) {
+    const { natKids, roots } = buildNaturalTree(rightLine);
+    const allR = collectAll(roots, natKids);
+    positionLayered(allR, natKids);
+    const ext = getExtent(allR);
+    const centerExt = getExtent(descAll);
+    shiftAll(allR, (centerExt.min || 0) - ext.max - H_SPACING * 2);
+  }
+
+  // ── Position partner B's family to the RIGHT ──
+  if (leftLine.length > 0) {
+    const { natKids, roots } = buildNaturalTree(leftLine);
+    const allL = collectAll(roots, natKids);
+    positionLayered(allL, natKids);
+    const ext = getExtent(allL);
+    const centerExt = getExtent(descAll);
+    shiftAll(allL, (centerExt.max || 0) - ext.min + H_SPACING * 2);
+  }
+
+  // ── Position any orphan couples not yet positioned ──
+  let maxX = 0;
+  for (const [, pos] of couplePositions) {
+    if (pos.cx + NODE_W > maxX) maxX = pos.cx + NODE_W;
+  }
+  for (let i = 0; i < couples.length; i++) {
+    if (couplePositions.has(i)) continue;
+    maxX += H_SPACING * 2;
+    const w = coupleWidth(couples[i]);
+    couplePositions.set(i, { cx: maxX + w / 2, y: genY(couples[i].gen) });
+    maxX += w;
+  }
+
+  // Build flat node list
+  const nodes = [];
+  const nodeMap = {};
+  for (let i = 0; i < couples.length; i++) {
+    const c = couples[i];
+    const pos = couplePositions.get(i);
+    if (!pos) continue;
+
+    const w = coupleWidth(c);
+    const person = PEOPLE_MAP[c.primaryId];
+    if (!person) continue;
+
+    const primaryX = c.partnerId ? pos.cx - w / 2 : pos.cx - NODE_W / 2;
+    const primaryNode = {
+      id: c.primaryId, x: primaryX, y: pos.y, cx: primaryX + NODE_W / 2,
+      gen: c.gen, side: c.side, person, coupleIdx: i,
+    };
+    nodes.push(primaryNode);
+    nodeMap[c.primaryId] = primaryNode;
+
+    if (c.partnerId) {
+      const partnerPerson = PEOPLE_MAP[c.partnerId];
+      if (partnerPerson) {
+        const partnerX = primaryX + NODE_W + COUPLE_GAP;
+        const partnerNode = {
+          id: c.partnerId, x: partnerX, y: pos.y, cx: partnerX + NODE_W / 2,
+          gen: c.gen, side: c.side, person: partnerPerson, coupleIdx: i,
+        };
+        nodes.push(partnerNode);
+        nodeMap[c.partnerId] = partnerNode;
+      }
+    }
+  }
+
+  // Build links (child → parent)
+  const links = [];
+  for (const r of DATA.relationships) {
+    const childNode = nodeMap[r.child_id];
+    const parentNode = nodeMap[r.parent_id];
+    if (childNode && parentNode) links.push({ from: childNode, to: parentNode });
+  }
+
+  // Build union connectors
+  const unions = [];
+  for (let i = 0; i < couples.length; i++) {
+    const c = couples[i];
+    if (!c.partnerId) continue;
+    const n1 = nodeMap[c.primaryId];
+    const n2 = nodeMap[c.partnerId];
+    if (n1 && n2) {
+      unions.push({
+        x1: n1.x + NODE_W, y1: n1.y + NODE_H / 2,
+        x2: n2.x, y2: n2.y + NODE_H / 2,
+        id1: c.primaryId, id2: c.partnerId,
+      });
+    }
+  }
+
+  // ── Compute bloodline distance (fog-of-war) ──
+  // Distance 0 = center couple + their direct blood ancestors/descendants
+  //              (reachable through parent-child edges only from CENTER_ID_A/B)
+  // Distance 1 = partners of bloodline members (married into the family)
+  // Distance 2 = ancestors of those partners (in-law family trees)
+  // Distance 3+ = deeper in-law branches
+  const bloodline = new Set();
+  // Trace blood ancestors of CENTER_ID_A
+  function traceBloodUp(pid) {
+    if (bloodline.has(pid)) return;
+    bloodline.add(pid);
+    for (const par of (parentsOf[pid] || [])) traceBloodUp(par);
+  }
+  // Trace blood descendants of CENTER_ID_A/B
+  function traceBloodDown(pid) {
+    if (bloodline.has(pid)) return;
+    bloodline.add(pid);
+    for (const kid of (childrenOf[pid] || new Set())) traceBloodDown(kid);
+  }
+  if (CENTER_ID_A) { traceBloodUp(CENTER_ID_A); traceBloodDown(CENTER_ID_A); }
+  if (CENTER_ID_B) { traceBloodUp(CENTER_ID_B); traceBloodDown(CENTER_ID_B); }
+
+  // BFS from bloodline through union edges to compute fog distance
+  const fogDistance = {};
+  for (const id of bloodline) fogDistance[id] = 0;
+
+  // Partners of bloodline = distance 1
+  for (const u of DATA.unions) {
+    if (bloodline.has(u.partner1_id) && !bloodline.has(u.partner2_id)) {
+      if (fogDistance[u.partner2_id] === undefined) fogDistance[u.partner2_id] = 1;
+    }
+    if (bloodline.has(u.partner2_id) && !bloodline.has(u.partner1_id)) {
+      if (fogDistance[u.partner1_id] === undefined) fogDistance[u.partner1_id] = 1;
+    }
+  }
+
+  // BFS outward from distance-1 nodes through parent-child + union edges
+  let frontier = Object.entries(fogDistance).filter(([_, d]) => d === 1).map(([id]) => id);
+  let currentDist = 1;
+  while (frontier.length > 0 && currentDist < 10) {
+    const nextFrontier = [];
+    for (const pid of frontier) {
+      // Parents (going up in-law tree)
+      for (const par of (parentsOf[pid] || [])) {
+        if (fogDistance[par] === undefined) {
+          fogDistance[par] = currentDist + 1;
+          nextFrontier.push(par);
+        }
+      }
+      // Children (going down in-law tree)
+      for (const kid of (childrenOf[pid] || new Set())) {
+        if (fogDistance[kid] === undefined) {
+          fogDistance[kid] = currentDist + 1;
+          nextFrontier.push(kid);
+        }
+      }
+      // Union partners
+      for (const partnerId of (unionPartner[pid] || [])) {
+        if (fogDistance[partnerId] === undefined) {
+          fogDistance[partnerId] = currentDist + 1;
+          nextFrontier.push(partnerId);
+        }
+      }
+    }
+    frontier = nextFrontier;
+    currentDist++;
+  }
+
+  // Assign fogLevel to each node: 0 = clear, 1-4 = increasing fog
+  for (const n of nodes) {
+    const dist = fogDistance[n.id] ?? 99;
+    n.fogLevel = Math.min(dist, 4);
+  }
+
+  // Export fog distance globally so the map can filter by viewer proximity
+  window._fogDistance = fogDistance;
+
+  return { nodes, links, unions, genRange, couples, couplePositions };
+}
+
+function renderTree() {
+  const svg = d3.select("#tree-svg");
+  svg.selectAll("*").remove();
+
+  const container = document.querySelector(".tree-container");
+  const width = container.clientWidth;
+  const height = container.clientHeight;
+  svg.attr("width", width).attr("height", height);
+
+  const layout = buildButterflyLayout();
+  if (!layout || layout.nodes.length === 0) return;
+
+  const { nodes, links, unions, genRange } = layout;
+
+  // Calculate bounds
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const n of nodes) {
+    minX = Math.min(minX, n.x);
+    maxX = Math.max(maxX, n.x + NODE_W);
+    minY = Math.min(minY, n.y);
+    maxY = Math.max(maxY, n.y + NODE_H);
+  }
+
+  const padding = 80;
+
+  // Zoom behavior
+  const g = svg.append("g");
+  const zoom = d3.zoom().scaleExtent([0.15, 2.5]).on("zoom", (e) => {
+    g.attr("transform", e.transform);
+  });
+  svg.call(zoom);
+
+  // Start zoomed in on center couple, user can zoom out
+  const centerNodeA = nodes.find(n => n.id === CENTER_ID_A);
+  const centerNodeB = nodes.find(n => n.id === CENTER_ID_B);
+  if (centerNodeA) {
+    const focusX = centerNodeB
+      ? (centerNodeA.cx + centerNodeB.cx) / 2
+      : centerNodeA.cx;
+    const focusY = centerNodeA.y + NODE_H / 2;
+    const INITIAL_SCALE = 0.9;
+    const itx = width / 2 - focusX * INITIAL_SCALE;
+    const ity = height / 2 - focusY * INITIAL_SCALE;
+    svg.call(zoom.transform, d3.zoomIdentity.translate(itx, ity).scale(INITIAL_SCALE));
+  } else {
+    const contentWidth = maxX - minX + padding * 2;
+    const contentHeight = maxY - minY + padding * 2;
+    const fitScale = Math.min(width / contentWidth, height / contentHeight, 0.85);
+    const ftx = width / 2 - ((minX + maxX) / 2) * fitScale;
+    const fty = height / 2 - ((minY + maxY) / 2) * fitScale;
+    svg.call(zoom.transform, d3.zoomIdentity.translate(ftx, fty).scale(fitScale));
+  }
+
+  // ── 1. Generation bands ──
+  const isLight = document.documentElement.getAttribute("data-theme") === "light";
+  const bandExtent = maxX - minX + 600;
+
+  for (let gen = genRange.min; gen <= genRange.max; gen++) {
+    const meta = getGenMeta(gen);
+    const bandY = (gen - genRange.min) * ROW_HEIGHT;
+    const opacity = isLight ? 0.08 : 0.06;
+
+    g.append("rect")
+      .attr("class", "gen-band")
+      .attr("x", minX - 300)
+      .attr("y", bandY - 8)
+      .attr("width", bandExtent)
+      .attr("height", ROW_HEIGHT)
+      .attr("fill", meta.color)
+      .attr("opacity", opacity)
+      .attr("rx", 6);
+
+    g.append("text")
+      .attr("class", "gen-label")
+      .attr("x", minX - 20)
+      .attr("y", bandY + ROW_HEIGHT / 2 + 2)
+      .attr("text-anchor", "end")
+      .attr("fill", meta.color)
+      .attr("opacity", isLight ? 0.5 : 0.4)
+      .attr("font-size", "11px")
+      .attr("font-weight", "600")
+      .attr("font-family", "'Inter', sans-serif")
+      .text(meta.label);
+  }
+
+  // ── 2. Links (child → parent) — bus-bar grouped by parent couple ──
+  // Instead of individual bezier curves, draw a single vertical drop from
+  // the parent couple, a horizontal "bus bar" spanning all children, and
+  // short verticals down to each child.  Much cleaner with many siblings.
+
+  // Group links by parent node's coupleIdx to draw bus bars
+  const linksByParentCouple = {};
+  for (const l of links) {
+    const key = l.to.coupleIdx;
+    if (!linksByParentCouple[key]) linksByParentCouple[key] = [];
+    linksByParentCouple[key].push(l);
+  }
+
+  for (const [, groupLinks] of Object.entries(linksByParentCouple)) {
+    if (groupLinks.length === 0) continue;
+    const parent = groupLinks[0].to;
+    const fog = Math.max(...groupLinks.map(l => Math.max(l.from.fogLevel || 0, l.to.fogLevel || 0)));
+    const fogClass = "link fog-" + Math.min(fog, 4);
+
+    // Parent drop point: center of couple, bottom of node
+    const parentCouple = layout.couples[parent.coupleIdx];
+    const parentPos = layout.couplePositions.get(parent.coupleIdx);
+    const dropX = parentPos ? parentPos.cx : parent.cx;
+    const dropY = parent.y + NODE_H;
+
+    // Children x positions
+    const childXs = groupLinks.map(l => l.from.cx);
+    const childY = groupLinks[0].from.y;
+    const busY = dropY + (childY - dropY) * 0.5; // bus bar at midpoint
+
+    if (groupLinks.length === 1) {
+      // Single child: simple elbow connector
+      const cx = childXs[0];
+      g.append("path")
+        .attr("class", fogClass)
+        .attr("d", `M${dropX},${dropY} L${dropX},${busY} L${cx},${busY} L${cx},${childY}`);
+    } else {
+      // Multiple children: bus bar pattern
+      const minX = Math.min(...childXs);
+      const maxX = Math.max(...childXs);
+
+      // Vertical drop from parent to bus bar
+      g.append("path").attr("class", fogClass)
+        .attr("d", `M${dropX},${dropY} L${dropX},${busY}`);
+
+      // Horizontal bus bar
+      g.append("path").attr("class", fogClass)
+        .attr("d", `M${minX},${busY} L${maxX},${busY}`);
+
+      // Vertical drops from bus bar to each child
+      for (const cx of childXs) {
+        g.append("path").attr("class", fogClass)
+          .attr("d", `M${cx},${busY} L${cx},${childY}`);
+      }
+    }
+  }
+
+  // ── 3. Union connectors ──
+  // Attach fog info using the person IDs carried on each union connector
+  const _nodeMap = {};
+  for (const n of nodes) _nodeMap[n.id] = n;
+  const unionsWithFog = unions.map((u) => {
+    const f1 = _nodeMap[u.id1]?.fogLevel ?? 0;
+    const f2 = _nodeMap[u.id2]?.fogLevel ?? 0;
+    return { ...u, fogLevel: Math.max(f1, f2) };
+  });
+  g.selectAll(".union-link")
+    .data(unionsWithFog)
+    .enter()
+    .append("line")
+    .attr("class", (d) => "union-link fog-" + Math.min(d.fogLevel, 4))
+    .attr("x1", (d) => d.x1)
+    .attr("y1", (d) => d.y1)
+    .attr("x2", (d) => d.x2)
+    .attr("y2", (d) => d.y2);
+
+  // ── 4. Node cards ──
+  // Sort so center couple (gen 0) renders last → on top in SVG
+  const sortedNodes = [...nodes].sort((a, b) => {
+    const aCenter = (a.id === CENTER_ID_A || a.id === CENTER_ID_B) ? 1 : 0;
+    const bCenter = (b.id === CENTER_ID_A || b.id === CENTER_ID_B) ? 1 : 0;
+    return aCenter - bCenter;
+  });
+  const nodeGroups = g
+    .selectAll(".node-group")
+    .data(sortedNodes)
+    .enter()
+    .append("g")
+    .attr("class", (d) => "node-group fog-" + Math.min(d.fogLevel || 0, 4))
+    .attr("transform", (d) => `translate(${d.x},${d.y})`);
+
+  nodeGroups
+    .append("rect")
+    .attr("class", (d) => "node-rect" + ((d.id === CENTER_ID_A || d.id === CENTER_ID_B) ? " center-node" : ""))
+    .attr("width", NODE_W)
+    .attr("height", NODE_H)
+    .attr("fill", (d) => d.person.gender === "female" ? "var(--node-female-bg)" : "var(--node-male-bg)")
+    .attr("stroke", (d) => d.person.gender === "female" ? "var(--female)" : "var(--male)");
+
+  // Photo thumbnails (circular, clipped)
+  const PHOTO_SIZE = 28;
+  const PHOTO_PAD = 6;
+  const hasPhoto = (d) => !!d.person._profilePhotoPath;
+
+  // Clip path definition for circular photos
+  const defs = g.append("defs");
+  defs.append("clipPath")
+    .attr("id", "photo-clip")
+    .append("circle")
+    .attr("cx", PHOTO_SIZE / 2)
+    .attr("cy", PHOTO_SIZE / 2)
+    .attr("r", PHOTO_SIZE / 2);
+
+  // For cropped photos, use a nested <svg> with viewBox; uncropped use standard behavior
+  nodeGroups.filter(hasPhoto).each(function(d) {
+    const g = d3.select(this);
+    const crop = d.person._profileCrop;
+    if (crop) {
+      const vx = crop.x * 1000;
+      const vy = crop.y * 1000;
+      const vw = crop.w * 1000;
+      const vh = crop.h * 1000;
+      g.append("svg")
+        .attr("x", PHOTO_PAD)
+        .attr("y", (NODE_H - PHOTO_SIZE) / 2)
+        .attr("width", PHOTO_SIZE)
+        .attr("height", PHOTO_SIZE)
+        .attr("viewBox", `${vx} ${vy} ${vw} ${vh}`)
+        .attr("clip-path", "url(#photo-clip)")
+        .append("image")
+        .attr("class", "node-photo")
+        .attr("width", 1000)
+        .attr("height", 1000)
+        .attr("href", "/" + d.person._profilePhotoPath)
+        .attr("preserveAspectRatio", "xMidYMid slice");
+    } else {
+      g.append("image")
+        .attr("class", "node-photo")
+        .attr("x", PHOTO_PAD)
+        .attr("y", (NODE_H - PHOTO_SIZE) / 2)
+        .attr("width", PHOTO_SIZE)
+        .attr("height", PHOTO_SIZE)
+        .attr("clip-path", "url(#photo-clip)")
+        .attr("href", "/" + d.person._profilePhotoPath)
+        .attr("preserveAspectRatio", "xMidYMid slice");
+    }
+  });
+
+  // Text x offset: shift right when photo is present
+  function textX(d) {
+    return hasPhoto(d) ? PHOTO_PAD + PHOTO_SIZE + 4 + (NODE_W - PHOTO_PAD - PHOTO_SIZE - 4) / 2 : NODE_W / 2;
+  }
+
+  nodeGroups
+    .append("text")
+    .attr("class", "node-name")
+    .attr("x", textX)
+    .attr("y", 20)
+    .attr("text-anchor", "middle")
+    .text((d) => d.person.fullName);
+
+  nodeGroups
+    .append("text")
+    .attr("class", "node-dates")
+    .attr("x", textX)
+    .attr("y", 33)
+    .attr("text-anchor", "middle")
+    .text((d) => {
+      const p = d.person;
+      if (p.birth_date) {
+        const y = p.birth_date.substring(0, 4);
+        return p.death_date ? `${y} \u2013 ${p.death_date.substring(0, 4)}` : `b. ${y}`;
+      }
+      return "";
+    });
+
+  nodeGroups
+    .append("text")
+    .attr("class", "node-place")
+    .attr("x", textX)
+    .attr("y", 44)
+    .attr("text-anchor", "middle")
+    .text((d) => {
+      const place = d.person.birth_place;
+      if (!place) return "";
+      return place.length > 22 ? place.substring(0, 20) + "\u2026" : place;
+    });
+
+  nodeGroups.on("click", (e, d) => {
+    e.stopPropagation();
+    showPersonPanel(d.id);
+    highlightNode(d.id);
+    router.navigate(`/tree/person/${d.id}`);
+  });
+
+  // ── Fog-of-war hover reveal ──
+  // Build adjacency for quick neighbor lookup
+  const _fogAdj = {};
+  const _addFogEdge = (a, b) => {
+    (_fogAdj[a] || (_fogAdj[a] = new Set())).add(b);
+    (_fogAdj[b] || (_fogAdj[b] = new Set())).add(a);
+  };
+  for (const r of DATA.relationships) { _addFogEdge(r.parent_id, r.child_id); }
+  for (const u of DATA.unions) { _addFogEdge(u.partner1_id, u.partner2_id); }
+
+  let _fogRevealTimer = null;
+
+  function _fogNeighbors(personId, hops) {
+    const visited = new Set([personId]);
+    let front = [personId];
+    for (let i = 0; i < hops; i++) {
+      const next = [];
+      for (const id of front) {
+        for (const nb of (_fogAdj[id] || [])) {
+          if (!visited.has(nb)) { visited.add(nb); next.push(nb); }
+        }
+      }
+      front = next;
+    }
+    return visited;
+  }
+
+  nodeGroups.on("mouseenter", (e, d) => {
+    clearTimeout(_fogRevealTimer);
+    if ((d.fogLevel || 0) === 0) return; // already clear, no reveal needed
+    const reveal = _fogNeighbors(d.id, 3);
+    g.selectAll(".node-group").each(function(nd) {
+      if (reveal.has(nd.id)) d3.select(this).classed("fog-revealed", true);
+    });
+    g.selectAll(".link").each(function(ld) {
+      if (reveal.has(ld.from.id) && reveal.has(ld.to.id)) d3.select(this).classed("fog-revealed", true);
+    });
+    g.selectAll(".union-link").each(function(ud) {
+      // Union data doesn't directly carry person IDs, so just reveal
+      // union connectors near the hovered foggy area
+      const el = d3.select(this);
+      if (el.classed("fog-1") || el.classed("fog-2") || el.classed("fog-3") || el.classed("fog-4")) {
+        // Check spatial proximity — is this connector near any revealed node?
+        const ux = (+el.attr("x1") + +el.attr("x2")) / 2;
+        const uy = (+el.attr("y1") + +el.attr("y2")) / 2;
+        for (const rid of reveal) {
+          const rn = nodes.find(n => n.id === rid);
+          if (rn && Math.abs(rn.cx - ux) < NODE_W * 2 && Math.abs(rn.y + NODE_H/2 - uy) < NODE_H) {
+            el.classed("fog-revealed", true);
+            break;
+          }
+        }
+      }
+    });
+  });
+
+  nodeGroups.on("mouseleave", (e, d) => {
+    _fogRevealTimer = setTimeout(() => {
+      g.selectAll(".fog-revealed").classed("fog-revealed", false);
+    }, 400);
+  });
+
+  // Background click to deselect and clear focus
+  svg.on("click", () => {
+    closePersonPanel();
+    clearFocus();
+    router.navigate("/tree");
+  });
+
+  // ── 6. Minimap (overview inset) ──
+  const MINIMAP_W = 180, MINIMAP_H = 120;
+  const mmPad = 10;
+  const treeW = maxX - minX || 1;
+  const treeH = maxY - minY || 1;
+  const mmScale = Math.min((MINIMAP_W - mmPad * 2) / treeW, (MINIMAP_H - mmPad * 2) / treeH);
+
+  // Remove old minimap if re-rendering
+  d3.select("#tree-minimap").remove();
+
+  const mmSvg = d3.select(".tree-container")
+    .append("svg")
+    .attr("id", "tree-minimap")
+    .attr("width", MINIMAP_W)
+    .attr("height", MINIMAP_H)
+    .style("position", "absolute")
+    .style("bottom", "12px")
+    .style("right", "12px")
+    .style("background", "var(--surface)")
+    .style("border", "1px solid var(--border)")
+    .style("border-radius", "8px")
+    .style("opacity", "0.85")
+    .style("pointer-events", "all")
+    .style("z-index", "10");
+
+  const mmG = mmSvg.append("g")
+    .attr("transform", `translate(${mmPad - minX * mmScale},${mmPad - minY * mmScale}) scale(${mmScale})`);
+
+  // Draw node dots
+  for (const n of nodes) {
+    const fog = n.fogLevel || 0;
+    mmG.append("rect")
+      .attr("x", n.x)
+      .attr("y", n.y)
+      .attr("width", NODE_W)
+      .attr("height", NODE_H)
+      .attr("rx", 3)
+      .attr("fill", n.person.gender === "female" ? "var(--female)" : "var(--male)")
+      .attr("opacity", fog >= 3 ? 0.15 : fog >= 1 ? 0.4 : 0.7);
+  }
+
+  // Viewport indicator rectangle
+  const mmViewport = mmSvg.append("rect")
+    .attr("class", "minimap-viewport")
+    .attr("fill", "rgba(108, 124, 255, 0.15)")
+    .attr("stroke", "rgba(108, 124, 255, 0.6)")
+    .attr("stroke-width", 1.5)
+    .attr("rx", 3);
+
+  function updateMinimapViewport(transform) {
+    const vx = (-transform.x / transform.k);
+    const vy = (-transform.y / transform.k);
+    const vw = width / transform.k;
+    const vh = height / transform.k;
+    mmViewport
+      .attr("x", mmPad + (vx - minX) * mmScale)
+      .attr("y", mmPad + (vy - minY) * mmScale)
+      .attr("width", vw * mmScale)
+      .attr("height", vh * mmScale);
+  }
+
+  // Update minimap on zoom
+  svg.call(zoom.on("zoom", (e) => {
+    g.attr("transform", e.transform);
+    updateMinimapViewport(e.transform);
+  }));
+
+  // Initialize viewport indicator
+  const currentTransform = d3.zoomTransform(svg.node());
+  updateMinimapViewport(currentTransform);
+
+  // Click minimap to pan
+  mmSvg.on("click", (e) => {
+    const [mx, my] = d3.pointer(e);
+    const targetX = (mx - mmPad) / mmScale + minX;
+    const targetY = (my - mmPad) / mmScale + minY;
+    const t = d3.zoomTransform(svg.node());
+    const newTx = width / 2 - targetX * t.k;
+    const newTy = height / 2 - targetY * t.k;
+    svg.transition().duration(300).call(zoom.transform, d3.zoomIdentity.translate(newTx, newTy).scale(t.k));
+  });
+}
+
+function highlightNode(personId) {
+  d3.selectAll(".node-group").classed("selected", (d) => d.id === personId);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Focus Mode
+// ═══════════════════════════════════════════════════════════════
+
+function computeFocusSubgraph(personId, hops) {
+  const adj = {};
+  const addEdge = (a, b) => {
+    (adj[a] || (adj[a] = [])).push(b);
+    (adj[b] || (adj[b] = [])).push(a);
+  };
+  for (const r of ORIGINAL_DATA.relationships) addEdge(r.parent_id, r.child_id);
+  for (const u of ORIGINAL_DATA.unions) addEdge(u.partner1_id, u.partner2_id);
+
+  const visited = new Set([personId]);
+  let frontier = [personId];
+  for (let i = 0; i < hops; i++) {
+    const next = [];
+    for (const id of frontier) {
+      for (const neighbor of (adj[id] || [])) {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor);
+          next.push(neighbor);
+        }
+      }
+    }
+    frontier = next;
+  }
+
+  // Always include siblings (co-children of any parent) regardless of hop depth
+  const parents = ORIGINAL_DATA.relationships
+    .filter(r => r.child_id === personId)
+    .map(r => r.parent_id);
+  for (const parentId of parents) {
+    for (const r of ORIGINAL_DATA.relationships) {
+      if (r.parent_id === parentId && !visited.has(r.child_id)) {
+        visited.add(r.child_id);
+      }
+    }
+  }
+
+  return visited;
+}
+
+function applyFocus() {
+  if (!FOCUS_PERSON_ID || FOCUS_DEPTH === "all") {
+    DATA = ORIGINAL_DATA;
+    if (!FOCUS_PERSON_ID) {
+      CENTER_ID_A = ORIGINAL_CENTER_ID_A;
+      CENTER_ID_B = ORIGINAL_CENTER_ID_B;
+    }
+  } else {
+    const inScope = computeFocusSubgraph(FOCUS_PERSON_ID, FOCUS_DEPTH);
+    DATA = {
+      ...ORIGINAL_DATA,
+      people: ORIGINAL_DATA.people.filter(p => inScope.has(p.id)),
+      relationships: ORIGINAL_DATA.relationships.filter(r => inScope.has(r.parent_id) && inScope.has(r.child_id)),
+      unions: ORIGINAL_DATA.unions.filter(u => inScope.has(u.partner1_id) && inScope.has(u.partner2_id)),
+      events: (ORIGINAL_DATA.events || []).filter(e => inScope.has(e.person_id)),
+    };
+    CENTER_ID_A = FOCUS_PERSON_ID;
+    const focusUnion = ORIGINAL_DATA.unions.find(
+      u => u.partner1_id === FOCUS_PERSON_ID || u.partner2_id === FOCUS_PERSON_ID
+    );
+    CENTER_ID_B = focusUnion
+      ? (focusUnion.partner1_id === FOCUS_PERSON_ID ? focusUnion.partner2_id : focusUnion.partner1_id)
+      : null;
+  }
+  renderTree();
+  updateFocusBanner();
+}
+
+function setFocus(personId) {
+  if (!FOCUS_PERSON_ID) {
+    ORIGINAL_CENTER_ID_A = CENTER_ID_A;
+    ORIGINAL_CENTER_ID_B = CENTER_ID_B;
+  }
+  FOCUS_PERSON_ID = personId;
+  const sel = document.getElementById("focus-depth-select");
+  const val = sel?.value || "1";
+  FOCUS_DEPTH = val === "all" ? "all" : parseInt(val, 10);
+  applyFocus();
+}
+
+function clearFocus() {
+  FOCUS_PERSON_ID = null;
+  applyFocus();
+}
+
+function updateFocusBanner() {
+  const banner = document.getElementById("focus-banner");
+  if (!banner) return;
+  if (!FOCUS_PERSON_ID) {
+    banner.classList.add("hidden");
+    return;
+  }
+  banner.classList.remove("hidden");
+  const nameEl = document.getElementById("focus-banner-name");
+  if (nameEl) nameEl.innerHTML = `<a class="person-link" data-person-id="${FOCUS_PERSON_ID}" href="javascript:void(0)">${personThumb(FOCUS_PERSON_ID, 20)} ${personName(FOCUS_PERSON_ID)}</a>`;
+  const sel = document.getElementById("focus-depth-select");
+  if (sel) sel.value = FOCUS_DEPTH === "all" ? "all" : String(FOCUS_DEPTH);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Person Detail Panel
+// ═══════════════════════════════════════════════════════════════
+
