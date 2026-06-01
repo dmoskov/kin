@@ -22,7 +22,7 @@ import time
 from functools import wraps
 from pathlib import Path
 
-from flask import Flask, abort, jsonify, request, send_from_directory, session
+from flask import Flask, Response, abort, jsonify, request, send_from_directory, session
 
 from database.connection import init_db
 from database.repository import TreeRepository
@@ -217,7 +217,15 @@ def _get_google_client_id() -> str | None:
 
 @app.route("/")
 def index():
-    return send_from_directory(WEB_DIR, "index.html")
+    # Serve the minified single-file bundle when it exists (produced by
+    # scripts/build_js.sh); otherwise serve the ES modules directly for dev.
+    html = (Path(WEB_DIR) / "index.html").read_text()
+    if (Path(WEB_DIR) / "dist" / "app.min.js").exists():
+        html = html.replace(
+            '<script type="module" src="/js/99-main.js"></script>',
+            '<script type="module" src="/dist/app.min.js"></script>',
+        )
+    return Response(html, mimetype="text/html")
 
 
 @app.errorhandler(404)
@@ -279,8 +287,6 @@ def api_config():
 @app.route("/photos/<path:filename>")
 def serve_photo(filename):
     """Serve photos from S3 (if configured) or local disk."""
-    from flask import Response
-
     data = photo_storage.get(filename)
     if data is None:
         abort(404)
