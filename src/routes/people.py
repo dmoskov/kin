@@ -244,6 +244,7 @@ def api_create_relationship():
 
     rel = Relationship(parent_id=parent_id, child_id=child_id, rel_type=RelationshipType.BIOLOGICAL)
     repo.save_relationship(rel)
+    repo.auto_link_siblings()
     return jsonify({"parent_id": parent_id, "child_id": child_id}), 201
 
 
@@ -279,4 +280,5 @@ def api_create_union():
 
     union = Union(partner1_id=p1, partner2_id=p2)
     repo.save_union(union)
+    repo.auto_link_siblings()
     return jsonify({"partner1_id": p1, "partner2_id": p2}), 201

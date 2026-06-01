@@ -281,6 +281,14 @@ def api_import_gedcom():
         except Exception as e:
             stats["skipped"].append(f"Event: {e}")
 
+    # Auto-link siblings after bulk import of relationships + unions
+    try:
+        linked = repo.auto_link_siblings()
+        if linked:
+            stats["auto_linked_siblings"] = linked
+    except Exception as e:
+        stats["skipped"].append(f"auto_link_siblings: {e}")
+
     return jsonify(stats)
 
 
@@ -731,6 +739,14 @@ def api_apply_document(doc_id):
             applied["unions"] += 1
         except Exception as e:
             logger.warning("Could not save union %s + %s: %s", p1, p2, e)
+
+    # Auto-link siblings after applying relationships + unions from document
+    try:
+        linked = repo.auto_link_siblings()
+        if linked:
+            applied["auto_linked_siblings"] = linked
+    except Exception:
+        pass
 
     # Update document status
     _update_document(doc_id, status="applied")
