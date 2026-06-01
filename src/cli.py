@@ -329,84 +329,183 @@ def _birth_year(person) -> int | None:
 
 
 def cmd_audit(args: argparse.Namespace) -> None:
-    """Flag likely-bad relationship data that produces wrong relationship labels.
+    """Walk the tree and report structural data problems.
 
-    Detects (1) parent-child edges where the parent was born after the child
-    (almost always a reversed edge) and (2) ancestor cycles (a person who is
-    their own ancestor). With --fix, swaps the reversed edges.
+    Detects: self-loops (own parent), ancestor cycles, people with >2 parents
+    (often grandparents wrongly linked as parents), duplicate edges, parent born
+    after child, implausibly-young parents, unions between a parent and child,
+    and disconnected/isolated people.
+
+    --fix auto-corrects only the UNAMBIGUOUS issues (delete self-loops, swap
+    parent-after-child edges). Over-parented and disconnected nodes are reported
+    for manual review — picking the correct parent needs human judgement.
     """
+    from collections import Counter, defaultdict
+
     from database.repository import _execute, _ph
 
     repo = TreeRepository()
     tree = repo.load_tree()
-    people = tree.people  # dict: id -> Person
+    people = tree.people  # id -> Person
+    rels = tree.relationships
+    unions = getattr(tree, "unions", [])
 
-    reversed_edges = []
-    for r in tree.relationships:
-        par, ch = people.get(r.parent_id), people.get(r.child_id)
-        if not par or not ch:
-            continue
-        py, cy = _birth_year(par), _birth_year(ch)
-        if py is not None and cy is not None and py > cy:
-            reversed_edges.append((r.parent_id, r.child_id, par, ch, py, cy))
+    def nm(i):
+        p = people.get(i)
+        return (f"{p.given_name or ''} {p.surname or ''}".strip() or i) if p else f"<{i}>"
 
-    # Ancestor cycles: is any person reachable from themselves via parent edges?
-    parents_of: dict[str, list[str]] = {}
-    for r in tree.relationships:
-        parents_of.setdefault(r.child_id, []).append(r.parent_id)
-    cycles = []
+    parents_of: dict[str, set] = defaultdict(set)
+    for r in rels:
+        parents_of[r.child_id].add(r.parent_id)
+
+    self_loops = [(r.parent_id, r.child_id) for r in rels if r.parent_id == r.child_id]
+    dup = [k for k, v in Counter((r.parent_id, r.child_id) for r in rels).items() if v > 1]
+    over = {c: ps for c, ps in parents_of.items() if len(ps) > 2}
+
+    cycles = set()
     for start in people:
-        stack = list(parents_of.get(start, []))
-        seen = set()
+        stack = list(parents_of.get(start, ()))
+        seen: set = set()
         while stack:
             cur = stack.pop()
             if cur == start:
-                cycles.append(start)
+                cycles.add(start)
                 break
             if cur in seen:
                 continue
             seen.add(cur)
-            stack.extend(parents_of.get(cur, []))
+            stack.extend(parents_of.get(cur, ()))
 
-    def nm(p):
-        return f"{p.given_name or ''} {p.surname or ''}".strip() or p.id
+    reversed_edges, implausible = [], []
+    for r in rels:
+        if r.parent_id == r.child_id:
+            continue
+        py, cy = _birth_year(people.get(r.parent_id)), _birth_year(people.get(r.child_id))
+        if py is not None and cy is not None:
+            if py > cy:
+                reversed_edges.append((r.parent_id, r.child_id))
+            elif cy - py < 13:
+                implausible.append((r.parent_id, r.child_id, cy - py))
 
-    if not reversed_edges and not cycles:
-        print(f"No relationship issues found ({len(tree.relationships)} relationships checked).")
+    pc_unions = [
+        (u.partner1_id, u.partner2_id)
+        for u in unions
+        if u.partner1_id in parents_of.get(u.partner2_id, ())
+        or u.partner2_id in parents_of.get(u.partner1_id, ())
+    ]
+
+    # Connected components over parent + union edges (undirected).
+    adj: dict[str, set] = defaultdict(set)
+    for r in rels:
+        adj[r.parent_id].add(r.child_id)
+        adj[r.child_id].add(r.parent_id)
+    for u in unions:
+        adj[u.partner1_id].add(u.partner2_id)
+        adj[u.partner2_id].add(u.partner1_id)
+    visited: set = set()
+    comps = []
+    for p in people:
+        if p in visited:
+            continue
+        stack, size = [p], 0
+        while stack:
+            x = stack.pop()
+            if x in visited:
+                continue
+            visited.add(x)
+            size += 1
+            stack.extend(a for a in adj.get(x, ()) if a not in visited)
+        comps.append(size)
+    comps.sort(reverse=True)
+    isolated = [p for p in people if not adj.get(p)]
+
+    any_issue = (
+        self_loops
+        or dup
+        or over
+        or cycles
+        or reversed_edges
+        or implausible
+        or pc_unions
+        or len(comps) > 1
+    )
+    if not any_issue:
+        print(
+            f"No issues found ({len(people)} people, {len(rels)} relationships, "
+            f"{len(unions)} unions)."
+        )
         return
 
-    if reversed_edges:
+    print(
+        f"=== Tree audit: {len(people)} people, {len(rels)} relationships, {len(unions)} unions ==="
+    )
+    if self_loops:
         print(
-            f"\n{len(reversed_edges)} likely-reversed parent-child edge(s) "
-            "(parent born after child):"
+            f"\nSELF-LOOPS — own parent ({len(self_loops)}): "
+            + ", ".join(nm(p) for p, _ in self_loops)
         )
-        for _pid, _cid, par, ch, py, cy in reversed_edges:
-            print(
-                f"  parent {nm(par)} ({py}) -> child {nm(ch)} ({cy})  "
-                f"[should likely be {nm(ch)} -> {nm(par)}]"
-            )
     if cycles:
         print(
-            f"\n{len(set(cycles))} person(s) are their own ancestor (cycle): "
-            + ", ".join(nm(people[c]) for c in sorted(set(cycles)))
+            f"\nCYCLES — own ancestor ({len(cycles)}): " + ", ".join(nm(c) for c in sorted(cycles))
         )
+    if dup:
+        print(
+            f"\nDUPLICATE edges ({len(dup)}): " + ", ".join(f"{nm(p)} -> {nm(c)}" for p, c in dup)
+        )
+    if reversed_edges:
+        print(f"\nPARENT BORN AFTER CHILD ({len(reversed_edges)}):")
+        for p, c in reversed_edges:
+            print(f"  {nm(p)} -> {nm(c)}")
+    if over:
+        print(f"\nMORE THAN 2 PARENTS ({len(over)}):")
+        for c, ps in over.items():
+            gp = [nm(x) for x in ps if any(x in parents_of.get(o, ()) for o in ps if o != x)]
+            extra = f"   (look like grandparents: {gp})" if gp else ""
+            print(f"  {nm(c)}: {[nm(x) for x in ps]}{extra}")
+    if implausible:
+        print(f"\nPARENT < 13 YEARS OLDER THAN CHILD ({len(implausible)}):")
+        for p, c, d in implausible:
+            print(f"  {nm(p)} -> {nm(c)} ({d}y)")
+    if pc_unions:
+        print(f"\nUNION BETWEEN A PARENT AND CHILD ({len(pc_unions)}):")
+        for a, b in pc_unions:
+            print(f"  {nm(a)} & {nm(b)}")
+    if len(comps) > 1:
+        print(
+            f"\nDISCONNECTED: {len(comps)} components (sizes {comps[:8]}); "
+            f"{len(isolated)} fully isolated people"
+        )
+        if isolated:
+            print("  isolated: " + ", ".join(nm(p) for p in isolated[:15]))
 
-    if args.fix and reversed_edges:
+    if args.fix:
         conn = repo._conn()
         try:
-            for pid, cid, *_ in reversed_edges:
+            for p, c in self_loops:
+                _execute(
+                    conn,
+                    f"DELETE FROM relationships WHERE parent_id = {_ph()} AND child_id = {_ph()}",
+                    (p, c),
+                )
+            for p, c in reversed_edges:
                 _execute(
                     conn,
                     f"UPDATE relationships SET parent_id = {_ph()}, child_id = {_ph()} "
                     f"WHERE parent_id = {_ph()} AND child_id = {_ph()}",
-                    (cid, pid, pid, cid),
+                    (c, p, p, c),
                 )
             conn.commit()
         finally:
             conn.close()
-        print(f"\nFixed: swapped {len(reversed_edges)} reversed edge(s).")
-    elif reversed_edges:
-        print("\nRe-run with --fix to swap the reversed edges.")
+        print(
+            f"\nFixed {len(self_loops)} self-loop(s) and {len(reversed_edges)} reversed "
+            "edge(s). Over-parented / disconnected nodes need manual review."
+        )
+    else:
+        print(
+            "\n--fix auto-corrects only the unambiguous issues (self-loops, "
+            "parent-after-child). The rest need review."
+        )
 
 
 def build_parser() -> argparse.ArgumentParser:

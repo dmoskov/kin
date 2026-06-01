@@ -406,7 +406,7 @@ class TestAudit:
         repo.save_relationship(Relationship(parent_id="p", child_id="c"))
         main(["audit"])
         out = capsys.readouterr().out
-        assert "No relationship issues found" in out
+        assert "No issues found" in out
 
     def test_detects_reversed_edge(self, repo, capsys):
         repo.save_person(
@@ -420,7 +420,7 @@ class TestAudit:
         repo.save_relationship(Relationship(parent_id="young", child_id="old"))  # reversed
         main(["audit"])
         out = capsys.readouterr().out
-        assert "likely-reversed" in out
+        assert "PARENT BORN AFTER CHILD" in out
         assert "Young" in out and "Old" in out
 
     def test_fix_swaps_reversed_edge(self, repo, capsys):
@@ -439,3 +439,27 @@ class TestAudit:
         # edge should now be old -> young
         edge = tree.relationships[0]
         assert edge.parent_id == "old" and edge.child_id == "young"
+
+    def test_detects_and_fixes_self_loop(self, repo, capsys):
+        repo.save_person(Person(id="x", given_name="X", surname="Y", gender=Gender.MALE))
+        repo.save_relationship(Relationship(parent_id="x", child_id="x"))  # self-loop
+        main(["audit"])
+        assert "SELF-LOOPS" in capsys.readouterr().out
+        main(["audit", "--fix"])
+        assert "Fixed" in capsys.readouterr().out
+        assert repo.load_tree().relationships == []
+
+    def test_detects_over_parenting_and_grandparent(self, repo, capsys):
+        # Grandparent (GP) -> Parent (P) -> Child (C), but GP is ALSO linked as C's parent.
+        for pid in ("gp", "p", "mom", "c"):
+            repo.save_person(
+                Person(id=pid, given_name=pid.upper(), surname="Z", gender=Gender.MALE)
+            )
+        repo.save_relationship(Relationship(parent_id="gp", child_id="p"))
+        repo.save_relationship(Relationship(parent_id="p", child_id="c"))
+        repo.save_relationship(Relationship(parent_id="mom", child_id="c"))
+        repo.save_relationship(Relationship(parent_id="gp", child_id="c"))  # grandparent-as-parent
+        main(["audit"])
+        out = capsys.readouterr().out
+        assert "MORE THAN 2 PARENTS" in out
+        assert "look like grandparents" in out
