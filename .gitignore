@@ -5,6 +5,7 @@ __pycache__/
 dist/
 build/
 .venv/
+node_modules/
 
 # ── Private family content (never commit) ──────────────
 # All personal data lives in private/ — see README.md
