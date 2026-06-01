@@ -776,6 +776,26 @@ export function ensureTreeNodeVisible(personId) {
   if (!onScreen) centerTreeOnNode(personId);
 }
 
+// Highlight a chain of people (e.g. a relationship path) on the tree: dim
+// everyone else and outline the path nodes. Uses inline styles so it clears on
+// the next renderTree(). Pans to the first path node.
+export function highlightTreePath(ids) {
+  if (!_treeSvg || !ids || ids.length === 0) return;
+  const set = new Set(ids);
+  d3.selectAll(".node-group").style("opacity", (d) => (set.has(d.id) ? 1 : 0.18));
+  d3.selectAll(".node-group")
+    .select("rect")
+    .style("stroke", (d) => (set.has(d.id) ? "var(--accent)" : null))
+    .style("stroke-width", (d) => (set.has(d.id) ? 3 : null));
+  centerTreeOnNode(ids[0]);
+}
+
+export function clearTreePathHighlight() {
+  if (!_treeSvg) return;
+  d3.selectAll(".node-group").style("opacity", null);
+  d3.selectAll(".node-group").select("rect").style("stroke", null).style("stroke-width", null);
+}
+
 export function renderTree() {
   const svg = d3.select("#tree-svg");
   svg.selectAll("*").remove();

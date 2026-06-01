@@ -117,6 +117,13 @@ export function computeRelationship() {
   // Client-side relationship calculation (simplified LCA)
   const label = calculateRelationship(idA, idB);
   result.classList.remove("hidden");
+  const path = relationshipPath(idA, idB);
+  const pathBtn = path && path.length > 1
+    ? `<button class="rel-show-path" onclick="showRelationshipPath('${idA}', '${idB}')"
+         style="margin-top:12px;padding:7px 16px;font:inherit;font-size:13px;color:var(--bg);background:var(--accent);border:none;border-radius:var(--radius);cursor:pointer">
+         Show path on tree (${path.length - 1} step${path.length - 1 === 1 ? "" : "s"})
+       </button>`
+    : "";
   result.innerHTML = `
     <div class="rel-label">${label}</div>
     <div class="rel-people">
@@ -124,7 +131,45 @@ export function computeRelationship() {
       <span class="rel-connector">${label}</span>
       <div class="rel-person"><a class="person-link" data-person-id="${idB}" href="javascript:void(0)">${personThumb(idB, 48)}<span>${personName(idB)}</span></a></div>
     </div>
+    ${pathBtn}
   `;
+}
+
+// Shortest path between two people over the family graph (parent-child + spouse
+// edges, undirected). Returns an ordered array of person ids, or null.
+export function relationshipPath(idA, idB) {
+  if (!idA || !idB) return null;
+  if (idA === idB) return [idA];
+  const src = S.ORIGINAL_DATA || S.DATA;
+  const adj = {};
+  const add = (a, b) => { (adj[a] = adj[a] || []).push(b); };
+  for (const r of src.relationships) { add(r.parent_id, r.child_id); add(r.child_id, r.parent_id); }
+  for (const u of src.unions) { add(u.partner1_id, u.partner2_id); add(u.partner2_id, u.partner1_id); }
+  const prev = { [idA]: null };
+  const queue = [idA];
+  while (queue.length) {
+    const cur = queue.shift();
+    if (cur === idB) {
+      const path = [];
+      for (let n = idB; n != null; n = prev[n]) path.unshift(n);
+      return path;
+    }
+    for (const nb of adj[cur] || []) {
+      if (!(nb in prev)) { prev[nb] = cur; queue.push(nb); }
+    }
+  }
+  return null;
+}
+
+// Switch to the tree and highlight the relationship path between two people.
+export function showRelationshipPath(idA, idB) {
+  const path = relationshipPath(idA, idB);
+  if (!path || path.length < 2) return;
+  switchTab("tree");
+  // Show the full tree (clear any focus filter) so all path nodes are present.
+  if (S.FOCUS_PERSON_ID && typeof clearFocus === "function") clearFocus();
+  router.navigate("/tree");
+  setTimeout(() => highlightTreePath(path), 150);
 }
 
 export function calculateRelationship(idA, idB) {
