@@ -4,6 +4,26 @@
 import { S } from "./00-state.js";
 
 export async function init() {
+  const loadingEl = document.getElementById("app-loading");
+  const errorEl = document.getElementById("app-error");
+  document
+    .getElementById("app-error-retry")
+    ?.addEventListener("click", () => location.reload());
+  try {
+    await initApp();
+    if (loadingEl) loadingEl.classList.add("hidden");
+  } catch (err) {
+    console.error("App failed to initialize:", err);
+    if (loadingEl) loadingEl.classList.add("hidden");
+    if (errorEl) {
+      const detail = document.getElementById("app-error-detail");
+      if (detail) detail.textContent = err?.message || "Something went wrong while loading.";
+      errorEl.classList.remove("hidden");
+    }
+  }
+}
+
+async function initApp() {
   await loadConfig();
   await loadData();
   S._geocodeReady = prefetchGeocode();  // fire-and-forget; map awaits before rendering

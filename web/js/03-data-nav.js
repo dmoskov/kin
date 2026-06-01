@@ -5,6 +5,7 @@ import { S } from "./00-state.js";
 
 export async function loadData() {
   const resp = await fetch("/api/data");
+  if (!resp.ok) throw new Error(`Failed to load family data (HTTP ${resp.status})`);
   S.DATA = await resp.json();
   S.PEOPLE_MAP = {};
   for (const p of S.DATA.people) {
@@ -205,10 +206,16 @@ export const router = new Router();
 // ═══════════════════════════════════════════════════════════════
 
 export function switchTab(viewName) {
-  document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+  document.querySelectorAll(".tab").forEach((t) => {
+    t.classList.remove("active");
+    t.setAttribute("aria-selected", "false");
+  });
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
   const tab = document.querySelector(`.tab[data-view="${viewName}"]`);
-  if (tab) tab.classList.add("active");
+  if (tab) {
+    tab.classList.add("active");
+    tab.setAttribute("aria-selected", "true");
+  }
   const view = document.getElementById(`view-${viewName}`);
   if (view) view.classList.add("active");
 }

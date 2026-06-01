@@ -11,6 +11,17 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 <body>
+  <!-- Shown until the first data load completes (see init()). -->
+  <div id="app-loading" class="app-overlay" role="status" aria-live="polite">
+    <div class="app-spinner" aria-hidden="true"></div>
+    <p>Loading your family tree…</p>
+  </div>
+  <div id="app-error" class="app-overlay hidden" role="alert">
+    <h2>Couldn't load the family tree</h2>
+    <p id="app-error-detail">Something went wrong while loading.</p>
+    <button id="app-error-retry" class="app-error-retry">Retry</button>
+  </div>
+
   <header>
     <div class="header-left">
       <h1 id="family-title">Family Tree</h1>
@@ -18,12 +29,12 @@
       <span class="badge" id="stats-badge"></span>
     </div>
     <div style="display:flex;align-items:center;gap:12px">
-      <nav>
-        <button class="tab active" data-view="tree">Tree</button>
-        <button class="tab" data-view="timeline">Timeline</button>
-        <button class="tab" data-view="map">Map</button>
-        <button class="tab" data-view="photos">Photos</button>
-        <button class="tab" data-view="relationships">Relationships</button>
+      <nav role="tablist" aria-label="Views">
+        <button class="tab active" data-view="tree" id="tab-tree" role="tab" aria-controls="view-tree" aria-selected="true">Tree</button>
+        <button class="tab" data-view="timeline" id="tab-timeline" role="tab" aria-controls="view-timeline" aria-selected="false">Timeline</button>
+        <button class="tab" data-view="map" id="tab-map" role="tab" aria-controls="view-map" aria-selected="false">Map</button>
+        <button class="tab" data-view="photos" id="tab-photos" role="tab" aria-controls="view-photos" aria-selected="false">Photos</button>
+        <button class="tab" data-view="relationships" id="tab-relationships" role="tab" aria-controls="view-relationships" aria-selected="false">Relationships</button>
       </nav>
       <div class="viewing-as-section">
         <label class="viewing-as-label" for="viewing-as-global">Viewing as</label>
@@ -69,13 +80,13 @@
       </div>
       <button class="doc-upload-btn" id="gedcom-import-btn" title="Import a GEDCOM file from genealogy software">&#128229; Import GEDCOM</button>
       <button class="doc-upload-btn" id="doc-upload-btn" title="Upload a document for AI parsing">&#128196; Upload Doc</button>
-      <button class="theme-toggle" id="theme-toggle" title="Toggle light/dark mode">&#9790;</button>
+      <button class="theme-toggle" id="theme-toggle" title="Toggle light/dark mode" aria-label="Toggle light/dark mode">&#9790;</button>
     </div>
   </header>
 
   <main>
     <!-- Tree View -->
-    <section id="view-tree" class="view active">
+    <section id="view-tree" class="view active" role="tabpanel" aria-labelledby="tab-tree">
       <div class="tree-container">
         <div id="focus-banner" class="focus-banner hidden">
           <span class="focus-banner-label">Focused on: <strong id="focus-banner-name"></strong></span>
@@ -93,7 +104,7 @@
     </section>
 
     <!-- Timeline View -->
-    <section id="view-timeline" class="view">
+    <section id="view-timeline" class="view" role="tabpanel" aria-labelledby="tab-timeline">
       <div class="timeline-container">
         <div class="timeline-header">
           <h2>Family Timeline</h2>
@@ -110,7 +121,7 @@
     </section>
 
     <!-- Map View -->
-    <section id="view-map" class="view">
+    <section id="view-map" class="view" role="tabpanel" aria-labelledby="tab-map">
       <div class="map-wrapper">
         <div id="map"></div>
         <div class="map-controls">
@@ -150,7 +161,7 @@
     </section>
 
     <!-- Photos Gallery View -->
-    <section id="view-photos" class="view">
+    <section id="view-photos" class="view" role="tabpanel" aria-labelledby="tab-photos">
       <div class="photos-container">
         <div class="photos-header">
           <h2>Photo Gallery <span class="badge" id="photos-count-badge"></span></h2>
@@ -208,7 +219,7 @@
     </section>
 
     <!-- Relationships View -->
-    <section id="view-relationships" class="view">
+    <section id="view-relationships" class="view" role="tabpanel" aria-labelledby="tab-relationships">
       <div class="relationships-container">
         <h2>Relationship Calculator</h2>
         <p class="subtitle">Select two people to see how they're related</p>
@@ -227,8 +238,8 @@
       </div>
     </section>
 
-    <aside id="person-panel" class="panel hidden">
-      <button class="close-btn" id="close-panel">&times;</button>
+    <aside id="person-panel" class="panel hidden" role="dialog" aria-label="Person details" aria-modal="false">
+      <button class="close-btn" id="close-panel" aria-label="Close panel">&times;</button>
       <div id="panel-content"></div>
     </aside>
   </main>
