@@ -25,7 +25,11 @@ const BENIGN = [
 const isBenign = (s) => BENIGN.some((re) => re.test(s));
 
 const errors = [];
-const browser = await chromium.launch({ channel: "chrome" });
+// Use a system browser channel when set (e.g. PW_CHANNEL=chrome locally);
+// default to Playwright's bundled chromium (what CI installs).
+const browser = await chromium.launch(
+  process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : {}
+);
 const page = await browser.newPage();
 
 page.on("pageerror", (err) => errors.push(`pageerror: ${err.message}`));

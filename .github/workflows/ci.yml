@@ -36,3 +36,43 @@ jobs:
           pip install pytest
       - name: Run tests
         run: pytest tests/ -x -q
+
+  js-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - name: Run JS unit tests (vitest)
+        run: npm test
+
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Build JS bundle
+        run: bash scripts/build_js.sh
+      - name: Seed a database
+        run: FAMILY_TREE_DB="$PWD/data/ci.db" python data/seed_longfellow.py
+      - name: Smoke test (headless browser)
+        run: |
+          PYTHONPATH="$PWD/src" FAMILY_TREE_DB="$PWD/data/ci.db" \
+            python -c "import web_server; web_server.init_db(); web_server.app.run(host='127.0.0.1', port=8137, debug=False, use_reloader=False)" &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8137/ >/dev/null 2>&1 && break; sleep 0.5; done
+          SMOKE_URL=http://127.0.0.1:8137 node scripts/smoke_test.mjs
