@@ -87,7 +87,13 @@
   <main>
     <!-- Tree View -->
     <section id="view-tree" class="view active" role="tabpanel" aria-labelledby="tab-tree">
-      <div class="tree-container">
+      <div class="tree-container" tabindex="0" aria-label="Family tree — use arrow keys to pan, +/- to zoom, F to fit">
+        <div class="tree-controls" role="group" aria-label="Tree zoom controls">
+          <button class="tree-ctrl-btn" id="tree-zoom-in" aria-label="Zoom in" title="Zoom in">+</button>
+          <button class="tree-ctrl-btn" id="tree-zoom-out" aria-label="Zoom out" title="Zoom out">&#8722;</button>
+          <button class="tree-ctrl-btn" id="tree-fit" aria-label="Fit tree to screen" title="Fit to screen">&#9974;</button>
+          <button class="tree-ctrl-btn" id="tree-center-me" aria-label="Center on me" title="Center on me">&#9678;</button>
+        </div>
         <div id="focus-banner" class="focus-banner hidden">
           <span class="focus-banner-label">Focused on: <strong id="focus-banner-name"></strong></span>
           <select id="focus-depth-select" class="focus-depth-select">

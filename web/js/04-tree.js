@@ -705,6 +705,77 @@ export function buildButterflyLayout() {
   return { nodes, links, unions, genRange, couples, couplePositions };
 }
 
+// ── Tree pan/zoom controls (state populated by renderTree) ──────────────
+let _treeZoom = null;
+let _treeSvg = null;
+let _treeDims = { width: 0, height: 0 };
+let _treeBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+let _treeNodeById = {};
+
+function _treeNodeCenter(n) {
+  return { cx: n.cx != null ? n.cx : n.x + NODE_W / 2, cy: n.y + NODE_H / 2 };
+}
+
+export function zoomTreeBy(factor) {
+  if (!_treeZoom || !_treeSvg) return;
+  _treeSvg.transition().duration(200).call(_treeZoom.scaleBy, factor);
+}
+
+export function fitTreeToScreen() {
+  if (!_treeZoom || !_treeSvg) return;
+  const pad = 80;
+  const cw = _treeBounds.maxX - _treeBounds.minX + pad * 2;
+  const ch = _treeBounds.maxY - _treeBounds.minY + pad * 2;
+  if (cw <= 0 || ch <= 0) return;
+  const k = Math.min(_treeDims.width / cw, _treeDims.height / ch, 0.85);
+  const tx = _treeDims.width / 2 - ((_treeBounds.minX + _treeBounds.maxX) / 2) * k;
+  const ty = _treeDims.height / 2 - ((_treeBounds.minY + _treeBounds.maxY) / 2) * k;
+  _treeSvg.transition().duration(450).call(_treeZoom.transform, d3.zoomIdentity.translate(tx, ty).scale(k));
+}
+
+// Smoothly center the tree on a person, accounting for the person panel
+// covering the right edge when it's open.
+export function centerTreeOnNode(personId, opts = {}) {
+  if (!_treeZoom || !_treeSvg) return;
+  const n = _treeNodeById[personId];
+  if (!n) return;
+  const panel = document.getElementById("person-panel");
+  const panelOpen = panel && !panel.classList.contains("hidden");
+  const panelW = panelOpen ? panel.getBoundingClientRect().width || 0 : 0;
+  const t = d3.zoomTransform(_treeSvg.node());
+  const k = opts.scale || (t.k >= 0.5 ? t.k : 0.9);
+  const { cx, cy } = _treeNodeCenter(n);
+  const visibleW = Math.max(_treeDims.width - panelW, 200);
+  const tx = visibleW / 2 - cx * k;
+  const ty = _treeDims.height / 2 - cy * k;
+  _treeSvg.transition().duration(450).call(_treeZoom.transform, d3.zoomIdentity.translate(tx, ty).scale(k));
+}
+
+export function centerTreeOnMe() {
+  centerTreeOnNode(S.CENTER_ID_A || S.CENTER_ID_B, { scale: 0.9 });
+}
+
+// Pan to a node only if it's currently off-screen or hidden behind the panel.
+export function ensureTreeNodeVisible(personId) {
+  if (!_treeZoom || !_treeSvg) return;
+  const n = _treeNodeById[personId];
+  if (!n) return;
+  const t = d3.zoomTransform(_treeSvg.node());
+  const { cx, cy } = _treeNodeCenter(n);
+  const sx = cx * t.k + t.x;
+  const sy = cy * t.k + t.y;
+  const panel = document.getElementById("person-panel");
+  const panelOpen = panel && !panel.classList.contains("hidden");
+  const panelW = panelOpen ? panel.getBoundingClientRect().width || 0 : 0;
+  const margin = 80;
+  const onScreen =
+    sx > margin &&
+    sx < _treeDims.width - panelW - margin &&
+    sy > margin &&
+    sy < _treeDims.height - margin;
+  if (!onScreen) centerTreeOnNode(personId);
+}
+
 export function renderTree() {
   const svg = d3.select("#tree-svg");
   svg.selectAll("*").remove();
@@ -757,6 +828,14 @@ export function renderTree() {
     const fty = height / 2 - ((minY + maxY) / 2) * fitScale;
     svg.call(zoom.transform, d3.zoomIdentity.translate(ftx, fty).scale(fitScale));
   }
+
+  // Expose for external pan/zoom controls (buttons, keyboard, panel centering).
+  _treeZoom = zoom;
+  _treeSvg = svg;
+  _treeDims = { width, height };
+  _treeBounds = { minX, maxX, minY, maxY };
+  _treeNodeById = {};
+  for (const n of nodes) _treeNodeById[n.id] = n;
 
   // ── 1. Generation bands ──
   const isLight = document.documentElement.getAttribute("data-theme") === "light";
@@ -1247,3 +1326,25 @@ export function updateFocusBanner() {
 // Person Detail Panel
 // ═══════════════════════════════════════════════════════════════
 
+
+// ── Wire tree zoom/pan controls + keyboard (static elements, wired once) ──
+document.getElementById("tree-zoom-in")?.addEventListener("click", () => zoomTreeBy(1.3));
+document.getElementById("tree-zoom-out")?.addEventListener("click", () => zoomTreeBy(1 / 1.3));
+document.getElementById("tree-fit")?.addEventListener("click", () => fitTreeToScreen());
+document.getElementById("tree-center-me")?.addEventListener("click", () => centerTreeOnMe());
+
+const _treeContainerEl = document.querySelector(".tree-container");
+_treeContainerEl?.addEventListener("keydown", (e) => {
+  if (!_treeSvg || !_treeZoom) return;
+  const pan = 80;
+  let handled = true;
+  if (e.key === "ArrowUp") _treeSvg.transition().duration(150).call(_treeZoom.translateBy, 0, pan);
+  else if (e.key === "ArrowDown") _treeSvg.transition().duration(150).call(_treeZoom.translateBy, 0, -pan);
+  else if (e.key === "ArrowLeft") _treeSvg.transition().duration(150).call(_treeZoom.translateBy, pan, 0);
+  else if (e.key === "ArrowRight") _treeSvg.transition().duration(150).call(_treeZoom.translateBy, -pan, 0);
+  else if (e.key === "+" || e.key === "=") zoomTreeBy(1.3);
+  else if (e.key === "-" || e.key === "_") zoomTreeBy(1 / 1.3);
+  else if (e.key.toLowerCase() === "f") fitTreeToScreen();
+  else handled = false;
+  if (handled) e.preventDefault();
+});
