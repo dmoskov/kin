@@ -59,6 +59,18 @@ def _fetchone(conn: Any, sql: str, params: tuple = ()) -> dict | None:
     return dict(row)
 
 
+def _scalar(conn: Any, sql: str, params: tuple = ()) -> dict:
+    """Like ``_fetchone`` but for queries guaranteed to return exactly one row.
+
+    Used for COUNT/aggregate and identity (``lastval()``/``last_insert_rowid()``)
+    lookups, which always yield a row. Asserts non-None so callers can index the
+    result directly without a redundant guard.
+    """
+    row = _fetchone(conn, sql, params)
+    assert row is not None, f"expected exactly one row from: {sql}"
+    return row
+
+
 def _fetchall(conn: Any, sql: str, params: tuple = ()) -> list[dict]:
     """Execute and fetch all rows as dicts."""
     cur = _execute(conn, sql, params)
@@ -751,20 +763,20 @@ class TreeRepository:
         try:
             counts = {}
             for table in ("people", "relationships", "unions", "events"):
-                row = _fetchone(conn, f"SELECT COUNT(*) as n FROM {table}")
+                row = _scalar(conn, f"SELECT COUNT(*) as n FROM {table}")
                 counts[table] = row["n"]
 
-            row = _fetchone(
+            row = _scalar(
                 conn, "SELECT COUNT(*) as n FROM people WHERE death_date IS NULL"
             )
             counts["living"] = row["n"]
             counts["deceased"] = counts["people"] - counts["living"]
 
             try:
-                counts["sources"] = _fetchone(
+                counts["sources"] = _scalar(
                     conn, "SELECT COUNT(*) as n FROM sources"
                 )["n"]
-                counts["citations"] = _fetchone(
+                counts["citations"] = _scalar(
                     conn, "SELECT COUNT(*) as n FROM citations"
                 )["n"]
             except Exception:
@@ -774,7 +786,7 @@ class TreeRepository:
                 counts["citations"] = 0
 
             try:
-                counts["articles"] = _fetchone(
+                counts["articles"] = _scalar(
                     conn, "SELECT COUNT(*) as n FROM news_articles"
                 )["n"]
             except Exception:
@@ -801,7 +813,7 @@ class TreeRepository:
                 conn, "photos", ["file_path"], (file_path,), ["file_path"], update=False
             )
             conn.commit()
-            row = _fetchone(
+            row = _scalar(
                 conn, f"SELECT id FROM photos WHERE file_path = {_ph()}", (file_path,)
             )
             return row["id"]
@@ -893,13 +905,14 @@ class TreeRepository:
         """Link a photo to a person."""
         conn = self._conn()
         try:
+            is_profile_val: int = is_profile  # bool is a subtype of int
             if not _is_pg():
-                is_profile = 1 if is_profile else 0
+                is_profile_val = 1 if is_profile else 0
             _upsert(
                 conn,
                 "person_photos",
                 ["person_id", "photo_id", "is_profile", "display_order", "caption"],
-                (person_id, photo_id, is_profile, display_order, caption),
+                (person_id, photo_id, is_profile_val, display_order, caption),
                 ["person_id", "photo_id"],
             )
             conn.commit()
@@ -1018,9 +1031,9 @@ class TreeRepository:
             )
             conn.commit()
             if _is_pg():
-                row = _fetchone(conn, "SELECT lastval() AS id")
+                row = _scalar(conn, "SELECT lastval() AS id")
             else:
-                row = _fetchone(conn, "SELECT last_insert_rowid() AS id")
+                row = _scalar(conn, "SELECT last_insert_rowid() AS id")
             return row["id"]
         finally:
             conn.close()
@@ -1130,7 +1143,7 @@ class TreeRepository:
                 conn, "photos", ["file_path"], (file_path,), ["file_path"], update=False
             )
 
-            row = _fetchone(
+            row = _scalar(
                 conn, f"SELECT id FROM photos WHERE file_path = {p}", (file_path,)
             )
             photo_id = row["id"]
@@ -1156,7 +1169,7 @@ class TreeRepository:
                     (idx, caption, person.id, photo_id),
                 )
             else:
-                is_profile_val = idx == 0
+                is_profile_val: int = idx == 0  # bool is a subtype of int
                 if not _is_pg():
                     is_profile_val = 1 if is_profile_val else 0
                 _execute(

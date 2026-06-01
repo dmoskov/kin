@@ -11,6 +11,16 @@ family-tree = "cli:main"
 testpaths = ["tests"]
 pythonpath = ["src"]
 
+[tool.mypy]
+files = ["src"]
+mypy_path = "src"
+explicit_package_bases = true
+ignore_missing_imports = true
+# __init__.py / __main__.py are top-level scripts under src/ (pythonpath=src),
+# which collide during module discovery; they hold only a re-export and an
+# entry point, so they are not type-checked.
+exclude = '^src/__(init|main)__\.py$'
+
 [tool.ruff]
 target-version = "py311"
 line-length = 100

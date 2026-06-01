@@ -98,7 +98,7 @@ def _load_cache(places: list[str]) -> dict[str, tuple[float, float] | None]:
     finally:
         conn.close()
 
-    result = {}
+    result: dict[str, tuple[float, float] | None] = {}
     for row in rows:
         place = row["place"] if hasattr(row, "keys") else row[0]
         lat = row["lat"] if hasattr(row, "keys") else row[1]

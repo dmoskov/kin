@@ -150,7 +150,7 @@ def family_timeline(tree: FamilyTree) -> list[TimelineEntry]:
         # Birth
         if person.birth_date:
             place_suffix = f" in {person.birth_place}" if person.birth_place else ""
-            key = ("birth", person_id)
+            key: tuple = ("birth", person_id)
             if key not in seen:
                 seen.add(key)
                 entries.append(
@@ -181,15 +181,15 @@ def family_timeline(tree: FamilyTree) -> list[TimelineEntry]:
     for event in tree.events:
         if event.event_type in (EventType.BIRTH, EventType.DEATH):
             continue
-        person = tree.get_person(event.person_id)
-        if not person:
+        evt_person = tree.get_person(event.person_id)
+        if not evt_person:
             continue
         place_suffix = f" at {event.place}" if event.place else ""
         desc = event.description or event.event_type.value
         entries.append(
             TimelineEntry(
                 date=event.date,
-                description=f"{person.full_name} — {desc}{place_suffix} ({event.event_type.value})",
+                description=f"{evt_person.full_name} — {desc}{place_suffix} ({event.event_type.value})",
                 event_type=event.event_type.value,
                 related_person_id=event.person_id,
             )

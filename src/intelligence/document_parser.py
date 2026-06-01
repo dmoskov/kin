@@ -514,24 +514,24 @@ def _merge_chunk_results(chunk_results: list[dict]) -> dict:
                 seen_people[pid] = person
 
         for rel in result.get("relationships", []):
-            key = (rel.get("parent_id", ""), rel.get("child_id", ""))
-            if key[0] and key[1] and key not in seen_rels:
-                seen_rels.add(key)
+            rel_key = (rel.get("parent_id", ""), rel.get("child_id", ""))
+            if rel_key[0] and rel_key[1] and rel_key not in seen_rels:
+                seen_rels.add(rel_key)
                 merged["relationships"].append(rel)
 
         for event in result.get("events", []):
-            key = (event.get("person_id", ""), event.get("event_type", ""), event.get("date", ""))
-            if key[0] and key not in seen_events:
-                seen_events.add(key)
+            event_key = (event.get("person_id", ""), event.get("event_type", ""), event.get("date", ""))
+            if event_key[0] and event_key not in seen_events:
+                seen_events.add(event_key)
                 merged["events"].append(event)
 
         for union in result.get("unions", []):
             p1 = union.get("partner1_id", "")
             p2 = union.get("partner2_id", "")
             if p1 and p2:
-                key = frozenset([p1, p2])
-                if key not in seen_unions:
-                    seen_unions.add(key)
+                union_key = frozenset([p1, p2])
+                if union_key not in seen_unions:
+                    seen_unions.add(union_key)
                     merged["unions"].append(union)
 
         if result.get("notes"):

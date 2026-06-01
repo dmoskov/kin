@@ -49,7 +49,7 @@ def extract_exif_metadata(image_bytes: bytes) -> dict[str, Any]:
         logger.debug("Pillow not installed, skipping EXIF extraction")
         return {}
 
-    result = {}
+    result: dict[str, Any] = {}
 
     try:
         img = Image.open(io.BytesIO(image_bytes))
