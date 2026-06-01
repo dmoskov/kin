@@ -179,6 +179,53 @@ class TestRelationships:
         assert len(tree.relationships) == 0
 
 
+class TestSavePersonPreservesRelatedData:
+    """Re-saving (editing) a person must not destroy their related rows.
+
+    Regression for the SQLite INSERT OR REPLACE bug: with foreign_keys=ON, a
+    delete-then-reinsert upsert cascade-deleted the person's relationships,
+    unions, and events and reset created_at on every edit.
+    """
+
+    def test_editing_person_keeps_relationships_unions_events(self, repo):
+        repo.save_person(Person(id="parent", given_name="P", surname="S"))
+        repo.save_person(Person(id="child", given_name="C", surname="S"))
+        repo.save_person(Person(id="spouse", given_name="Sp", surname="S"))
+        repo.save_relationship(Relationship(parent_id="parent", child_id="child"))
+        repo.save_union(Union(partner1_id="parent", partner2_id="spouse"))
+        repo.save_event(LifeEvent(person_id="parent", event_type=EventType.CAREER, date="2010"))
+
+        # Edit the parent (a routine update) and re-save.
+        edited = repo.get_person("parent")
+        edited.given_name = "Patricia"
+        repo.save_person(edited)
+
+        tree = repo.load_tree()
+        assert edited.given_name == "Patricia"
+        assert len(tree.relationships) == 1, "relationship cascade-deleted on edit"
+        assert len(tree.unions) == 1, "union cascade-deleted on edit"
+        assert len(tree.events) == 1, "event cascade-deleted on edit"
+
+    def test_editing_person_preserves_created_at(self, repo):
+        repo.save_person(Person(id="p", given_name="P", surname="S"))
+        conn = get_connection(repo._db_path)
+        original = conn.execute("SELECT created_at FROM people WHERE id = 'p'").fetchone()[
+            "created_at"
+        ]
+        conn.close()
+
+        edited = repo.get_person("p")
+        edited.given_name = "Renamed"
+        repo.save_person(edited)
+
+        conn = get_connection(repo._db_path)
+        after = conn.execute("SELECT created_at FROM people WHERE id = 'p'").fetchone()[
+            "created_at"
+        ]
+        conn.close()
+        assert after == original, "created_at was reset on edit"
+
+
 # ── Unions ─────────────────────────────────────────────────────────────
 
 

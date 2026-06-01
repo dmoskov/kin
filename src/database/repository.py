@@ -96,8 +96,8 @@ def _upsert(
         columns: Column names corresponding to parameterised *values*.
         values: Parameter values (len must match *columns*).
         conflict_columns: Columns that form the conflict/uniqueness constraint.
-        update: If True, update non-conflict columns on conflict
-                (PG ``ON CONFLICT DO UPDATE`` / SQLite ``INSERT OR REPLACE``).
+        update: If True, update non-conflict columns on conflict, in place
+                (``ON CONFLICT DO UPDATE`` on both backends).
                 If False, silently skip duplicates
                 (PG ``ON CONFLICT DO NOTHING`` / SQLite ``INSERT OR IGNORE``).
         extra_columns: Additional columns whose values are raw SQL expressions
@@ -140,10 +140,7 @@ def _upsert(
             conflict_set = set(conflict_columns)
             sets = [f"{c}=excluded.{c}" for c in columns if c not in conflict_set]
             if extra_columns and extra_values:
-                sets.extend(
-                    f"{c}={v}"
-                    for c, v in zip(extra_columns, extra_values, strict=False)
-                )
+                sets.extend(f"{c}={v}" for c, v in zip(extra_columns, extra_values, strict=False))
             sql = (
                 f"INSERT INTO {table} ({col_list}) VALUES ({ph}) "
                 f"ON CONFLICT ({conflict}) DO UPDATE SET {', '.join(sets)}"
