@@ -191,7 +191,7 @@ export function renderTimeline(filterPersonId = "all") {
       for (const e of decadeEntries) {
         const isCross = e.crossLane;
         html += `
-          <div class="timeline-entry${isCross ? " timeline-cross-marriage" : ""}${e.type === "photo" ? " timeline-photo-entry" : ""}" data-type="${e.type}" data-year="${e.year}">
+          <div class="timeline-entry${isCross ? " timeline-cross-marriage" : ""}${e.type === "photo" ? " timeline-photo-entry" : ""}" data-type="${e.type}" data-year="${e.year}" data-person-id="${e.personId || ""}">
             <div class="timeline-entry-dot" style="border-color:${e.type === "photo" ? (EVENT_COLORS.photo || "#d4a843") : lane.color}"></div>
             <div class="timeline-content">
               <span class="timeline-year-inline">${e.dateDisplay || e.year}</span>
@@ -300,3 +300,11 @@ export function populateTimelineFilter() {
 // Relationship Calculator
 // ═══════════════════════════════════════════════════════════════
 
+
+// ── Click a timeline entry to open that person (links/photos keep their own action) ──
+document.getElementById("timeline-entries")?.addEventListener("click", (e) => {
+  if (e.target.closest("a, img, [onclick]")) return;
+  const entry = e.target.closest(".timeline-entry");
+  const pid = entry?.dataset.personId;
+  if (pid) showPersonPanel(pid);
+});

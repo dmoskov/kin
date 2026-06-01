@@ -4785,3 +4785,15 @@ select.ge-input { padding: 3px 4px; }
   }
   .map-legends.collapsed { display: none; }
 }
+
+
+/* ── Timeline: clickable entries + sticky decade labels ───── */
+.timeline-entry[data-person-id]:not([data-person-id=""]) { cursor: pointer; }
+.timeline-entry[data-person-id]:not([data-person-id=""]):hover { background: var(--surface-hover); }
+/* Keep the decade label pinned just under the sticky column header as you
+   scroll through a tall decade row. */
+.timeline-decade {
+  position: sticky;
+  top: 42px;
+  z-index: 2;
+}
