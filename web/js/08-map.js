@@ -446,40 +446,41 @@ export function plotMapMarkers(events) {
     byCoord[ck].push(group);
   }
 
-  // Offset radius in degrees — small enough to look clustered, large enough to see
-  const OFFSET_DEG = 0.15;
-
+  // Co-located people (e.g. everyone recorded simply as "Boston") share ONE
+  // marker at the true coordinate rather than being fanned out into fake,
+  // specific-looking nearby points. Size grows with how many people are there,
+  // and a tooltip/popup spell out who — honest about the location's precision.
   for (const groups of Object.values(byCoord)) {
-    const n = groups.length;
-    groups.forEach((group, i) => {
-      let markerLatLng = group.latlng;
-      if (n > 1) {
-        // Fan out in a circle around the original point
-        const angle = (2 * Math.PI * i) / n - Math.PI / 2;
-        const offsetLat = OFFSET_DEG * Math.sin(angle);
-        const offsetLng = OFFSET_DEG * Math.cos(angle);
-        markerLatLng = [group.latlng[0] + offsetLat, group.latlng[1] + offsetLng];
-      }
+    const latlng = groups[0].latlng;
+    const place = groups[0].place;
+    const events = groups.flatMap((g) => g.events);
+    const peopleCount = new Set(groups.map((g) => g.personId).filter(Boolean)).size;
+    const isCluster = peopleCount > 1;
 
-      const newestYear = Math.max(...group.events.map((e) => e.year || MIN_YEAR));
-      const ratio = recencyRatio(newestYear, MAX_YEAR);
-      const primaryType = group.events[0].type;
-      const baseColor = EVENT_COLORS[primaryType] || "#6c7cff";
-      const fillColor = brightenColor(baseColor, ratio);
-      const fillOpacity = lerp(BRIGHTNESS_FLOOR, BRIGHTNESS_CEIL, ratio);
-      const radius = lerp(RADIUS_FLOOR, RADIUS_CEIL, ratio);
-      const era = getEra(newestYear);
+    const newestYear = Math.max(...events.map((e) => e.year || MIN_YEAR));
+    const ratio = recencyRatio(newestYear, MAX_YEAR);
+    const primaryType = events[0].type;
+    const baseColor = EVENT_COLORS[primaryType] || "#6c7cff";
+    const fillColor = brightenColor(baseColor, ratio);
+    const fillOpacity = lerp(BRIGHTNESS_FLOOR, BRIGHTNESS_CEIL, ratio);
+    const baseRadius = lerp(RADIUS_FLOOR, RADIUS_CEIL, ratio);
+    // Bigger blob = more people at this exact spot.
+    const radius = Math.min(baseRadius + (peopleCount - 1) * 1.6, RADIUS_CEIL + 9);
+    const era = getEra(newestYear);
 
-      const marker = L.circleMarker(markerLatLng, {
-        radius: Math.min(radius + group.events.length * 0.5, RADIUS_CEIL + 2),
-        fillColor,
-        fillOpacity,
-        color: era.color,
-        weight: 2,
-      }).addTo(S.MAP);
+    const marker = L.circleMarker(latlng, {
+      radius,
+      fillColor,
+      fillOpacity,
+      color: era.color,
+      weight: 2,
+    }).addTo(S.MAP);
 
+    if (isCluster) {
+      marker.bindTooltip(`${peopleCount} people · ${place}`, { direction: "top" });
+    } else {
       marker.on("mouseover", (e) => {
-        const primaryEvent = group.events[0];
+        const primaryEvent = events[0];
         if (primaryEvent) {
           const containerPt = S.MAP.latLngToContainerPoint(e.latlng);
           const mapEl = document.getElementById("map");
@@ -488,25 +489,29 @@ export function plotMapMarkers(events) {
         }
       });
       marker.on("mouseout", () => { hideHovercard(); });
+    }
 
-      marker.on("click", () => {
-        const primaryEvent = group.events[0];
+    marker.on("click", () => {
+      if (isCluster) {
+        marker.openPopup();
+      } else {
+        const primaryEvent = events[0];
         if (primaryEvent) {
           showPersonPanel(primaryEvent.personId);
           router.navigate(`/map/person/${primaryEvent.personId}`);
         }
-      });
+      }
+    });
 
-      const popupHtml = buildPlacePopup(group.place, group.events);
-      marker.bindPopup(popupHtml, { maxWidth: 300, maxHeight: 300 });
+    const popupHtml = buildPlacePopup(place, events);
+    marker.bindPopup(popupHtml, { maxWidth: 300, maxHeight: 320 });
 
-      MAP_MARKERS.push({
-        marker,
-        latlng: markerLatLng,
-        origLatlng: group.latlng,
-        events: group.events,
-        placeKey: group.latlng.join(","),
-      });
+    MAP_MARKERS.push({
+      marker,
+      latlng,
+      origLatlng: latlng,
+      events,
+      placeKey: latlng.join(","),
     });
   }
 }
