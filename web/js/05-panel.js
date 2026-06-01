@@ -195,6 +195,11 @@ export function showPersonPanel(personId) {
   panel.classList.remove("hidden");
   requestAnimationFrame(() => panel.classList.add("panel-open"));
   if (S.MAP) setTimeout(() => S.MAP.invalidateSize(), 250);
+  // On the tree, pan the selected node into the visible area if the panel now
+  // covers it (or it's off-screen). No-op on other views.
+  if (typeof activeViewName === "function" && activeViewName() === "tree") {
+    ensureTreeNodeVisible(personId);
+  }
 }
 
 document.getElementById("close-panel").addEventListener("click", () => {
