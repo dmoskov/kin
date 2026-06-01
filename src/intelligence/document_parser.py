@@ -84,9 +84,7 @@ def _get_client():
     try:
         import anthropic
     except ImportError as err:
-        raise RuntimeError(
-            "anthropic package not installed. Run: pip install anthropic"
-        ) from err
+        raise RuntimeError("anthropic package not installed. Run: pip install anthropic") from err
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
@@ -100,9 +98,7 @@ def _extract_pdf_text(file_path: str) -> str:
     try:
         import pdfplumber
     except ImportError as err:
-        raise RuntimeError(
-            "pdfplumber package not installed. Run: pip install pdfplumber"
-        ) from err
+        raise RuntimeError("pdfplumber package not installed. Run: pip install pdfplumber") from err
 
     text_parts = []
     with pdfplumber.open(file_path) as pdf:
@@ -148,7 +144,7 @@ def _build_existing_people_context(existing_people: list[dict]) -> str:
         if p.get("maiden_name"):
             extras.append(f"née {p['maiden_name']}")
         extra_str = f" ({', '.join(extras)})" if extras else ""
-        lines.append(f"  - id=\"{p['id']}\": {name}{extra_str}")
+        lines.append(f'  - id="{p["id"]}": {name}{extra_str}')
 
     return "\n".join(lines)
 
@@ -191,21 +187,25 @@ Extract all people, relationships, dates, places, and events. Match people to ex
             # If no text extracted, try sending pages as images
             try:
                 import pdfplumber
+
                 with pdfplumber.open(file_path) as pdf:
                     for page in pdf.pages[:10]:  # max 10 pages
                         img = page.to_image(resolution=200)
                         import io
+
                         buf = io.BytesIO()
                         img.original.save(buf, format="PNG")
                         b64 = base64.standard_b64encode(buf.getvalue()).decode("utf-8")
-                        content.append({
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "image/png",
-                                "data": b64,
-                            },
-                        })
+                        content.append(
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/png",
+                                    "data": b64,
+                                },
+                            }
+                        )
             except Exception as e:
                 logger.warning("Could not render PDF pages as images: %s", e)
                 return {"error": f"PDF has no extractable text and could not be rendered: {e}"}
@@ -214,14 +214,16 @@ Extract all people, relationships, dates, places, and events. Match people to ex
     elif ext in IMAGE_TYPES:
         # Send image directly to Claude vision
         b64_data, media_type = _encode_image(file_path)
-        content.append({
-            "type": "image",
-            "source": {
-                "type": "base64",
-                "media_type": media_type,
-                "data": b64_data,
-            },
-        })
+        content.append(
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": media_type,
+                    "data": b64_data,
+                },
+            }
+        )
 
     content.append({"type": "text", "text": user_prompt})
 
@@ -257,8 +259,14 @@ Extract all people, relationships, dates, places, and events. Match people to ex
     except json.JSONDecodeError as e:
         logger.error("Failed to parse Claude response as JSON: %s", e)
         truncated = stop_reason == "max_tokens"
-        msg = ("AI response was truncated — the document produced too much data. "
-               "Try cropping to the most relevant section.") if truncated else f"AI returned invalid JSON: {e}"
+        msg = (
+            (
+                "AI response was truncated — the document produced too much data. "
+                "Try cropping to the most relevant section."
+            )
+            if truncated
+            else f"AI returned invalid JSON: {e}"
+        )
         return {
             "error": msg,
             "raw_response": response_text[:2000],
@@ -311,12 +319,14 @@ def _plan_chunks(file_path: str) -> list[dict]:
         at_char_limit = current_mode == "text" and (current_chars + info["chars"]) > MAX_TEXT_CHARS
 
         if mode_changed or at_page_limit or at_char_limit:
-            chunks.append({
-                "start_page": current_start,
-                "end_page": info["page"] - 1,
-                "mode": current_mode,
-                "char_count": current_chars,
-            })
+            chunks.append(
+                {
+                    "start_page": current_start,
+                    "end_page": info["page"] - 1,
+                    "mode": current_mode,
+                    "char_count": current_chars,
+                }
+            )
             current_mode = info["mode"]
             current_start = info["page"]
             current_chars = info["chars"]
@@ -324,12 +334,14 @@ def _plan_chunks(file_path: str) -> list[dict]:
         else:
             current_chars += info["chars"]
 
-    chunks.append({
-        "start_page": current_start,
-        "end_page": page_info[-1]["page"],
-        "mode": current_mode,
-        "char_count": current_chars,
-    })
+    chunks.append(
+        {
+            "start_page": current_start,
+            "end_page": page_info[-1]["page"],
+            "mode": current_mode,
+            "char_count": current_chars,
+        }
+    )
 
     return chunks
 
@@ -359,14 +371,16 @@ def _render_pages_as_images(file_path: str, start: int, end: int) -> list[dict]:
             buf = io.BytesIO()
             img.original.save(buf, format="PNG")
             b64 = base64.standard_b64encode(buf.getvalue()).decode("utf-8")
-            content_blocks.append({
-                "type": "image",
-                "source": {
-                    "type": "base64",
-                    "media_type": "image/png",
-                    "data": b64,
-                },
-            })
+            content_blocks.append(
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": b64,
+                    },
+                }
+            )
 
     return content_blocks
 
@@ -403,8 +417,11 @@ def _call_claude(client, system: str, content: list[dict]) -> dict:
         return json.loads(json_text.strip())
     except json.JSONDecodeError as e:
         truncated = stop_reason == "max_tokens"
-        msg = ("AI response was truncated — too much data for this chunk. "
-               "Results may be incomplete.") if truncated else f"AI returned invalid JSON: {e}"
+        msg = (
+            ("AI response was truncated — too much data for this chunk. Results may be incomplete.")
+            if truncated
+            else f"AI returned invalid JSON: {e}"
+        )
         return {"error": msg, "raw_response": response_text[:2000]}
 
 
@@ -425,7 +442,9 @@ def _parse_chunk(
 
     prior_context = ""
     if prior_people:
-        lines = ["People found in earlier pages of this document (reuse these IDs if you see the same person):"]
+        lines = [
+            "People found in earlier pages of this document (reuse these IDs if you see the same person):"
+        ]
         for p in prior_people:
             name = f"{p.get('given_name', '')} {p.get('surname', '')}".strip()
             lines.append(f'  - id="{p["id"]}": {name}')
@@ -487,7 +506,11 @@ def _merge_chunk_results(chunk_results: list[dict]) -> dict:
             continue
 
         page_range = result.get("_page_range", [0, 0])
-        page_label = f"pp.{page_range[0]}-{page_range[1]}" if page_range[0] != page_range[1] else f"p.{page_range[0]}"
+        page_label = (
+            f"pp.{page_range[0]}-{page_range[1]}"
+            if page_range[0] != page_range[1]
+            else f"p.{page_range[0]}"
+        )
 
         if result.get("summary"):
             summaries.append(f"[{page_label}] {result['summary']}")
@@ -498,8 +521,16 @@ def _merge_chunk_results(chunk_results: list[dict]) -> dict:
                 continue
             if pid in seen_people:
                 existing = seen_people[pid]
-                for field in ("given_name", "surname", "gender", "birth_date", "birth_place",
-                              "death_date", "death_place", "maiden_name"):
+                for field in (
+                    "given_name",
+                    "surname",
+                    "gender",
+                    "birth_date",
+                    "birth_place",
+                    "death_date",
+                    "death_place",
+                    "maiden_name",
+                ):
                     new_val = person.get(field)
                     if new_val and not existing.get(field):
                         existing[field] = new_val
@@ -520,7 +551,11 @@ def _merge_chunk_results(chunk_results: list[dict]) -> dict:
                 merged["relationships"].append(rel)
 
         for event in result.get("events", []):
-            event_key = (event.get("person_id", ""), event.get("event_type", ""), event.get("date", ""))
+            event_key = (
+                event.get("person_id", ""),
+                event.get("event_type", ""),
+                event.get("date", ""),
+            )
             if event_key[0] and event_key not in seen_events:
                 seen_events.add(event_key)
                 merged["events"].append(event)
@@ -593,13 +628,18 @@ def parse_document_chunked(
             for person in dr.get("people", []):
                 pid = person.get("id", "")
                 if pid and not any(p["id"] == pid for p in prior_people):
-                    prior_people.append({
-                        "id": pid,
-                        "given_name": person.get("given_name", ""),
-                        "surname": person.get("surname", ""),
-                    })
-        logger.info("Resuming with %d pre-done chunks, %d prior people",
-                     len(done_by_index), len(prior_people))
+                    prior_people.append(
+                        {
+                            "id": pid,
+                            "given_name": person.get("given_name", ""),
+                            "surname": person.get("surname", ""),
+                        }
+                    )
+        logger.info(
+            "Resuming with %d pre-done chunks, %d prior people",
+            len(done_by_index),
+            len(prior_people),
+        )
 
     # Pre-populate chunk_results: done results in their slots, None for pending
     chunk_results: list[dict] = [done_by_index.get(i, {}) for i in range(len(chunks))]
@@ -611,21 +651,36 @@ def parse_document_chunked(
                 on_progress(idx, len(chunks), done_by_index[idx])
             continue
 
-        logger.info("Processing chunk %d/%d (pages %d-%d, mode=%s)",
-                     idx + 1, len(chunks), chunk["start_page"], chunk["end_page"], chunk["mode"])
+        logger.info(
+            "Processing chunk %d/%d (pages %d-%d, mode=%s)",
+            idx + 1,
+            len(chunks),
+            chunk["start_page"],
+            chunk["end_page"],
+            chunk["mode"],
+        )
 
-        result = _parse_chunk(client, file_path, chunk, existing_people, prior_people, filename or Path(file_path).name)
+        result = _parse_chunk(
+            client,
+            file_path,
+            chunk,
+            existing_people,
+            prior_people,
+            filename or Path(file_path).name,
+        )
         chunk_results[idx] = result
 
         if "error" not in result:
             for person in result.get("people", []):
                 pid = person.get("id", "")
                 if pid and not any(p["id"] == pid for p in prior_people):
-                    prior_people.append({
-                        "id": pid,
-                        "given_name": person.get("given_name", ""),
-                        "surname": person.get("surname", ""),
-                    })
+                    prior_people.append(
+                        {
+                            "id": pid,
+                            "given_name": person.get("given_name", ""),
+                            "surname": person.get("surname", ""),
+                        }
+                    )
 
         if on_progress:
             on_progress(idx, len(chunks), result)

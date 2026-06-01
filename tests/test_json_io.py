@@ -125,9 +125,7 @@ def test_validation_catches_missing_person():
     tree = FamilyTree()
     tree.add_person(Person(id="P1", given_name="A", surname="B"))
     tree.add_relationship(Relationship(parent_id="P1", child_id="MISSING"))
-    tree.add_event(
-        LifeEvent(person_id="GHOST", event_type=EventType.BIRTH, date="2000-01-01")
-    )
+    tree.add_event(LifeEvent(person_id="GHOST", event_type=EventType.BIRTH, date="2000-01-01"))
 
     warnings = validate_tree(tree)
     assert any("MISSING" in w for w in warnings)
@@ -137,15 +135,9 @@ def test_validation_catches_missing_person():
 def test_validation_catches_impossible_dates():
     """Validate should flag child born before parent and marriage before birth."""
     tree = FamilyTree()
-    tree.add_person(
-        Person(id="P1", given_name="Parent", surname="X", birth_date="2000-01-01")
-    )
-    tree.add_person(
-        Person(id="P2", given_name="Child", surname="X", birth_date="1990-01-01")
-    )
-    tree.add_person(
-        Person(id="P3", given_name="Spouse", surname="X", birth_date="2001-06-01")
-    )
+    tree.add_person(Person(id="P1", given_name="Parent", surname="X", birth_date="2000-01-01"))
+    tree.add_person(Person(id="P2", given_name="Child", surname="X", birth_date="1990-01-01"))
+    tree.add_person(Person(id="P3", given_name="Spouse", surname="X", birth_date="2001-06-01"))
     tree.add_relationship(Relationship(parent_id="P1", child_id="P2"))
     tree.add_union(Union(partner1_id="P1", partner2_id="P3", union_date="1999-01-01"))
 

@@ -33,9 +33,7 @@ _PERSON_WRITABLE_FIELDS = {
 _VALID_GENDERS = {g.value for g in Gender}
 
 
-def _coerce_person_payload(
-    body: dict, *, partial: bool
-) -> tuple[dict, str | None, int]:
+def _coerce_person_payload(body: dict, *, partial: bool) -> tuple[dict, str | None, int]:
     """Validate + normalize a person payload.
 
     Returns ``(normalized, error_message, status_code)``. On success
@@ -72,9 +70,7 @@ def _coerce_person_payload(
         elif key == "nicknames":
             if value is None:
                 value = []
-            if not isinstance(value, list) or not all(
-                isinstance(n, str) for n in value
-            ):
+            if not isinstance(value, list) or not all(isinstance(n, str) for n in value):
                 return {}, "nicknames must be a list of strings", 400
         elif key == "notes":
             if value is None:
@@ -236,27 +232,17 @@ def api_create_relationship():
     parent_id = (body.get("parent_id") or "").strip()
     child_id = (body.get("child_id") or "").strip()
     if not parent_id or not child_id:
-        return jsonify(
-            {"error": "parent_id and child_id are required", "code": "bad_request"}
-        ), 400
+        return jsonify({"error": "parent_id and child_id are required", "code": "bad_request"}), 400
     if parent_id == child_id:
-        return jsonify(
-            {"error": "parent_id and child_id must differ", "code": "bad_request"}
-        ), 400
+        return jsonify({"error": "parent_id and child_id must differ", "code": "bad_request"}), 400
 
     repo = TreeRepository()
     if repo.get_person(parent_id) is None:
-        return jsonify(
-            {"error": f"person not found: {parent_id}", "code": "not_found"}
-        ), 404
+        return jsonify({"error": f"person not found: {parent_id}", "code": "not_found"}), 404
     if repo.get_person(child_id) is None:
-        return jsonify(
-            {"error": f"person not found: {child_id}", "code": "not_found"}
-        ), 404
+        return jsonify({"error": f"person not found: {child_id}", "code": "not_found"}), 404
 
-    rel = Relationship(
-        parent_id=parent_id, child_id=child_id, rel_type=RelationshipType.BIOLOGICAL
-    )
+    rel = Relationship(parent_id=parent_id, child_id=child_id, rel_type=RelationshipType.BIOLOGICAL)
     repo.save_relationship(rel)
     return jsonify({"parent_id": parent_id, "child_id": child_id}), 201
 

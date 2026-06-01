@@ -80,9 +80,7 @@ def person_timeline(tree: FamilyTree, person_id: str) -> list[TimelineEntry]:
             # Find the other parent for context
             other_parent = _other_parent(tree, person_id, child.id)
             if other_parent:
-                parent_desc = (
-                    f" (child of {person.full_name} & {other_parent.full_name})"
-                )
+                parent_desc = f" (child of {person.full_name} & {other_parent.full_name})"
             else:
                 parent_desc = f" (child of {person.full_name})"
             entries.append(

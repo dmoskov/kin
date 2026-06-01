@@ -19,7 +19,9 @@ from models.person import Gender, Person
 # ── Fixtures ─────────────────────────────────────────────────────────────
 
 
-def _make_client(tmp_path, monkeypatch, editors_env: str | None = None, google_client_id: str | None = None):
+def _make_client(
+    tmp_path, monkeypatch, editors_env: str | None = None, google_client_id: str | None = None
+):
     """Return a Flask test client with a fresh DB and optional EDITORS env var."""
     db_path = str(tmp_path / "test.db")
     monkeypatch.delenv("DATABASE_URL", raising=False)
@@ -36,15 +38,18 @@ def _make_client(tmp_path, monkeypatch, editors_env: str | None = None, google_c
         monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
 
     from database.connection import init_db
+
     init_db(db_path)
 
     import web_server
+
     importlib.reload(web_server)
     web_server.PRIVATE_DIR = tmp_path
     web_server.app.config["TESTING"] = True
     web_server.app.config["SECRET_KEY"] = "test-secret"
 
     from database.repository import TreeRepository
+
     repo = TreeRepository(db_path)
     repo.save_person(Person(id="p1", given_name="Alice", surname="Test", gender=Gender.FEMALE))
 
@@ -79,6 +84,7 @@ def _sign_in_as(client, app, *, is_editor: bool, email: str = "user@example.com"
 
 # ── No EDITORS set: original behaviour preserved ──────────────────────────
 
+
 class TestNoEditorsSet:
     def test_create_person_allowed_without_auth(self, open_client):
         client, _, _ = open_client
@@ -109,6 +115,7 @@ class TestNoEditorsSet:
 
 
 # ── EDITORS set: unauthenticated requests blocked ─────────────────────────
+
 
 class TestEditorsSetUnauthenticated:
     def test_create_person_blocked(self, restricted_client):
@@ -152,6 +159,7 @@ class TestEditorsSetUnauthenticated:
 
 # ── EDITORS set: signed-in editor can mutate ─────────────────────────────
 
+
 class TestEditorsSetAsEditor:
     def test_editor_can_create_person(self, restricted_client):
         client, _, app = restricted_client
@@ -180,6 +188,7 @@ class TestEditorsSetAsEditor:
 
 # ── EDITORS set: non-editor viewer is blocked ────────────────────────────
 
+
 class TestEditorsSetAsViewer:
     def test_viewer_cannot_create_person(self, restricted_client):
         client, _, app = restricted_client
@@ -207,14 +216,17 @@ class TestEditorsSetAsViewer:
 
 # ── editorsMisconfigured flag ────────────────────────────────────────────
 
+
 class TestEditorsMisconfigured:
     def test_misconfigured_when_editors_set_without_google(self, tmp_path, monkeypatch):
         _, _, app = _make_client(
-            tmp_path, monkeypatch,
+            tmp_path,
+            monkeypatch,
             editors_env="someone@example.com",
             google_client_id=None,
         )
         import web_server
+
         # Point WEB_DIR at tmp_path so no family-config.json with a
         # googleClientId is found by _get_google_client_id().
         web_server.WEB_DIR = str(tmp_path)
@@ -225,7 +237,8 @@ class TestEditorsMisconfigured:
 
     def test_not_misconfigured_when_google_also_set(self, tmp_path, monkeypatch):
         _, _, app = _make_client(
-            tmp_path, monkeypatch,
+            tmp_path,
+            monkeypatch,
             editors_env="someone@example.com",
             google_client_id="fake-client-id.apps.googleusercontent.com",
         )

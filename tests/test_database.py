@@ -46,6 +46,7 @@ class TestInit:
 
     def test_init_records_schema_version(self, db_path):
         from database.schema import SCHEMA_VERSION
+
         conn = get_connection(db_path)
         row = conn.execute("SELECT version FROM schema_version").fetchone()
         assert row["version"] == SCHEMA_VERSION
@@ -172,9 +173,7 @@ class TestRelationships:
     def test_cascade_delete_removes_relationships(self, repo):
         repo.save_person(Person(id="parent", given_name="P", surname="S"))
         repo.save_person(Person(id="child", given_name="C", surname="S"))
-        repo.save_relationship(
-            Relationship(parent_id="parent", child_id="child")
-        )
+        repo.save_relationship(Relationship(parent_id="parent", child_id="child"))
         repo.delete_person("parent")
         tree = repo.load_tree()
         assert len(tree.relationships) == 0
@@ -234,28 +233,52 @@ class TestEvents:
 class TestTreeRoundTrip:
     def _build_family(self) -> FamilyTree:
         tree = FamilyTree()
-        tree.add_person(Person(
-            id="dad", given_name="Dad", surname="Smith", gender=Gender.MALE,
-            birth_date="1960-01-01",
-        ))
-        tree.add_person(Person(
-            id="mom", given_name="Mom", surname="Smith", gender=Gender.FEMALE,
-            birth_date="1962-03-15", maiden_name="Jones",
-        ))
-        tree.add_person(Person(
-            id="kid", given_name="Kid", surname="Smith", gender=Gender.MALE,
-            birth_date="1990-07-20",
-        ))
+        tree.add_person(
+            Person(
+                id="dad",
+                given_name="Dad",
+                surname="Smith",
+                gender=Gender.MALE,
+                birth_date="1960-01-01",
+            )
+        )
+        tree.add_person(
+            Person(
+                id="mom",
+                given_name="Mom",
+                surname="Smith",
+                gender=Gender.FEMALE,
+                birth_date="1962-03-15",
+                maiden_name="Jones",
+            )
+        )
+        tree.add_person(
+            Person(
+                id="kid",
+                given_name="Kid",
+                surname="Smith",
+                gender=Gender.MALE,
+                birth_date="1990-07-20",
+            )
+        )
         tree.add_relationship(Relationship(parent_id="dad", child_id="kid"))
         tree.add_relationship(Relationship(parent_id="mom", child_id="kid"))
-        tree.add_union(Union(
-            partner1_id="dad", partner2_id="mom",
-            union_date="1988-09-01", union_place="Boston",
-        ))
-        tree.add_event(LifeEvent(
-            person_id="dad", event_type=EventType.CAREER,
-            date="1985", description="First job",
-        ))
+        tree.add_union(
+            Union(
+                partner1_id="dad",
+                partner2_id="mom",
+                union_date="1988-09-01",
+                union_place="Boston",
+            )
+        )
+        tree.add_event(
+            LifeEvent(
+                person_id="dad",
+                event_type=EventType.CAREER,
+                date="1985",
+                description="First job",
+            )
+        )
         return tree
 
     def test_save_and_load_tree(self, repo):
@@ -321,12 +344,21 @@ class TestStats:
         assert s["deceased"] == 0
 
     def test_stats_with_data(self, repo):
-        repo.save_person(Person(
-            id="alive", given_name="A", surname="S",
-        ))
-        repo.save_person(Person(
-            id="dead", given_name="D", surname="S", death_date="2020-01-01",
-        ))
+        repo.save_person(
+            Person(
+                id="alive",
+                given_name="A",
+                surname="S",
+            )
+        )
+        repo.save_person(
+            Person(
+                id="dead",
+                given_name="D",
+                surname="S",
+                death_date="2020-01-01",
+            )
+        )
         s = repo.stats()
         assert s["people"] == 2
         assert s["living"] == 1

@@ -86,9 +86,7 @@ def api_update_article(article_id):
     if "title" in body:
         title = (body["title"] or "").strip()
         if not title:
-            return jsonify(
-                {"error": "title cannot be empty", "code": "bad_request"}
-            ), 400
+            return jsonify({"error": "title cannot be empty", "code": "bad_request"}), 400
         existing.title = title
     if "url" in body:
         existing.url = (body["url"] or "").strip() or None

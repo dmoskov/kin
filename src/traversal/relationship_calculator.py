@@ -30,9 +30,7 @@ def _ancestors_with_distance(tree: FamilyTree, person_id: str) -> dict[str, int]
     return dist
 
 
-def find_common_ancestors(
-    tree: FamilyTree, id_a: str, id_b: str
-) -> list[tuple[str, int, int]]:
+def find_common_ancestors(tree: FamilyTree, id_a: str, id_b: str) -> list[tuple[str, int, int]]:
     """Return common ancestors of *id_a* and *id_b*.
 
     Each entry is ``(ancestor_id, dist_a, dist_b)`` where *dist_a* / *dist_b*
@@ -146,30 +144,14 @@ def _blood_label(tree: FamilyTree, id_a: str, id_b: str) -> str | None:
         return _direct_ancestor_label(dist_a, gender_b)
 
     if dist_a == 1 and dist_b == 1:
-        return (
-            "brother"
-            if gender_b == "male"
-            else "sister"
-            if gender_b == "female"
-            else "sibling"
-        )
+        return "brother" if gender_b == "male" else "sister" if gender_b == "female" else "sibling"
 
     if dist_a == 1 and dist_b == 2:
         return (
-            "nephew"
-            if gender_b == "male"
-            else "niece"
-            if gender_b == "female"
-            else "niece/nephew"
+            "nephew" if gender_b == "male" else "niece" if gender_b == "female" else "niece/nephew"
         )
     if dist_a == 2 and dist_b == 1:
-        return (
-            "uncle"
-            if gender_b == "male"
-            else "aunt"
-            if gender_b == "female"
-            else "uncle/aunt"
-        )
+        return "uncle" if gender_b == "male" else "aunt" if gender_b == "female" else "uncle/aunt"
 
     if dist_b == 1 and dist_a > 2:
         prefix = _greats(dist_a - 2)
@@ -290,13 +272,7 @@ def describe_relationship(tree: FamilyTree, id_a: str, id_b: str) -> str:
 
     # 2. Direct spouse
     if id_b in spouses_a:
-        return (
-            "husband"
-            if gender_b == "male"
-            else "wife"
-            if gender_b == "female"
-            else "spouse"
-        )
+        return "husband" if gender_b == "male" else "wife" if gender_b == "female" else "spouse"
 
     # 3. B is A's spouse's blood relative → in-law
     for s_a in spouses_a:

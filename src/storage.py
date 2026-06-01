@@ -144,9 +144,7 @@ class S3Storage(PhotoStorage):
             Body=data,
             ContentType=content_type,
         )
-        logger.info(
-            "S3 put: s3://%s/%s (%d bytes)", self.bucket, self._key(filename), len(data)
-        )
+        logger.info("S3 put: s3://%s/%s (%d bytes)", self.bucket, self._key(filename), len(data))
 
     def get(self, filename: str) -> bytes | None:
         try:
@@ -201,9 +199,7 @@ class S3Storage(PhotoStorage):
 # ---------------------------------------------------------------------------
 
 
-def init_storage(
-    private_dir: Path | None = None, web_dir: Path | None = None
-) -> PhotoStorage:
+def init_storage(private_dir: Path | None = None, web_dir: Path | None = None) -> PhotoStorage:
     """Create the appropriate backend based on environment.
 
     Parameters can be overridden for testing.
@@ -217,9 +213,7 @@ def init_storage(
 
     private_photos = private_dir / "photos"
     web_photos = web_dir / "photos"
-    local = LocalStorage(
-        write_dir=private_photos, read_dirs=[private_photos, web_photos]
-    )
+    local = LocalStorage(write_dir=private_photos, read_dirs=[private_photos, web_photos])
 
     bucket = os.environ.get("S3_BUCKET", "").strip()
     if bucket:

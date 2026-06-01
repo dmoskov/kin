@@ -43,12 +43,8 @@ def app_client(tmp_path, monkeypatch):
 
     repo = TreeRepository(db_path)
 
-    repo.save_person(
-        Person(id="parent1", given_name="Alice", surname="Test", gender=Gender.FEMALE)
-    )
-    repo.save_person(
-        Person(id="child1", given_name="Bob", surname="Test", gender=Gender.MALE)
-    )
+    repo.save_person(Person(id="parent1", given_name="Alice", surname="Test", gender=Gender.FEMALE))
+    repo.save_person(Person(id="child1", given_name="Bob", surname="Test", gender=Gender.MALE))
     repo.save_person(
         Person(id="partner1", given_name="Carol", surname="Test", gender=Gender.FEMALE)
     )
@@ -77,14 +73,10 @@ class TestCreateRelationship:
 
     def test_relationship_persists_in_api_data(self, app_client):
         client, _, _ = app_client
-        client.post(
-            "/api/relationships", json={"parent_id": "parent1", "child_id": "child1"}
-        )
+        client.post("/api/relationships", json={"parent_id": "parent1", "child_id": "child1"})
         data = client.get("/api/data").get_json()
         rels = data["relationships"]
-        assert any(
-            r["parent_id"] == "parent1" and r["child_id"] == "child1" for r in rels
-        )
+        assert any(r["parent_id"] == "parent1" and r["child_id"] == "child1" for r in rels)
 
     def test_missing_parent_id(self, app_client):
         client, _, _ = app_client
@@ -129,9 +121,7 @@ class TestCreateRelationship:
 
     def test_empty_body(self, app_client):
         client, _, _ = app_client
-        resp = client.post(
-            "/api/relationships", data="", content_type="application/json"
-        )
+        resp = client.post("/api/relationships", data="", content_type="application/json")
         assert resp.status_code == 400
 
     def test_self_parent_rejected(self, app_client):
@@ -167,9 +157,7 @@ class TestCreateUnion:
 
     def test_union_persists_in_api_data(self, app_client):
         client, _, _ = app_client
-        client.post(
-            "/api/unions", json={"partner1_id": "parent1", "partner2_id": "partner1"}
-        )
+        client.post("/api/unions", json={"partner1_id": "parent1", "partner2_id": "partner1"})
         data = client.get("/api/data").get_json()
         unions = data["unions"]
         assert any(

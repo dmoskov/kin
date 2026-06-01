@@ -29,12 +29,14 @@ logger = logging.getLogger(__name__)
 
 # ── Backend detection ──────────────────────────────────────────────────
 
+
 def _use_postgres() -> bool:
     """Return True if DATABASE_URL is set (PostgreSQL mode)."""
     return bool(os.environ.get("DATABASE_URL"))
 
 
 # ── SQLite helpers ─────────────────────────────────────────────────────
+
 
 def get_db_path() -> str:
     """Resolve the SQLite database file path.
@@ -70,6 +72,7 @@ def _get_sqlite_connection(db_path: str | None = None) -> sqlite3.Connection:
 
 # ── PostgreSQL helpers ─────────────────────────────────────────────────
 
+
 def _get_pg_connection() -> Any:
     """Create a PostgreSQL connection using DATABASE_URL.
 
@@ -86,6 +89,7 @@ def _get_pg_connection() -> Any:
 
 
 # ── Public API ─────────────────────────────────────────────────────────
+
 
 def get_connection(db_path: str | None = None) -> Any:
     """Create a database connection (PostgreSQL or SQLite).
@@ -124,9 +128,6 @@ def init_db(db_path: str | None = None) -> str:
         return _init_pg()
 
     return _init_sqlite(db_path)
-
-
-
 
 
 def _migrate_photos_data(conn: Any, is_pg: bool) -> None:

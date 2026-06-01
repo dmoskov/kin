@@ -3,6 +3,7 @@
 Events are how we capture the narrative: immigration journeys, career milestones,
 moves, education. They give the tree its story beyond just birth-marriage-death.
 """
+
 from dataclasses import dataclass
 from enum import Enum
 
@@ -31,13 +32,14 @@ class LifeEvent:
     Events are timestamped and located. They form the narrative
     timeline of a person's life.
     """
+
     person_id: str
     event_type: EventType
-    date: str | None = None          # ISO date (partial OK)
-    end_date: str | None = None      # for spans (education, career, residence)
+    date: str | None = None  # ISO date (partial OK)
+    end_date: str | None = None  # for spans (education, career, residence)
     place: str | None = None
     description: str = ""
-    source: str | None = None        # where we learned this (document, oral, etc.)
+    source: str | None = None  # where we learned this (document, oral, etc.)
 
     @property
     def year(self) -> int | None:

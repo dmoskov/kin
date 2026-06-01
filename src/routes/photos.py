@@ -226,9 +226,7 @@ def api_import_google_photos(person_id):
             ".ggpht.com",
             ".googleapis.com",
         )
-        host_ok = any(
-            parsed.hostname == h or parsed.hostname.endswith(h) for h in allowed_hosts
-        )
+        host_ok = any(parsed.hostname == h or parsed.hostname.endswith(h) for h in allowed_hosts)
         if not host_ok:
             errors.append({"filename": filename, "error": "URL not from Google"})
             continue
@@ -381,13 +379,9 @@ def api_bulk_update_photo_metadata():
     body = request.get_json(force=True) or {}
     photo_ids = body.get("photo_ids", [])
     if not isinstance(photo_ids, list) or len(photo_ids) == 0:
-        return jsonify(
-            {"error": "photo_ids must be a non-empty array", "code": "bad_request"}
-        ), 400
+        return jsonify({"error": "photo_ids must be a non-empty array", "code": "bad_request"}), 400
     if len(photo_ids) > 200:
-        return jsonify(
-            {"error": "max 200 photos per request", "code": "bad_request"}
-        ), 400
+        return jsonify({"error": "max 200 photos per request", "code": "bad_request"}), 400
 
     kwargs = {}
     if "date" in body:
@@ -407,9 +401,7 @@ def api_bulk_update_photo_metadata():
         kwargs["lng"] = float(body["lng"]) if body["lng"] is not None else None
 
     if not kwargs:
-        return jsonify(
-            {"error": "no metadata fields provided", "code": "bad_request"}
-        ), 400
+        return jsonify({"error": "no metadata fields provided", "code": "bad_request"}), 400
 
     repo = TreeRepository()
     updated = []
@@ -451,9 +443,7 @@ def api_reextract_exif():
         file_path = row["file_path"]
         # Strip "photos/" prefix for storage lookup
         filename = (
-            file_path.replace("photos/", "", 1)
-            if file_path.startswith("photos/")
-            else file_path
+            file_path.replace("photos/", "", 1) if file_path.startswith("photos/") else file_path
         )
         data = storage.photo_storage.get(filename)
         if not data:
@@ -576,18 +566,12 @@ def api_save_face_region(photo_id):
         w = float(body.get("w", -1))
         h = float(body.get("h", -1))
     except (TypeError, ValueError):
-        return jsonify(
-            {"error": "x, y, w, h must be numbers", "code": "bad_request"}
-        ), 400
+        return jsonify({"error": "x, y, w, h must be numbers", "code": "bad_request"}), 400
 
     if not (0 <= x <= 1 and 0 <= y <= 1 and 0 < w <= 1 and 0 < h <= 1):
-        return jsonify(
-            {"error": "coordinates must be in 0-1 range", "code": "bad_request"}
-        ), 400
+        return jsonify({"error": "coordinates must be in 0-1 range", "code": "bad_request"}), 400
     if x + w > 1.001 or y + h > 1.001:
-        return jsonify(
-            {"error": "region extends beyond image bounds", "code": "bad_request"}
-        ), 400
+        return jsonify({"error": "region extends beyond image bounds", "code": "bad_request"}), 400
 
     repo = TreeRepository()
     photo = repo.get_photo(photo_id)
@@ -604,9 +588,7 @@ def api_save_face_region(photo_id):
     existing_people = repo.people_for_photo(photo_id)
     already_tagged = {p["person_id"] for p in existing_people}
     if person_id not in already_tagged:
-        max_order = max(
-            (p.get("display_order", 0) for p in existing_people), default=-1
-        )
+        max_order = max((p.get("display_order", 0) for p in existing_people), default=-1)
         repo.assign_photo_to_person(person_id, photo_id, display_order=max_order + 1)
         # Also add to old photo_paths for backward compat
         if photo["file_path"] not in person.photo_paths:
@@ -680,13 +662,9 @@ def api_set_profile_crop(person_id):
         crop_w = float(body.get("crop_w", -1))
         crop_h = float(body.get("crop_h", -1))
     except (TypeError, ValueError):
-        return jsonify(
-            {"error": "crop values must be numbers", "code": "bad_request"}
-        ), 400
+        return jsonify({"error": "crop values must be numbers", "code": "bad_request"}), 400
 
-    if not (
-        0 <= crop_x <= 1 and 0 <= crop_y <= 1 and 0 < crop_w <= 1 and 0 < crop_h <= 1
-    ):
+    if not (0 <= crop_x <= 1 and 0 <= crop_y <= 1 and 0 < crop_w <= 1 and 0 < crop_h <= 1):
         return jsonify(
             {"error": "crop coordinates must be in 0-1 range", "code": "bad_request"}
         ), 400

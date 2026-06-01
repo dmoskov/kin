@@ -78,9 +78,7 @@ def _get_existing_people() -> list[dict]:
     ]
 
 
-def _save_chunk_result(
-    doc_id: str, chunk_index: int, chunk: dict, result: dict
-) -> None:
+def _save_chunk_result(doc_id: str, chunk_index: int, chunk: dict, result: dict) -> None:
     """Update a pending chunk row with parsed results."""
     status = "error" if "error" in result else "done"
     error_msg = result.get("error") if "error" in result else None
@@ -114,6 +112,7 @@ def _update_document_progress(doc_id: str, total: int, done: int) -> None:
 def _load_done_chunks(doc_id: str) -> list[tuple[int, dict]]:
     """Return (chunk_index, parsed_data_dict) for all status='done' chunks."""
     from database.repository import _fetchall
+
     conn = get_connection()
     try:
         rows = _fetchall(
@@ -136,7 +135,9 @@ def _load_done_chunks(doc_id: str) -> list[tuple[int, dict]]:
 
 
 def _run_background_parse(
-    doc_id: str, file_path: str, filename: str,
+    doc_id: str,
+    file_path: str,
+    filename: str,
     existing_people: list[dict],
     done_results: list[dict] | None = None,
 ) -> None:
@@ -200,15 +201,17 @@ def api_list_documents():
         done = r.get("chunks_done") or 0
         if status == "parsing" and r["id"] not in _parse_jobs and done < total:
             status = "stalled"
-        docs.append({
-            "id": r["id"],
-            "filename": r["filename"],
-            "file_type": r.get("file_type"),
-            "status": status,
-            "uploaded_at": r.get("uploaded_at"),
-            "total_chunks": total,
-            "chunks_done": done,
-        })
+        docs.append(
+            {
+                "id": r["id"],
+                "filename": r["filename"],
+                "file_type": r.get("file_type"),
+                "status": status,
+                "uploaded_at": r.get("uploaded_at"),
+                "total_chunks": total,
+                "chunks_done": done,
+            }
+        )
     return jsonify(docs)
 
 
@@ -405,9 +408,7 @@ def api_parse_document(doc_id):
 
     file_path = str(web_server.PRIVATE_DIR / row["file_path"])
     if not Path(file_path).exists():
-        return jsonify(
-            {"error": "Document file not found on disk", "code": "missing_file"}
-        ), 404
+        return jsonify({"error": "Document file not found on disk", "code": "missing_file"}), 404
 
     existing_people = _get_existing_people()
 
@@ -428,6 +429,7 @@ def api_parse_document(doc_id):
         # Re-plan chunks to get total (must match original plan)
         if ext == ".pdf":
             from intelligence.document_parser import _plan_chunks
+
             chunks = _plan_chunks(file_path)
             total_chunks = max(len(chunks), 1)
 
@@ -462,12 +464,14 @@ def api_parse_document(doc_id):
         )
         t.start()
 
-        return jsonify({
-            "document_id": doc_id,
-            "status": "parsing",
-            "total_chunks": total_chunks,
-            "chunks_done": resume_count,
-        })
+        return jsonify(
+            {
+                "document_id": doc_id,
+                "status": "parsing",
+                "total_chunks": total_chunks,
+                "chunks_done": resume_count,
+            }
+        )
 
     # Fresh parse: no prior chunks
     _update_document(doc_id, status="parsing")
@@ -680,9 +684,7 @@ def api_apply_document(doc_id):
             repo.save_relationship(rel)
             applied["relationships"] += 1
         except Exception as e:
-            logger.warning(
-                "Could not save relationship %s→%s: %s", parent_id, child_id, e
-            )
+            logger.warning("Could not save relationship %s→%s: %s", parent_id, child_id, e)
 
     # Apply events
     from models.event import EventType, LifeEvent

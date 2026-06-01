@@ -296,6 +296,7 @@ def cmd_sources(args: argparse.Namespace) -> None:
 
 def cmd_serve(args: argparse.Namespace) -> None:
     from web_server import serve
+
     serve(port=args.port)
 
 

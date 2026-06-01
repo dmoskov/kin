@@ -99,9 +99,7 @@ def require_editor(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
         if EDITORS and not session.get("is_editor"):
-            return jsonify(
-                {"error": "editor access required", "code": "forbidden"}
-            ), 403
+            return jsonify({"error": "editor access required", "code": "forbidden"}), 403
         return f(*args, **kwargs)
 
     return wrapper
@@ -356,8 +354,7 @@ def api_data():
         "sources": [_source_to_dict(s) for s in tree.sources.values()],
         "citations": [_citation_to_dict(c) for c in tree.citations],
         "articles": [
-            _article_to_dict(a, article_person_map.get(a.id))
-            for a in tree.articles.values()
+            _article_to_dict(a, article_person_map.get(a.id)) for a in tree.articles.values()
         ],
         "photos": photos_list,
     }

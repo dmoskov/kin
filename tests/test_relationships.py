@@ -92,9 +92,7 @@ def _build_test_tree() -> FamilyTree:
     tree.add_relationship(Relationship(parent_id="eve", child_id="gus"))
 
     tree.add_union(Union(partner1_id="al", partner2_id="beth", union_date="1955-06-15"))
-    tree.add_union(
-        Union(partner1_id="carl", partner2_id="eve", union_date="1985-09-28")
-    )
+    tree.add_union(Union(partner1_id="carl", partner2_id="eve", union_date="1985-09-28"))
 
     return tree
 
@@ -242,20 +240,29 @@ def test_co_in_law():
     """Carl married Eve; Eve's brother Ned married Rosa → Carl and Rosa are co-in-laws."""
     tree = _build_test_tree()
     ned = Person(
-        id="ned", given_name="Ned", surname="Taylor",
-        gender=Gender.MALE, birth_date="1963-05-01",
+        id="ned",
+        given_name="Ned",
+        surname="Taylor",
+        gender=Gender.MALE,
+        birth_date="1963-05-01",
     )
     rosa = Person(
-        id="rosa", given_name="Rosa", surname="Taylor",
-        gender=Gender.FEMALE, birth_date="1964-08-15",
+        id="rosa",
+        given_name="Rosa",
+        surname="Taylor",
+        gender=Gender.FEMALE,
+        birth_date="1964-08-15",
     )
     tree.add_person(ned)
     tree.add_person(rosa)
     tree.add_union(Union(partner1_id="ned", partner2_id="rosa"))
     # Make Ned Eve's sibling by giving them a shared parent
     shared_parent = Person(
-        id="taylor-sr", given_name="Tom", surname="Taylor",
-        gender=Gender.MALE, birth_date="1935-01-01",
+        id="taylor-sr",
+        given_name="Tom",
+        surname="Taylor",
+        gender=Gender.MALE,
+        birth_date="1935-01-01",
     )
     tree.add_person(shared_parent)
     tree.add_relationship(Relationship(parent_id="taylor-sr", child_id="eve"))

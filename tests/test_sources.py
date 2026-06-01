@@ -66,10 +66,9 @@ def _make_citation(**overrides):
 class TestSchemaV2:
     def test_sources_table_exists(self, db_path):
         from database.connection import get_connection
+
         conn = get_connection(db_path)
-        tables = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        ).fetchall()
+        tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         table_names = {t["name"] for t in tables}
         assert "sources" in table_names
         assert "citations" in table_names
@@ -195,15 +194,27 @@ class TestTreeWithSources:
 
     def test_tree_source_ids_for_person(self):
         tree = FamilyTree()
-        tree.add_citation(Citation(
-            source_id="src-a", entity_type=EntityType.PERSON, entity_id="alice",
-        ))
-        tree.add_citation(Citation(
-            source_id="src-b", entity_type=EntityType.PERSON, entity_id="alice",
-        ))
-        tree.add_citation(Citation(
-            source_id="src-a", entity_type=EntityType.PERSON, entity_id="bob",
-        ))
+        tree.add_citation(
+            Citation(
+                source_id="src-a",
+                entity_type=EntityType.PERSON,
+                entity_id="alice",
+            )
+        )
+        tree.add_citation(
+            Citation(
+                source_id="src-b",
+                entity_type=EntityType.PERSON,
+                entity_id="alice",
+            )
+        )
+        tree.add_citation(
+            Citation(
+                source_id="src-a",
+                entity_type=EntityType.PERSON,
+                entity_id="bob",
+            )
+        )
 
         assert tree.source_ids_for_person("alice") == {"src-a", "src-b"}
         assert tree.source_ids_for_person("bob") == {"src-a"}
@@ -230,9 +241,7 @@ class TestSourceTagParsing:
     def test_parse_single_source(self):
         from import_export.json_io import parse_source_tags
 
-        source_ids, cleaned = parse_source_tags(
-            "Some biographical info. Source: Golden Book."
-        )
+        source_ids, cleaned = parse_source_tags("Some biographical info. Source: Golden Book.")
         assert "golden-book" in source_ids
         assert "Source:" not in cleaned
         assert cleaned == "Some biographical info."
@@ -258,8 +267,6 @@ class TestSourceTagParsing:
     def test_parse_with_and_connector(self):
         from import_export.json_io import parse_source_tags
 
-        source_ids, _ = parse_source_tags(
-            "Some info. Source: fan chart and Wikipedia."
-        )
+        source_ids, _ = parse_source_tags("Some info. Source: fan chart and Wikipedia.")
         assert "fan-chart-2016" in source_ids
         assert "wikipedia" in source_ids

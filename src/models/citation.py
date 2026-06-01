@@ -4,6 +4,7 @@ Citations are the glue between the family data and its provenance.
 Any entity (person, relationship, union, event) can have citations,
 optionally scoped to a specific field (e.g., "birth_date").
 """
+
 from dataclasses import dataclass
 from enum import Enum
 
@@ -16,10 +17,10 @@ class EntityType(Enum):
 
 
 class Confidence(Enum):
-    CONFIRMED = "confirmed"        # multiple sources agree, or primary source
-    PROBABLE = "probable"          # single reliable source
-    UNCERTAIN = "uncertain"        # inferred, partially legible, estimated
-    CONFLICTING = "conflicting"    # sources disagree on this fact
+    CONFIRMED = "confirmed"  # multiple sources agree, or primary source
+    PROBABLE = "probable"  # single reliable source
+    UNCERTAIN = "uncertain"  # inferred, partially legible, estimated
+    CONFLICTING = "conflicting"  # sources disagree on this fact
 
 
 @dataclass
@@ -35,6 +36,7 @@ class Citation:
         confidence: How reliable is this citation
         notes: Additional context
     """
+
     source_id: str
     entity_type: EntityType
     entity_id: str

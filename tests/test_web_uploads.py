@@ -24,8 +24,10 @@ from models.person import Gender, Person
 
 # ── PNG / JPG / GIF / WEBP byte helpers ──────────────────────────────────
 
+
 def _tiny_png() -> bytes:
     """Return the bytes of a minimal valid 1x1 PNG."""
+
     def _chunk(tag: bytes, data: bytes) -> bytes:
         length = struct.pack(">I", len(data))
         crc = struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
@@ -66,6 +68,7 @@ def _not_an_image() -> bytes:
 
 # ── Fixtures ─────────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def app_client(tmp_path, monkeypatch):
     """Return a (flask_client, repo, db_path) triple.
@@ -78,6 +81,7 @@ def app_client(tmp_path, monkeypatch):
     monkeypatch.setenv("FAMILY_TREE_DB", db_path)
 
     from database.connection import init_db
+
     init_db(db_path)
 
     # Import after env is set so the module picks it up, and redirect
@@ -85,31 +89,37 @@ def app_client(tmp_path, monkeypatch):
     import importlib
 
     import web_server
+
     importlib.reload(web_server)
     web_server.PRIVATE_DIR = tmp_path
     web_server.app.config["TESTING"] = True
 
     # Reinitialize photo storage to use the tmp_path
     import storage
+
     storage.photo_storage = storage.init_storage(private_dir=tmp_path, web_dir=tmp_path / "web")
     web_server.photo_storage = storage.photo_storage
 
     from database.repository import TreeRepository
+
     repo = TreeRepository(db_path)
 
     # Seed a person.
-    repo.save_person(Person(
-        id="p1",
-        given_name="Alice",
-        surname="Test",
-        gender=Gender.FEMALE,
-    ))
+    repo.save_person(
+        Person(
+            id="p1",
+            given_name="Alice",
+            surname="Test",
+            gender=Gender.FEMALE,
+        )
+    )
 
     with web_server.app.test_client() as client:
         yield client, repo, tmp_path
 
 
 # ── Photo upload ─────────────────────────────────────────────────────────
+
 
 class TestPhotoUpload:
     def test_happy_path_png(self, app_client):
@@ -177,6 +187,7 @@ class TestPhotoUpload:
 
     def test_rejects_oversize(self, app_client, monkeypatch):
         import web_server
+
         monkeypatch.setattr(web_server, "MAX_PHOTO_BYTES", 1024)  # 1 KB
         client, _, _ = app_client
         big = b"\x89PNG\r\n\x1a\n" + b"\x00" * 4096
@@ -219,6 +230,7 @@ class TestPhotoUpload:
 
 
 # ── Photo association (the production PG regression fix) ─────────────────
+
 
 class TestPhotoAssociation:
     """These endpoints previously used raw SQLite syntax and broke silently
@@ -340,6 +352,7 @@ class TestPhotoAssociation:
         import inspect
 
         from routes.photos import api_add_photos, api_remove_photo, api_set_photo_caption
+
         for name, fn in [
             ("api_add_photos", api_add_photos),
             ("api_remove_photo", api_remove_photo),
@@ -352,6 +365,7 @@ class TestPhotoAssociation:
 
 
 # ── Document upload ──────────────────────────────────────────────────────
+
 
 class TestDocumentUpload:
     def test_happy_path_pdf(self, app_client):
@@ -403,6 +417,7 @@ class TestDocumentUpload:
 
     def test_rejects_oversize(self, app_client, monkeypatch):
         import web_server
+
         monkeypatch.setattr(web_server, "MAX_DOC_BYTES", 512)
         client, _, _ = app_client
         resp = client.post(
@@ -416,31 +431,37 @@ class TestDocumentUpload:
 
 # ── Filename sanitization unit tests ─────────────────────────────────────
 
+
 class TestSanitizeFilename:
     def test_strips_traversal(self):
         from web_server import _sanitize_filename
+
         out = _sanitize_filename("../../etc/passwd.png")
         assert ".." not in out
         assert out.endswith(".png")
 
     def test_strips_nul_bytes(self):
         from web_server import _sanitize_filename
+
         out = _sanitize_filename("bad\x00name.png")
         assert "\x00" not in out
 
     def test_fallback_for_empty_stem(self):
         from web_server import _sanitize_filename
+
         out = _sanitize_filename("___.png")
         assert "upload" in out
         assert out.endswith(".png")
 
     def test_lowercases_extension(self):
         from web_server import _sanitize_filename
+
         out = _sanitize_filename("Photo.JPG")
         assert out.endswith(".jpg")
 
     def test_slugifies_spaces_and_symbols(self):
         from web_server import _sanitize_filename
+
         out = _sanitize_filename("My Great Photo!.png")
         assert "my-great-photo" in out
         assert "!" not in out
@@ -449,10 +470,12 @@ class TestSanitizeFilename:
 
 # ── 413 JSON error handler ───────────────────────────────────────────────
 
+
 class TestOversizeHandler:
     def test_413_returns_json(self, app_client, monkeypatch):
         """Flask-level MAX_CONTENT_LENGTH aborts should return JSON, not HTML."""
         import web_server
+
         # Set MAX_CONTENT_LENGTH to something tiny.
         client, _, _ = app_client
         web_server.app.config["MAX_CONTENT_LENGTH"] = 10

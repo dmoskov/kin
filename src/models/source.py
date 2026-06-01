@@ -3,16 +3,17 @@
 Each fact in the tree can cite one or more Sources via Citations.
 This enables structured provenance tracking: "Where did we learn this?"
 """
+
 from dataclasses import dataclass
 from enum import Enum
 
 
 class SourceType(Enum):
-    DOCUMENT = "document"      # physical/scanned document (Golden Book, fan chart)
-    LETTER = "letter"          # personal correspondence (Herb's letter)
-    ORAL = "oral"              # oral history / interview
-    PUBLIC = "public"          # publicly available (Wikipedia, Open Library)
-    DIRECT = "direct"          # directly from a living family member
+    DOCUMENT = "document"  # physical/scanned document (Golden Book, fan chart)
+    LETTER = "letter"  # personal correspondence (Herb's letter)
+    ORAL = "oral"  # oral history / interview
+    PUBLIC = "public"  # publicly available (Wikipedia, Open Library)
+    DIRECT = "direct"  # directly from a living family member
     OTHER = "other"
 
 
@@ -29,6 +30,7 @@ class Source:
         description: Additional context about the source
         url: For public sources (Wikipedia URL, etc.)
     """
+
     id: str
     name: str
     source_type: SourceType = SourceType.OTHER

@@ -295,9 +295,7 @@ class TreeRepository:
         """Fetch a single Person by ID."""
         conn = self._conn()
         try:
-            row = _fetchone(
-                conn, f"SELECT * FROM people WHERE id = {_ph()}", (person_id,)
-            )
+            row = _fetchone(conn, f"SELECT * FROM people WHERE id = {_ph()}", (person_id,))
             return self._row_to_person(row) if row else None
         finally:
             conn.close()
@@ -403,9 +401,7 @@ class TreeRepository:
         """Fetch a single Source by ID."""
         conn = self._conn()
         try:
-            row = _fetchone(
-                conn, f"SELECT * FROM sources WHERE id = {_ph()}", (source_id,)
-            )
+            row = _fetchone(conn, f"SELECT * FROM sources WHERE id = {_ph()}", (source_id,))
             return self._row_to_source(row) if row else None
         finally:
             conn.close()
@@ -524,9 +520,7 @@ class TreeRepository:
         """Fetch a single NewsArticle by ID."""
         conn = self._conn()
         try:
-            row = _fetchone(
-                conn, f"SELECT * FROM news_articles WHERE id = {_ph()}", (article_id,)
-            )
+            row = _fetchone(conn, f"SELECT * FROM news_articles WHERE id = {_ph()}", (article_id,))
             return self._row_to_article(row) if row else None
         finally:
             conn.close()
@@ -659,8 +653,15 @@ class TreeRepository:
                     conn,
                     "news_articles",
                     ["id", "title", "url", "publication", "date", "summary", "photo_url"],
-                    (article.id, article.title, article.url, article.publication,
-                     article.date, article.summary, article.photo_url),
+                    (
+                        article.id,
+                        article.title,
+                        article.url,
+                        article.publication,
+                        article.date,
+                        article.summary,
+                        article.photo_url,
+                    ),
                     ["id"],
                 )
 
@@ -743,9 +744,7 @@ class TreeRepository:
             try:
                 for row in _fetchall(conn, "SELECT * FROM news_articles"):
                     tree.add_article(self._row_to_article(row))
-                for row in _fetchall(
-                    conn, "SELECT person_id, article_id FROM person_articles"
-                ):
+                for row in _fetchall(conn, "SELECT person_id, article_id FROM person_articles"):
                     tree.add_person_article_link(row["person_id"], row["article_id"])
             except Exception:
                 if _is_pg():
@@ -766,19 +765,13 @@ class TreeRepository:
                 row = _scalar(conn, f"SELECT COUNT(*) as n FROM {table}")
                 counts[table] = row["n"]
 
-            row = _scalar(
-                conn, "SELECT COUNT(*) as n FROM people WHERE death_date IS NULL"
-            )
+            row = _scalar(conn, "SELECT COUNT(*) as n FROM people WHERE death_date IS NULL")
             counts["living"] = row["n"]
             counts["deceased"] = counts["people"] - counts["living"]
 
             try:
-                counts["sources"] = _scalar(
-                    conn, "SELECT COUNT(*) as n FROM sources"
-                )["n"]
-                counts["citations"] = _scalar(
-                    conn, "SELECT COUNT(*) as n FROM citations"
-                )["n"]
+                counts["sources"] = _scalar(conn, "SELECT COUNT(*) as n FROM sources")["n"]
+                counts["citations"] = _scalar(conn, "SELECT COUNT(*) as n FROM citations")["n"]
             except Exception:
                 if _is_pg():
                     conn.rollback()
@@ -786,9 +779,7 @@ class TreeRepository:
                 counts["citations"] = 0
 
             try:
-                counts["articles"] = _scalar(
-                    conn, "SELECT COUNT(*) as n FROM news_articles"
-                )["n"]
+                counts["articles"] = _scalar(conn, "SELECT COUNT(*) as n FROM news_articles")["n"]
             except Exception:
                 if _is_pg():
                     conn.rollback()
@@ -804,18 +795,12 @@ class TreeRepository:
         """Return the photo id for a file_path, creating a row if needed."""
         conn = self._conn()
         try:
-            row = _fetchone(
-                conn, f"SELECT id FROM photos WHERE file_path = {_ph()}", (file_path,)
-            )
+            row = _fetchone(conn, f"SELECT id FROM photos WHERE file_path = {_ph()}", (file_path,))
             if row:
                 return row["id"]
-            _upsert(
-                conn, "photos", ["file_path"], (file_path,), ["file_path"], update=False
-            )
+            _upsert(conn, "photos", ["file_path"], (file_path,), ["file_path"], update=False)
             conn.commit()
-            row = _scalar(
-                conn, f"SELECT id FROM photos WHERE file_path = {_ph()}", (file_path,)
-            )
+            row = _scalar(conn, f"SELECT id FROM photos WHERE file_path = {_ph()}", (file_path,))
             return row["id"]
         finally:
             conn.close()
@@ -847,9 +832,7 @@ class TreeRepository:
         """Fetch a single photo by id."""
         conn = self._conn()
         try:
-            return _fetchone(
-                conn, f"SELECT * FROM photos WHERE id = {_ph()}", (photo_id,)
-            )
+            return _fetchone(conn, f"SELECT * FROM photos WHERE id = {_ph()}", (photo_id,))
         finally:
             conn.close()
 
@@ -952,9 +935,7 @@ class TreeRepository:
         finally:
             conn.close()
 
-    def set_photo_caption_new(
-        self, person_id: str, photo_id: int, caption: str
-    ) -> None:
+    def set_photo_caption_new(self, person_id: str, photo_id: int, caption: str) -> None:
         """Set the caption for a person-photo link."""
         conn = self._conn()
         try:
@@ -1067,9 +1048,7 @@ class TreeRepository:
         finally:
             conn.close()
 
-    def face_region_for_person_photo(
-        self, photo_id: int, person_id: str
-    ) -> dict | None:
+    def face_region_for_person_photo(self, photo_id: int, person_id: str) -> dict | None:
         """Return the face region for a specific person on a specific photo."""
         conn = self._conn()
         try:
@@ -1139,13 +1118,9 @@ class TreeRepository:
         """
         p = _ph()
         for idx, file_path in enumerate(person.photo_paths):
-            _upsert(
-                conn, "photos", ["file_path"], (file_path,), ["file_path"], update=False
-            )
+            _upsert(conn, "photos", ["file_path"], (file_path,), ["file_path"], update=False)
 
-            row = _scalar(
-                conn, f"SELECT id FROM photos WHERE file_path = {p}", (file_path,)
-            )
+            row = _scalar(conn, f"SELECT id FROM photos WHERE file_path = {p}", (file_path,))
             photo_id = row["id"]
 
             caption = person.photo_captions.get(file_path, "")

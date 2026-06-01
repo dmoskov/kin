@@ -6,15 +6,16 @@ Two fundamental edge types:
 
 Everything else (siblings, grandparents, cousins) is computed by traversal.
 """
+
 from dataclasses import dataclass
 from enum import Enum
 
 
 class RelationshipType(Enum):
-    BIOLOGICAL = "biological"    # biological parent-child
-    ADOPTIVE = "adoptive"        # adoptive parent-child
-    STEP = "step"                # step-parent/step-child
-    FOSTER = "foster"            # foster parent-child
+    BIOLOGICAL = "biological"  # biological parent-child
+    ADOPTIVE = "adoptive"  # adoptive parent-child
+    STEP = "step"  # step-parent/step-child
+    FOSTER = "foster"  # foster parent-child
 
 
 @dataclass
@@ -24,6 +25,7 @@ class Relationship:
     Directed: parent_id → child_id.
     Type distinguishes biological from adoptive/step/foster.
     """
+
     parent_id: str
     child_id: str
     rel_type: RelationshipType = RelationshipType.BIOLOGICAL
@@ -39,12 +41,13 @@ class Union:
     Not a parent-child link — this represents the couple bond itself.
     Children are linked to each parent individually via Relationship edges.
     """
+
     partner1_id: str
     partner2_id: str
-    union_date: str | None = None     # ISO date
+    union_date: str | None = None  # ISO date
     union_place: str | None = None
-    end_date: str | None = None       # divorce or death date
-    end_reason: str | None = None     # "divorce", "death", "annulment"
+    end_date: str | None = None  # divorce or death date
+    end_reason: str | None = None  # "divorce", "death", "annulment"
     notes: str = ""
 
     @property

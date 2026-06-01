@@ -25,9 +25,7 @@ class FamilyTree:
     """
 
     people: dict[str, Person] = field(default_factory=dict)  # id → Person
-    relationships: list[Relationship] = field(
-        default_factory=list
-    )  # parent→child edges
+    relationships: list[Relationship] = field(default_factory=list)  # parent→child edges
     unions: list[Union] = field(default_factory=list)  # partner↔partner
     events: list[LifeEvent] = field(default_factory=list)
     sources: dict[str, Source] = field(default_factory=dict)  # id → Source
@@ -68,9 +66,7 @@ class FamilyTree:
     def citations_for(self, entity_type: EntityType, entity_id: str) -> list[Citation]:
         """Get all citations for a given entity."""
         return [
-            c
-            for c in self.citations
-            if c.entity_type == entity_type and c.entity_id == entity_id
+            c for c in self.citations if c.entity_type == entity_type and c.entity_id == entity_id
         ]
 
     def source_ids_for_person(self, person_id: str) -> set[str]:
@@ -88,9 +84,7 @@ class FamilyTree:
 
     def parents_of(self, person_id: str) -> list[Person]:
         """Get biological/adoptive parents of a person."""
-        parent_ids = [
-            r.parent_id for r in self.relationships if r.child_id == person_id
-        ]
+        parent_ids = [r.parent_id for r in self.relationships if r.child_id == person_id]
         return [self.people[pid] for pid in parent_ids if pid in self.people]
 
     def children_of(self, person_id: str) -> list[Person]:
@@ -100,9 +94,7 @@ class FamilyTree:
 
     def siblings_of(self, person_id: str) -> list[Person]:
         """Get siblings (share at least one parent). Excludes self."""
-        parent_ids = {
-            r.parent_id for r in self.relationships if r.child_id == person_id
-        }
+        parent_ids = {r.parent_id for r in self.relationships if r.child_id == person_id}
         sibling_ids: set[str] = set()
         for pid in parent_ids:
             for r in self.relationships:

@@ -12,6 +12,7 @@ Uses a synthetic 3-generation family for testing:
   ┌───┴───┐
   Kid Fay  Kid Gus
 """
+
 from models.event import EventType, LifeEvent
 from models.person import Gender, Person
 from models.relationship import Relationship, Union
@@ -23,24 +24,53 @@ def _build_test_tree() -> FamilyTree:
     tree = FamilyTree()
 
     # Generation 0: grandparents
-    al = Person(id="al", given_name="Al", surname="Smith", gender=Gender.MALE,
-                birth_date="1930-05-10", death_date="2005-12-01", birth_place="Chicago, IL")
-    beth = Person(id="beth", given_name="Beth", surname="Jones", gender=Gender.FEMALE,
-                  birth_date="1932-08-22", death_date="2010-03-15", maiden_name="Jones")
+    al = Person(
+        id="al",
+        given_name="Al",
+        surname="Smith",
+        gender=Gender.MALE,
+        birth_date="1930-05-10",
+        death_date="2005-12-01",
+        birth_place="Chicago, IL",
+    )
+    beth = Person(
+        id="beth",
+        given_name="Beth",
+        surname="Jones",
+        gender=Gender.FEMALE,
+        birth_date="1932-08-22",
+        death_date="2010-03-15",
+        maiden_name="Jones",
+    )
 
     # Generation 1: parents + aunt
-    carl = Person(id="carl", given_name="Carl", surname="Smith", gender=Gender.MALE,
-                  birth_date="1958-01-03", birth_place="Chicago, IL")
-    dana = Person(id="dana", given_name="Dana", surname="Smith", gender=Gender.FEMALE,
-                  birth_date="1960-11-30")
-    eve = Person(id="eve", given_name="Eve", surname="Smith", gender=Gender.FEMALE,
-                 birth_date="1960-07-14", maiden_name="Taylor")
+    carl = Person(
+        id="carl",
+        given_name="Carl",
+        surname="Smith",
+        gender=Gender.MALE,
+        birth_date="1958-01-03",
+        birth_place="Chicago, IL",
+    )
+    dana = Person(
+        id="dana", given_name="Dana", surname="Smith", gender=Gender.FEMALE, birth_date="1960-11-30"
+    )
+    eve = Person(
+        id="eve",
+        given_name="Eve",
+        surname="Smith",
+        gender=Gender.FEMALE,
+        birth_date="1960-07-14",
+        maiden_name="Taylor",
+    )
 
     # Generation 2: kids
-    fay = Person(id="fay", given_name="Fay", surname="Smith", gender=Gender.FEMALE,
-                 birth_date="1988-04-20")
-    gus = Person(id="gus", given_name="Gus", surname="Smith", gender=Gender.MALE,
-                 birth_date="1991-09-05")
+    fay = Person(
+        id="fay", given_name="Fay", surname="Smith", gender=Gender.FEMALE, birth_date="1988-04-20"
+    )
+    gus = Person(
+        id="gus", given_name="Gus", surname="Smith", gender=Gender.MALE, birth_date="1991-09-05"
+    )
 
     for p in [al, beth, carl, dana, eve, fay, gus]:
         tree.add_person(p)
@@ -60,17 +90,38 @@ def _build_test_tree() -> FamilyTree:
     tree.add_union(Union(partner1_id="carl", partner2_id="eve", union_date="1985-09-28"))
 
     # Events
-    tree.add_event(LifeEvent(person_id="al", event_type=EventType.MILITARY,
-                             date="1950-06-01", end_date="1953-07-27", description="Korean War"))
-    tree.add_event(LifeEvent(person_id="al", event_type=EventType.CAREER,
-                             date="1955-01-01", description="Joined the factory"))
-    tree.add_event(LifeEvent(person_id="eve", event_type=EventType.EDUCATION,
-                             date="1978-09-01", end_date="1982-06-01", place="State University"))
+    tree.add_event(
+        LifeEvent(
+            person_id="al",
+            event_type=EventType.MILITARY,
+            date="1950-06-01",
+            end_date="1953-07-27",
+            description="Korean War",
+        )
+    )
+    tree.add_event(
+        LifeEvent(
+            person_id="al",
+            event_type=EventType.CAREER,
+            date="1955-01-01",
+            description="Joined the factory",
+        )
+    )
+    tree.add_event(
+        LifeEvent(
+            person_id="eve",
+            event_type=EventType.EDUCATION,
+            date="1978-09-01",
+            end_date="1982-06-01",
+            place="State University",
+        )
+    )
 
     return tree
 
 
 # --- Tests ---
+
 
 def test_num_people():
     tree = _build_test_tree()

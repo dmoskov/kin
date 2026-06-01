@@ -48,12 +48,8 @@ def app_client(tmp_path, monkeypatch):
 
     repo = TreeRepository(db_path)
 
-    repo.save_person(
-        Person(id="p1", given_name="Alice", surname="Test", gender=Gender.FEMALE)
-    )
-    repo.save_person(
-        Person(id="p2", given_name="Bob", surname="Test", gender=Gender.MALE)
-    )
+    repo.save_person(Person(id="p1", given_name="Alice", surname="Test", gender=Gender.FEMALE))
+    repo.save_person(Person(id="p2", given_name="Bob", surname="Test", gender=Gender.MALE))
 
     with web_server.app.test_client() as client:
         yield client, repo, tmp_path
@@ -120,9 +116,7 @@ class TestCreatePerson:
             {"given_name": "NoBirth3"},
         ]:
             resp = client.post("/api/people", json=payload)
-            assert resp.status_code == 201, (
-                f"Failed for {payload}: {resp.get_data(as_text=True)}"
-            )
+            assert resp.status_code == 201, f"Failed for {payload}: {resp.get_data(as_text=True)}"
             body = resp.get_json()
             assert "birth_date" not in body or body["birth_date"] is None
             person = repo.get_person(body["id"])
@@ -167,9 +161,7 @@ class TestCreatePerson:
 
     def test_invalid_date_format_rejected(self, app_client):
         client, _, _ = app_client
-        resp = client.post(
-            "/api/people", json={"given_name": "Gus", "birth_date": "March 1950"}
-        )
+        resp = client.post("/api/people", json={"given_name": "Gus", "birth_date": "March 1950"})
         assert resp.status_code == 400
         assert "birth_date" in resp.get_json()["error"]
 
@@ -181,16 +173,12 @@ class TestCreatePerson:
 
     def test_nicknames_must_be_list_of_strings(self, app_client):
         client, _, _ = app_client
-        resp = client.post(
-            "/api/people", json={"given_name": "Ivy", "nicknames": "just a string"}
-        )
+        resp = client.post("/api/people", json={"given_name": "Ivy", "nicknames": "just a string"})
         assert resp.status_code == 400
 
     def test_nicknames_list_stored(self, app_client):
         client, repo, _ = app_client
-        resp = client.post(
-            "/api/people", json={"given_name": "Jo", "nicknames": ["Jo-Jo", "Jojo"]}
-        )
+        resp = client.post("/api/people", json={"given_name": "Jo", "nicknames": ["Jo-Jo", "Jojo"]})
         assert resp.status_code == 201
         pid = resp.get_json()["id"]
         assert repo.get_person(pid).nicknames == ["Jo-Jo", "Jojo"]
@@ -346,18 +334,13 @@ class TestDeletePerson:
             )
         )
         tree_before = repo.load_tree()
-        assert any(
-            r.parent_id == "p1" and r.child_id == "p2"
-            for r in tree_before.relationships
-        )
+        assert any(r.parent_id == "p1" and r.child_id == "p2" for r in tree_before.relationships)
 
         resp = client.delete("/api/people/p1")
         assert resp.status_code == 204
 
         tree_after = repo.load_tree()
-        assert not any(
-            r.parent_id == "p1" or r.child_id == "p1" for r in tree_after.relationships
-        )
+        assert not any(r.parent_id == "p1" or r.child_id == "p1" for r in tree_after.relationships)
 
 
 # ── Round-trips via /api/data ────────────────────────────────────────────

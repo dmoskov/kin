@@ -80,9 +80,7 @@ def _build_test_tree() -> FamilyTree:
     tree.add_relationship(Relationship(parent_id="eve", child_id="gus"))
 
     tree.add_union(Union(partner1_id="al", partner2_id="beth", union_date="1955-06-15"))
-    tree.add_union(
-        Union(partner1_id="carl", partner2_id="eve", union_date="1985-09-28")
-    )
+    tree.add_union(Union(partner1_id="carl", partner2_id="eve", union_date="1985-09-28"))
 
     tree.add_event(
         LifeEvent(

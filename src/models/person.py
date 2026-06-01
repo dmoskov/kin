@@ -2,6 +2,7 @@
 
 The atomic node. Every relationship, event, and traversal starts from a Person.
 """
+
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -31,6 +32,7 @@ class Person:
         notes: Free text biographical notes, stories
         photo_paths: Relative paths to photos in data/photos/
     """
+
     id: str
     given_name: str
     surname: str

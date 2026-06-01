@@ -218,9 +218,7 @@ def _citation_to_dict(c: Citation) -> dict[str, Any]:
     return d
 
 
-def _article_to_dict(
-    a: NewsArticle, person_ids: list[str] | None = None
-) -> dict[str, Any]:
+def _article_to_dict(a: NewsArticle, person_ids: list[str] | None = None) -> dict[str, Any]:
     d: dict[str, Any] = {
         "id": a.id,
         "title": a.title,
@@ -251,8 +249,7 @@ def save_tree(tree: FamilyTree, path: str, photos: list[dict] | None = None) -> 
         "sources": [_source_to_dict(s) for s in tree.sources.values()],
         "citations": [_citation_to_dict(c) for c in tree.citations],
         "articles": [
-            _article_to_dict(a, article_person_map.get(a.id))
-            for a in tree.articles.values()
+            _article_to_dict(a, article_person_map.get(a.id)) for a in tree.articles.values()
         ],
     }
     if photos:
@@ -301,9 +298,7 @@ def validate_tree(tree: FamilyTree) -> list[str]:
         child = tree.get_person(r.child_id)
         if parent and child and parent.birth_date and child.birth_date:
             if child.birth_date <= parent.birth_date:
-                warnings.append(
-                    f"Child {child.id} born before/same as parent {parent.id}"
-                )
+                warnings.append(f"Child {child.id} born before/same as parent {parent.id}")
 
     # Check marriage date before birth of either partner
     for u in tree.unions:
