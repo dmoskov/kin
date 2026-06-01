@@ -15,6 +15,7 @@ Usage:
     python -m cli stats                         # Summary counts
     python -m cli import FILE                   # Import from JSON
     python -m cli export FILE                   # Export to JSON
+    python -m cli audit [--fix]                 # Find/fix bad relationship data
     python -m cli serve [--port 8000]           # Start web dashboard
 """
 
@@ -319,6 +320,95 @@ def cmd_export(args: argparse.Namespace) -> None:
     print(f"Exported to {args.file}")
 
 
+def _birth_year(person) -> int | None:
+    import re
+
+    d = getattr(person, "birth_date", None) or ""
+    m = re.search(r"\d{4}", d)
+    return int(m.group()) if m else None
+
+
+def cmd_audit(args: argparse.Namespace) -> None:
+    """Flag likely-bad relationship data that produces wrong relationship labels.
+
+    Detects (1) parent-child edges where the parent was born after the child
+    (almost always a reversed edge) and (2) ancestor cycles (a person who is
+    their own ancestor). With --fix, swaps the reversed edges.
+    """
+    from database.repository import _execute, _ph
+
+    repo = TreeRepository()
+    tree = repo.load_tree()
+    people = tree.people  # dict: id -> Person
+
+    reversed_edges = []
+    for r in tree.relationships:
+        par, ch = people.get(r.parent_id), people.get(r.child_id)
+        if not par or not ch:
+            continue
+        py, cy = _birth_year(par), _birth_year(ch)
+        if py is not None and cy is not None and py > cy:
+            reversed_edges.append((r.parent_id, r.child_id, par, ch, py, cy))
+
+    # Ancestor cycles: is any person reachable from themselves via parent edges?
+    parents_of: dict[str, list[str]] = {}
+    for r in tree.relationships:
+        parents_of.setdefault(r.child_id, []).append(r.parent_id)
+    cycles = []
+    for start in people:
+        stack = list(parents_of.get(start, []))
+        seen = set()
+        while stack:
+            cur = stack.pop()
+            if cur == start:
+                cycles.append(start)
+                break
+            if cur in seen:
+                continue
+            seen.add(cur)
+            stack.extend(parents_of.get(cur, []))
+
+    def nm(p):
+        return f"{p.given_name or ''} {p.surname or ''}".strip() or p.id
+
+    if not reversed_edges and not cycles:
+        print(f"No relationship issues found ({len(tree.relationships)} relationships checked).")
+        return
+
+    if reversed_edges:
+        print(
+            f"\n{len(reversed_edges)} likely-reversed parent-child edge(s) "
+            "(parent born after child):"
+        )
+        for _pid, _cid, par, ch, py, cy in reversed_edges:
+            print(
+                f"  parent {nm(par)} ({py}) -> child {nm(ch)} ({cy})  "
+                f"[should likely be {nm(ch)} -> {nm(par)}]"
+            )
+    if cycles:
+        print(
+            f"\n{len(set(cycles))} person(s) are their own ancestor (cycle): "
+            + ", ".join(nm(people[c]) for c in sorted(set(cycles)))
+        )
+
+    if args.fix and reversed_edges:
+        conn = repo._conn()
+        try:
+            for pid, cid, *_ in reversed_edges:
+                _execute(
+                    conn,
+                    f"UPDATE relationships SET parent_id = {_ph()}, child_id = {_ph()} "
+                    f"WHERE parent_id = {_ph()} AND child_id = {_ph()}",
+                    (cid, pid, pid, cid),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+        print(f"\nFixed: swapped {len(reversed_edges)} reversed edge(s).")
+    elif reversed_edges:
+        print("\nRe-run with --fix to swap the reversed edges.")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="family-tree",
@@ -438,6 +528,13 @@ def build_parser() -> argparse.ArgumentParser:
     # sources
     sub.add_parser("sources", help="List all registered sources")
 
+    ap_audit = sub.add_parser(
+        "audit", help="Flag likely-bad relationship data (reversed edges, cycles)"
+    )
+    ap_audit.add_argument(
+        "--fix", action="store_true", help="Swap the likely-reversed parent-child edges"
+    )
+
     # serve
     ap13 = sub.add_parser("serve", help="Start the web dashboard server")
     ap13.add_argument("--port", type=int, default=8000, help="Port to listen on")
@@ -463,6 +560,7 @@ COMMANDS = {
     "cite": cmd_cite,
     "sources": cmd_sources,
     "serve": cmd_serve,
+    "audit": cmd_audit,
 }
 
 

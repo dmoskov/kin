@@ -393,3 +393,49 @@ class TestCommands:
         )
         out = capsys.readouterr().out
         assert "Cited" in out
+
+
+class TestAudit:
+    def test_clean_data_reports_no_issues(self, repo, capsys):
+        repo.save_person(
+            Person(id="p", given_name="Pat", surname="X", birth_date="1950", gender=Gender.MALE)
+        )
+        repo.save_person(
+            Person(id="c", given_name="Chris", surname="X", birth_date="1980", gender=Gender.MALE)
+        )
+        repo.save_relationship(Relationship(parent_id="p", child_id="c"))
+        main(["audit"])
+        out = capsys.readouterr().out
+        assert "No relationship issues found" in out
+
+    def test_detects_reversed_edge(self, repo, capsys):
+        repo.save_person(
+            Person(
+                id="young", given_name="Young", surname="P", birth_date="1984", gender=Gender.MALE
+            )
+        )
+        repo.save_person(
+            Person(id="old", given_name="Old", surname="C", birth_date="1950", gender=Gender.MALE)
+        )
+        repo.save_relationship(Relationship(parent_id="young", child_id="old"))  # reversed
+        main(["audit"])
+        out = capsys.readouterr().out
+        assert "likely-reversed" in out
+        assert "Young" in out and "Old" in out
+
+    def test_fix_swaps_reversed_edge(self, repo, capsys):
+        repo.save_person(
+            Person(
+                id="young", given_name="Young", surname="P", birth_date="1984", gender=Gender.MALE
+            )
+        )
+        repo.save_person(
+            Person(id="old", given_name="Old", surname="C", birth_date="1950", gender=Gender.MALE)
+        )
+        repo.save_relationship(Relationship(parent_id="young", child_id="old"))
+        main(["audit", "--fix"])
+        assert "Fixed" in capsys.readouterr().out
+        tree = repo.load_tree()
+        # edge should now be old -> young
+        edge = tree.relationships[0]
+        assert edge.parent_id == "old" and edge.child_id == "young"
