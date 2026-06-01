@@ -44,7 +44,7 @@ export function gatherTimelineEntries() {
       year: e.date ? parseInt(e.date.substring(0, 4)) : null,
       type: e.event_type,
       personId: e.person_id,
-      title: `${personLink(e.person_id)} — ${e.description || e.event_type}`,
+      title: `${personLink(e.person_id)} — ${escapeHtml(e.description || e.event_type)}`,
       desc: e.description || "",
       place: e.place,
       lane: assignLane(e.person_id),
@@ -86,7 +86,7 @@ export function gatherTimelineEntries() {
         year: year,
         type: "photo",
         personId: personId || "",
-        title: caption || `Photo — ${dateDisplay}`,
+        title: escapeHtml(caption) || `Photo — ${escapeHtml(dateDisplay)}`,
         desc: photo.place || "",
         place: photo.place,
         lane: personId ? assignLane(personId) : (S.LANES[0]?.id || "all"),
@@ -206,10 +206,10 @@ export function renderTimeline(filterPersonId = "all") {
           <div class="timeline-entry${isCross ? " timeline-cross-marriage" : ""}${e.type === "photo" ? " timeline-photo-entry" : ""}" data-type="${e.type}" data-year="${e.year}" data-person-id="${e.personId || ""}">
             <div class="timeline-entry-dot" style="border-color:${e.type === "photo" ? (EVENT_COLORS.photo || "#d4a843") : lane.color}"></div>
             <div class="timeline-content">
-              <span class="timeline-year-inline">${e.dateDisplay || e.year}</span>
+              <span class="timeline-year-inline">${escapeHtml(e.dateDisplay || e.year)}</span>
               ${e.type === "photo" && e.photoPath ? `<img class="timeline-photo-thumb" src="/${e.photoPath}" alt="" loading="lazy" onclick="openLightbox('/${e.photoPath}', '${(e.title || "").replace(/'/g, "\\'")}', '${e.photoPath}')" />` : ""}
               <h4>${e.title}</h4>
-              ${e.place ? `<div class="timeline-place"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;margin-right:3px"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>${e.place}</div>` : ""}
+              ${e.place ? `<div class="timeline-place"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;margin-right:3px"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>${escapeHtml(e.place)}</div>` : ""}
             </div>
           </div>`;
       }
@@ -272,7 +272,7 @@ export function buildStreamCellHtml(entries) {
             <div class="tstream-card-body">
               <div class="tstream-meta">
                 ${e.personId ? personThumb(e.personId, 22) : ""}
-                <span class="tstream-date">${e.dateDisplay || e.year}</span>
+                <span class="tstream-date">${escapeHtml(e.dateDisplay || e.year)}</span>
               </div>
               ${e.title ? `<div class="tstream-title">${e.title}</div>` : ""}
             </div>
@@ -284,7 +284,7 @@ export function buildStreamCellHtml(entries) {
           <div class="tstream-flat-dot" style="background:${color}"></div>
           <div class="tstream-flat-body">
             ${e.personId ? personThumb(e.personId, 20) : ""}
-            <span class="tstream-flat-date">${e.dateDisplay || e.year}</span>
+            <span class="tstream-flat-date">${escapeHtml(e.dateDisplay || e.year)}</span>
             <span class="tstream-flat-title">${e.title}</span>
             ${e.personId ? `<span class="tstream-flat-person">${personLink(e.personId)}</span>` : ""}
           </div>

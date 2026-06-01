@@ -14,7 +14,7 @@ export function buildHovercardHtml(personId) {
 
   const photoHtml = person._profilePhotoPath
     ? croppedImg(person._profilePhotoPath, person.fullName, 48, person._profileCrop, "hovercard-photo")
-    : `<div class="hovercard-avatar ${person.gender || ""}">${(person.given_name || person.fullName || "?")[0].toUpperCase()}</div>`;
+    : `<div class="hovercard-avatar ${person.gender || ""}">${escapeHtml((person.given_name || person.fullName || "?")[0].toUpperCase())}</div>`;
 
   let dates = "";
   if (person.birth_date) {
@@ -28,8 +28,8 @@ export function buildHovercardHtml(personId) {
   }
 
   const nameDisplay = person.maiden_name
-    ? `${person.fullName} <span class="hovercard-maiden">(née ${person.maiden_name})</span>`
-    : person.fullName;
+    ? `${escapeHtml(person.fullName)} <span class="hovercard-maiden">(née ${escapeHtml(person.maiden_name)})</span>`
+    : escapeHtml(person.fullName);
 
   let relHtml = "";
   if (S.CENTER_ID_A && personId !== S.CENTER_ID_A) {
@@ -74,7 +74,7 @@ export function buildHovercardHtml(personId) {
           ${dates ? `<span class="hovercard-dates">${dates}</span>` : ""}
           ${person.gender ? `<span class="hovercard-badge ${person.gender}">${person.gender}</span>` : ""}
         </div>
-        ${person.birth_place ? `<div class="hovercard-place">${person.birth_place}</div>` : ""}
+        ${person.birth_place ? `<div class="hovercard-place">${escapeHtml(person.birth_place)}</div>` : ""}
         ${heritageHtml}
       </div>
       <span class="hovercard-open-arrow">›</span>

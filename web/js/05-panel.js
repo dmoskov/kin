@@ -69,8 +69,8 @@ export function showPersonPanel(personId) {
   let lifespanHtml = "";
   if (person.birth_date || person.death_date) {
     const parts = [];
-    if (person.birth_date) parts.push(person.birth_date);
-    if (person.death_date) parts.push(person.death_date);
+    if (person.birth_date) parts.push(escapeHtml(person.birth_date));
+    if (person.death_date) parts.push(escapeHtml(person.death_date));
     else if (person.birth_date) parts.push("present");
     const age = _calcAge(person.birth_date, person.death_date);
     const ageStr = age !== null ? ` · age ${age}` : "";
@@ -81,10 +81,10 @@ export function showPersonPanel(personId) {
     <div class="panel-hero">
       <div class="panel-hero-avatar">${heroThumb}</div>
       <div class="panel-hero-info">
-        <div class="panel-name">${person.fullName}</div>
+        <div class="panel-name">${escapeHtml(person.fullName)}</div>
         ${relBadge}
         <div class="panel-hero-meta">
-          <span class="panel-gender ${person.gender}">${person.gender}</span>
+          <span class="panel-gender ${escapeHtml(person.gender)}">${escapeHtml(person.gender)}</span>
           ${!S.CONFIG?.editorsEnabled || S.AUTH_USER?.is_editor ? `<button class="panel-edit-btn" onclick="openEditPersonForm('${personId}')">Edit</button>` : ""}
         </div>
         ${lifespanHtml}
@@ -109,16 +109,16 @@ export function showPersonPanel(personId) {
   if (person.birth_date || person.birth_place || person.maiden_name) {
     html += `<div class="panel-section"><h3>Details</h3><div class="panel-details-grid">`;
     if (person.birth_date) {
-      html += `<div class="panel-detail-item"><span class="panel-detail-icon">&#9679;</span><div class="panel-detail-body"><span class="panel-detail-label">Born</span><span class="panel-detail-value">${person.birth_date}${person.birth_place ? " · " + person.birth_place : ""}</span></div></div>`;
+      html += `<div class="panel-detail-item"><span class="panel-detail-icon">&#9679;</span><div class="panel-detail-body"><span class="panel-detail-label">Born</span><span class="panel-detail-value">${escapeHtml(person.birth_date)}${person.birth_place ? " · " + escapeHtml(person.birth_place) : ""}</span></div></div>`;
     }
     if (person.death_date) {
-      html += `<div class="panel-detail-item"><span class="panel-detail-icon" style="color:var(--text-muted)">&#9679;</span><div class="panel-detail-body"><span class="panel-detail-label">Died</span><span class="panel-detail-value">${person.death_date}${person.death_place ? " · " + person.death_place : ""}</span></div></div>`;
+      html += `<div class="panel-detail-item"><span class="panel-detail-icon" style="color:var(--text-muted)">&#9679;</span><div class="panel-detail-body"><span class="panel-detail-label">Died</span><span class="panel-detail-value">${escapeHtml(person.death_date)}${person.death_place ? " · " + escapeHtml(person.death_place) : ""}</span></div></div>`;
     }
     if (person.maiden_name) {
-      html += `<div class="panel-detail-item"><span class="panel-detail-icon" style="color:var(--text-muted)">&#9679;</span><div class="panel-detail-body"><span class="panel-detail-label">Maiden name</span><span class="panel-detail-value">${person.maiden_name}</span></div></div>`;
+      html += `<div class="panel-detail-item"><span class="panel-detail-icon" style="color:var(--text-muted)">&#9679;</span><div class="panel-detail-body"><span class="panel-detail-label">Maiden name</span><span class="panel-detail-value">${escapeHtml(person.maiden_name)}</span></div></div>`;
     }
     if (person.email) {
-      html += `<div class="panel-detail-item"><span class="panel-detail-icon" style="color:var(--text-muted)">&#9679;</span><div class="panel-detail-body"><span class="panel-detail-label">Email</span><span class="panel-detail-value">${person.email}</span></div></div>`;
+      html += `<div class="panel-detail-item"><span class="panel-detail-icon" style="color:var(--text-muted)">&#9679;</span><div class="panel-detail-body"><span class="panel-detail-label">Email</span><span class="panel-detail-value">${escapeHtml(person.email)}</span></div></div>`;
     }
     html += `</div></div>`;
   }
@@ -179,7 +179,7 @@ export function showPersonPanel(personId) {
           </div>
           <div class="panel-event-body">
             <span class="panel-event-date">${date}</span>
-            <span class="panel-event-desc">${e.description || e.event_type}${e.place ? " · <span class='panel-event-place'>" + e.place + "</span>" : ""}</span>
+            <span class="panel-event-desc">${escapeHtml(e.description || e.event_type)}${e.place ? " · <span class='panel-event-place'>" + escapeHtml(e.place) + "</span>" : ""}</span>
           </div>
         </div>`;
     }
@@ -188,7 +188,7 @@ export function showPersonPanel(personId) {
 
   // Notes
   if (person.notes) {
-    html += `<div class="panel-section"><h3>Notes</h3><div class="panel-notes">${person.notes}</div></div>`;
+    html += `<div class="panel-section"><h3>Notes</h3><div class="panel-notes">${escapeHtml(person.notes)}</div></div>`;
   }
 
   content.innerHTML = html;
@@ -519,7 +519,7 @@ export function openEditPersonForm(personId) {
   const person = S.PEOPLE_MAP[personId];
   if (!person) return;
 
-  const esc = (v) => (v || "").replace(/'/g, "&#39;");
+  const esc = escapeHtml;
 
   form.innerHTML = `
     <div class="add-relative-form-inner">

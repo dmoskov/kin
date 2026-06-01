@@ -18,7 +18,7 @@ export function openLightbox(src, alt, photoPath) {
       <div class="lightbox-img-wrap">
         <img src="${src}" alt="${alt}" />
       </div>
-      <div class="lightbox-caption">${alt}</div>
+      <div class="lightbox-caption">${escapeHtml(alt)}</div>
       ${photoData && isEditor ? `<button class="lightbox-tag-faces-btn">Tag Faces</button>` : ""}
       <button class="lightbox-close">&times;</button>
     </div>
@@ -66,7 +66,7 @@ export function openLightbox(src, alt, photoPath) {
         div.style.top = (offY + fr.y * dispH) + "px";
         div.style.width = (fr.w * dispW) + "px";
         div.style.height = (fr.h * dispH) + "px";
-        div.innerHTML = `<span class="face-region-label">${name}</span>`;
+        div.innerHTML = `<span class="face-region-label">${escapeHtml(name)}</span>`;
         if (inAnnotation) {
           const del = document.createElement("button");
           del.className = "face-region-delete";

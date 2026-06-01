@@ -242,7 +242,7 @@ export function renderGalleryFacets() {
   if (placesEl) {
     const places = Object.entries(counts.places).sort((a, b) => b[1] - a[1]);
     placesEl.innerHTML = places
-      .map(([p, c]) => renderFacetOption("place", p, p, c, total))
+      .map(([p, c]) => renderFacetOption("place", p, escapeHtml(p), c, total))
       .join("");
   }
 
@@ -256,7 +256,7 @@ export function renderGalleryFacets() {
       .filter(p => !searchTerm || p.name.toLowerCase().includes(searchTerm))
       .sort((a, b) => b.count - a.count);
     peopleEl.innerHTML = people
-      .map(p => renderFacetOption("person", p.id, personThumb(p.id, 18) + ` <span>${p.name}</span>`, p.count, total))
+      .map(p => renderFacetOption("person", p.id, personThumb(p.id, 18) + ` <span>${escapeHtml(p.name)}</span>`, p.count, total))
       .join("");
   }
 
@@ -291,13 +291,13 @@ export function renderActiveFilterPills() {
   for (const [facet, set] of Object.entries(GALLERY_FILTERS)) {
     for (const value of set) {
       const display = valueFmt[facet] ? valueFmt[facet](value) : value;
-      pills.push(`<span class="filter-pill" onclick="toggleGalleryFilter('${facet}', '${value.replace(/'/g, "\\'")}')">${labels[facet]}: ${display} <span class="filter-pill-x">&times;</span></span>`);
+      pills.push(`<span class="filter-pill" onclick="toggleGalleryFilter('${facet}', '${value.replace(/'/g, "\\'")}')">${labels[facet]}: ${escapeHtml(display)} <span class="filter-pill-x">&times;</span></span>`);
     }
   }
 
   // Text search pill
   if (GALLERY_TEXT_SEARCH) {
-    pills.push(`<span class="filter-pill" onclick="clearGalleryTextSearch()">Search: "${GALLERY_TEXT_SEARCH}" <span class="filter-pill-x">&times;</span></span>`);
+    pills.push(`<span class="filter-pill" onclick="clearGalleryTextSearch()">Search: "${escapeHtml(GALLERY_TEXT_SEARCH)}" <span class="filter-pill-x">&times;</span></span>`);
   }
 
   // Date range pill
@@ -365,7 +365,7 @@ export function renderPhotoGallery() {
   grid.innerHTML = sorted.map(photo => {
     const tagCount = (photo.tagged_people || []).length;
     const hasGps = photo.lat != null && photo.lng != null;
-    const esc = (s) => (s || "").replace(/"/g, "&quot;");
+    const esc = escapeHtml;
     const selected = GALLERY_SELECT_MODE && GALLERY_SELECTED.has(photo.file_path);
     return `<div class="photos-grid-item${selected ? " gallery-selected" : ""}" data-photo-path="${photo.file_path}" data-photo-id="${photo.id}">
       ${GALLERY_SELECT_MODE ? `<div class="gallery-select-check${selected ? " checked" : ""}" onclick="togglePhotoSelection('${photo.file_path}')">${selected ? "&#10003;" : ""}</div>` : ""}
@@ -376,8 +376,8 @@ export function renderPhotoGallery() {
       </div>
       <div class="photos-grid-info">
         <div class="photos-grid-info-text">
-          ${photo.date ? `<span class="photo-date">${photo.date_circa ? "c. " : ""}${photo.date}</span>` : ""}
-          ${photo.place ? `<span class="photo-place" title="${esc(photo.place)}">${photo.place}</span>` : ""}
+          ${photo.date ? `<span class="photo-date">${photo.date_circa ? "c. " : ""}${esc(photo.date)}</span>` : ""}
+          ${photo.place ? `<span class="photo-place" title="${esc(photo.place)}">${esc(photo.place)}</span>` : ""}
           ${!photo.date && !photo.place ? `<span class="photo-place photo-no-meta">No metadata</span>` : ""}
         </div>
         ${isEditor ? `<button class="photos-grid-edit-btn" onclick="event.stopPropagation(); toggleGalleryEdit('${photo.file_path}')" title="Edit metadata">&#9998;</button>` : ""}
@@ -657,7 +657,7 @@ export function toggleGalleryEdit(photoPath) {
     f.innerHTML = "";
   });
 
-  const esc = (s) => (s || "").replace(/"/g, "&quot;");
+  const esc = escapeHtml;
   const date = photoData.date || "";
   const circa = photoData.date_circa ? "checked" : "";
   const place = photoData.place || "";
@@ -736,7 +736,7 @@ export function toggleGalleryEdit(photoPath) {
           if (infoText) {
             const d = updated.date;
             const p = updated.place;
-            infoText.innerHTML = `${d ? `<span class="photo-date">${updated.date_circa ? "c. " : ""}${d}</span>` : ""}${p ? `<span class="photo-place" title="${(p || "").replace(/"/g, "&quot;")}">${p}</span>` : ""}${!d && !p ? `<span class="photo-place photo-no-meta">No metadata</span>` : ""}`;
+            infoText.innerHTML = `${d ? `<span class="photo-date">${updated.date_circa ? "c. " : ""}${escapeHtml(d)}</span>` : ""}${p ? `<span class="photo-place" title="${escapeHtml(p)}">${escapeHtml(p)}</span>` : ""}${!d && !p ? `<span class="photo-place photo-no-meta">No metadata</span>` : ""}`;
           }
           // Update GPS badge
           const imgDiv = item.querySelector(".photos-grid-img");

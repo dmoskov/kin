@@ -290,7 +290,7 @@ export function buildMapEvents() {
       personId: e.person_id,
       fogLevel: personFog(e.person_id),
       place: e.place,
-      desc: `${personName(e.person_id)} — ${e.description || e.event_type}`,
+      desc: `${personName(e.person_id)} — ${escapeHtml(e.description || e.event_type)}`,
       latlng: ll,
     });
   }
@@ -477,7 +477,7 @@ export function plotMapMarkers(events) {
     }).addTo(S.MAP);
 
     if (isCluster) {
-      marker.bindTooltip(`${peopleCount} people · ${place}`, { direction: "top" });
+      marker.bindTooltip(`${peopleCount} people · ${escapeHtml(place)}`, { direction: "top" });
     } else {
       marker.on("mouseover", (e) => {
         const primaryEvent = events[0];
@@ -517,7 +517,7 @@ export function plotMapMarkers(events) {
 }
 
 export function buildPlacePopup(place, events) {
-  let html = `<h4>${place}</h4>`;
+  let html = `<h4>${escapeHtml(place)}</h4>`;
   for (const e of events) {
     const year = e.year || "?";
     const dotColor = EVENT_COLORS[e.type] || "#6c7cff";

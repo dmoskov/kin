@@ -38,9 +38,9 @@ export function buildPanelPhotosInnerHtml(personId) {
       const isProfile = person._profilePhotoPath === src;
       html += `<div class="panel-photo-wrap">`;
       if (isProfile) html += `<span class="photo-profile-badge" title="Profile photo">&#9733;</span>`;
-      html += `<img class="panel-photo" src="/${src}" alt="${capText}" loading="lazy" onclick="openLightbox('/${src}', '${safeCaption}', '${src}')" />`;
+      html += `<img class="panel-photo" src="/${src}" alt="${escapeHtml(capText)}" loading="lazy" onclick="openLightbox('/${src}', '${safeCaption}', '${src}')" />`;
       if (captions[src]) {
-        html += `<div class="panel-photo-caption">${captions[src]}</div>`;
+        html += `<div class="panel-photo-caption">${escapeHtml(captions[src])}</div>`;
       }
       const photoInfo = S.PHOTOS_MAP[src];
       if (photoInfo) {
@@ -52,9 +52,9 @@ export function buildPanelPhotosInnerHtml(personId) {
       if (photoInfo && (photoInfo.date || photoInfo.place)) {
         const dateStr = photoInfo.date_circa ? `c. ${photoInfo.date}` : photoInfo.date;
         html += `<div class="panel-photo-meta">`;
-        if (photoInfo.date) html += `<span>${dateStr}</span>`;
+        if (photoInfo.date) html += `<span>${escapeHtml(dateStr)}</span>`;
         if (photoInfo.date && photoInfo.place) html += ` &middot; `;
-        if (photoInfo.place) html += `<span>${photoInfo.place}</span>`;
+        if (photoInfo.place) html += `<span>${escapeHtml(photoInfo.place)}</span>`;
         html += `</div>`;
       }
       html += `</div>`;
@@ -138,7 +138,7 @@ export function _buildPhotoMetadataFields(photoPath) {
         <input class="photo-meta-date" type="text" placeholder="Date (e.g. 1987-04)" value="${date}" data-field="date" />
         <label class="photo-meta-circa"><input type="checkbox" ${circa} data-field="date_circa" /> Circa</label>
       </div>
-      <input class="photo-meta-place" type="text" placeholder="Place" value="${place.replace(/"/g, '&quot;')}" data-field="place" />
+      <input class="photo-meta-place" type="text" placeholder="Place" value="${escapeHtml(place)}" data-field="place" />
       <select class="photo-meta-type" data-field="photo_type">
         <option value="photo" ${ptype === "photo" ? "selected" : ""}>Photo</option>
         <option value="portrait" ${ptype === "portrait" ? "selected" : ""}>Portrait</option>
@@ -256,7 +256,7 @@ export function _buildPickerGrid(personId) {
         ${sel ? `<button class="photo-profile-star ${_isProfilePhoto(personId, photo) ? 'active' : ''}" data-photo="${photo}" title="Set as profile photo">&#9733;</button>` : ""}
         ${sel ? `<button class="photo-crop-btn" data-photo="${photo}" title="Crop for profile">&#8910;</button>` : ""}
         ${sel && (S.PHOTOS_MAP[photo]?.face_regions || []).length > 0 ? `<span class="photo-face-badge" title="Has face tags">&#9786;</span>` : ""}
-        ${sel ? `<input class="photo-caption-input" type="text" placeholder="Add caption..." value="${cap.replace(/"/g, '&quot;')}" data-photo="${photo}" />` : ""}
+        ${sel ? `<input class="photo-caption-input" type="text" placeholder="Add caption..." value="${escapeHtml(cap)}" data-photo="${photo}" />` : ""}
         ${sel ? _buildPhotoMetadataFields(photo) : ""}
         ${sel ? _buildTagChips(photo, personId) : ""}
       </div>
