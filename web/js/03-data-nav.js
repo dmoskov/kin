@@ -58,8 +58,23 @@ export async function loadData() {
   }
 }
 
+// Escape user-supplied text before interpolating it into innerHTML/template
+// HTML. Use everywhere a person field (name, caption, note, place, …) is put
+// into markup, to prevent stored XSS from free-text fields.
+export function escapeHtml(str) {
+  if (str == null) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// Returns an HTML-escaped display name (safe to interpolate into markup). All
+// current callers render the result as HTML.
 export function personName(id) {
-  return S.PEOPLE_MAP[id]?.fullName || id;
+  return escapeHtml(S.PEOPLE_MAP[id]?.fullName || id);
 }
 
 /**
@@ -69,18 +84,19 @@ export function personName(id) {
  * @param {number} [size=24] - pixel size
  */
 export function personLink(id, label) {
-  const name = label || personName(id);
+  const name = label ? escapeHtml(label) : personName(id);
   return `<a class="person-link" data-person-id="${id}" href="javascript:void(0)">${name}</a>`;
 }
 
 export function croppedImg(src, alt, size, crop, cssClass) {
+  const a = escapeHtml(alt);
   if (!crop) {
-    return `<img class="${cssClass || 'person-thumb'}" src="/${src}" alt="${alt}" style="width:${size}px;height:${size}px" loading="lazy" />`;
+    return `<img class="${cssClass || 'person-thumb'}" src="/${src}" alt="${a}" style="width:${size}px;height:${size}px" loading="lazy" />`;
   }
   const scale = 1 / crop.w;
   const tx = -crop.x * scale * size;
   const ty = -crop.y * scale * size;
-  return `<div class="cropped-thumb ${cssClass || ''}" style="width:${size}px;height:${size}px;border-radius:50%;overflow:hidden;position:relative;display:inline-block;flex-shrink:0"><img src="/${src}" alt="${alt}" style="position:absolute;width:${size * scale}px;height:auto;left:${tx}px;top:${ty}px" loading="lazy" /></div>`;
+  return `<div class="cropped-thumb ${cssClass || ''}" style="width:${size}px;height:${size}px;border-radius:50%;overflow:hidden;position:relative;display:inline-block;flex-shrink:0"><img src="/${src}" alt="${a}" style="position:absolute;width:${size * scale}px;height:auto;left:${tx}px;top:${ty}px" loading="lazy" /></div>`;
 }
 
 export function personThumb(id, size = 24) {
