@@ -451,6 +451,12 @@ main {
   transition: background 0.1s;
 }
 .panel-family-list li:hover { background: var(--surface-hover); }
+.panel-family-list li .person-link {
+  border-bottom: none;
+  flex: 1;
+  min-width: 0;
+}
+.panel-family-list li .person-link:hover { color: var(--accent); }
 
 .panel-event {
   display: flex;
@@ -954,11 +960,45 @@ main {
   padding: 14px 16px;
   min-width: 220px;
   max-width: 320px;
-  pointer-events: none;
+  pointer-events: auto;
   opacity: 1;
   transition: opacity 0.15s ease;
 }
 .hovercard.hidden { opacity: 0; display: none; }
+
+.hovercard-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.hovercard-action-btn {
+  flex: 1;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+  text-align: center;
+}
+.hovercard-action-btn:hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.hovercard-action-btn.primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.hovercard-action-btn.primary:hover {
+  opacity: 0.85;
+}
 
 .hovercard-top {
   display: flex;
@@ -1013,6 +1053,11 @@ main {
 }
 .hovercard-badge.male { background: rgba(74, 144, 217, 0.2); color: var(--male); }
 .hovercard-badge.female { background: rgba(217, 74, 140, 0.2); color: var(--female); }
+.hovercard-family-summary {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
 
 /* ── Viewing-As Picker ─────────────────────────────────────── */
 
@@ -1403,6 +1448,13 @@ main {
   font-size: 14px;
   font-weight: 600;
 }
+.rel-person .person-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  border-bottom: none;
+}
 
 .rel-connector {
   font-size: 13px;
@@ -1576,6 +1628,13 @@ main {
 .leaflet-popup-content .popup-event:last-child { border-bottom: none; }
 .leaflet-popup-content .popup-year { color: var(--accent); font-weight: 500; }
 .leaflet-popup-content .popup-person { color: var(--text); }
+.leaflet-popup-content .person-link {
+  border-bottom: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.leaflet-popup-content .person-link:hover { color: var(--accent); }
 .leaflet-popup-close-button { color: var(--text-muted) !important; }
 
 /* ── Theme Toggle ──────────────────────────────────────────── */
