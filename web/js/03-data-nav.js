@@ -414,15 +414,16 @@ document.querySelectorAll(".tab").forEach((tab) => {
 // Person search (shared ranked matcher + global header search)
 // ═══════════════════════════════════════════════════════════════
 
-// Rank people against a free-text query. Matches across full name, maiden
-// name, nicknames, and birth/death years; requires every token to match, and
-// ranks exact > full-prefix > word-prefix > substring.
-export function searchPeopleLocal(query, limit = 8) {
+// Rank a given list of people against a query. Matches across full name,
+// maiden name, nicknames, and birth/death years; every token must match; ranks
+// exact > full-prefix > word-prefix > substring. Empty query returns the list
+// unchanged (capped to limit). Shared by the header search and the pickers.
+export function rankPeople(query, people, limit = Infinity) {
   const q = (query || "").trim().toLowerCase();
-  if (!q) return [];
+  if (!q) return limit === Infinity ? people : people.slice(0, limit);
   const tokens = q.split(/\s+/);
   const scored = [];
-  for (const p of Object.values(S.PEOPLE_MAP)) {
+  for (const p of people) {
     const name = (p.fullName || "").toLowerCase();
     const extra = [p.maiden_name, ...(p.nicknames || [])].filter(Boolean).join(" ").toLowerCase();
     const years = [p.birth_date, p.death_date].filter(Boolean).join(" ").toLowerCase();
@@ -437,7 +438,13 @@ export function searchPeopleLocal(query, limit = 8) {
     scored.push({ p, score });
   }
   scored.sort((a, b) => b.score - a.score || a.p.fullName.localeCompare(b.p.fullName));
-  return scored.slice(0, limit).map((s) => s.p);
+  const out = scored.map((s) => s.p);
+  return limit === Infinity ? out : out.slice(0, limit);
+}
+
+export function searchPeopleLocal(query, limit = 8) {
+  if (!(query || "").trim()) return [];
+  return rankPeople(query, Object.values(S.PEOPLE_MAP), limit);
 }
 
 // Global header search: type-to-find a person, arrow keys to navigate, Enter to

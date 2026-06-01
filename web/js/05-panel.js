@@ -317,15 +317,14 @@ export function filterLinkCandidates(personId, relationship) {
   const resultsEl = document.getElementById("arf-search-results");
   if (!input || !resultsEl) return;
 
-  const q = input.value.trim().toLowerCase();
+  const q = input.value.trim();
   if (!q) { resultsEl.classList.add("hidden"); return; }
 
+  // Search the full person set (not the focus-filtered S.DATA) so any existing
+  // person can be linked, with the shared ranked matcher.
   const exclude = _getLinkExcludeIds(personId, relationship);
-  const matches = S.DATA.people.filter(p => {
-    if (exclude.has(p.id)) return false;
-    const full = ((p.given_name || "") + " " + (p.surname || "")).toLowerCase();
-    return full.includes(q);
-  }).slice(0, 10);
+  const candidates = Object.values(S.PEOPLE_MAP).filter((p) => !exclude.has(p.id));
+  const matches = rankPeople(q, candidates, 10);
 
   if (matches.length === 0) {
     resultsEl.innerHTML = `<div class="arf-search-empty">No matches found</div>`;

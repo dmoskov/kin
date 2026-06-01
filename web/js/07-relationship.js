@@ -16,37 +16,51 @@ export function setupPersonPicker(pickerId, people, onChange) {
   const input = container.querySelector(".picker-search");
   const list = container.querySelector(".picker-list");
   container._selectedId = null;
+  let current = [];
+  let active = -1;
 
+  function select(p) {
+    if (container._selectedId === p.id) {
+      container._selectedId = null;
+      input.value = "";
+      input.dataset.locked = "";
+      active = -1;
+      renderList("");
+    } else {
+      container._selectedId = p.id;
+      input.value = p.fullName;
+      input.dataset.locked = p.fullName;
+      renderList(p.fullName);
+    }
+    onChange();
+  }
+
+  function highlight() {
+    [...list.children].forEach((el, i) =>
+      el.classList.toggle("picker-item-active", i === active)
+    );
+    if (active >= 0 && list.children[active]) {
+      list.children[active].scrollIntoView({ block: "nearest" });
+    }
+  }
+
+  // Use the shared ranked matcher (name / maiden name / nicknames / years).
   function renderList(filter) {
-    const q = (filter || "").toLowerCase().trim();
-    const filtered = q
-      ? people.filter((p) => p.fullName.toLowerCase().includes(q))
-      : people;
+    current = rankPeople(filter, people, 50);
     list.innerHTML = "";
-    for (const p of filtered) {
+    current.forEach((p) => {
       const item = document.createElement("div");
       item.className =
-        "picker-item" +
-        (p.id === container._selectedId ? " picker-item-selected" : "");
+        "picker-item" + (p.id === container._selectedId ? " picker-item-selected" : "");
       item.dataset.id = p.id;
       item.textContent = p.fullName;
       item.addEventListener("mousedown", (e) => {
         e.preventDefault();
-        if (container._selectedId === p.id) {
-          container._selectedId = null;
-          input.value = "";
-          input.dataset.locked = "";
-          renderList("");
-        } else {
-          container._selectedId = p.id;
-          input.value = p.fullName;
-          input.dataset.locked = p.fullName;
-          renderList(p.fullName);
-        }
-        onChange();
+        select(p);
       });
       list.appendChild(item);
-    }
+    });
+    highlight();
   }
 
   input.addEventListener("input", () => {
@@ -55,7 +69,24 @@ export function setupPersonPicker(pickerId, people, onChange) {
       input.dataset.locked = "";
       onChange();
     }
+    active = -1;
     renderList(input.value);
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      active = Math.min(active + 1, current.length - 1);
+      highlight();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      active = Math.max(active - 1, 0);
+      highlight();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const pick = current[active >= 0 ? active : 0];
+      if (pick) select(pick);
+    }
   });
 
   renderList("");
