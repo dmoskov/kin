@@ -783,7 +783,9 @@ export function renderTree() {
   const container = document.querySelector(".tree-container");
   const width = container.clientWidth;
   const height = container.clientHeight;
-  svg.attr("width", width).attr("height", height);
+  svg.attr("width", width).attr("height", height)
+     .attr("aria-label", "Family tree visualization — press Tab to navigate between people, Enter or Space to open a person's details")
+     .attr("role", "group");
 
   const layout = buildButterflyLayout();
   if (!layout || layout.nodes.length === 0) return;
@@ -958,7 +960,10 @@ export function renderTree() {
     .enter()
     .append("g")
     .attr("class", (d) => "node-group fog-" + Math.min(d.fogLevel || 0, 4))
-    .attr("transform", (d) => `translate(${d.x},${d.y})`);
+    .attr("transform", (d) => `translate(${d.x},${d.y})`)
+    .attr("tabindex", "0")
+    .attr("role", "button")
+    .attr("aria-label", (d) => d.person.fullName);
 
   nodeGroups
     .append("rect")
@@ -1062,6 +1067,18 @@ export function renderTree() {
     showPersonPanel(d.id);
     highlightNode(d.id);
     router.navigate(`/tree/person/${d.id}`);
+    if (typeof _installPanelFocusTrap === "function") _installPanelFocusTrap();
+  });
+
+  nodeGroups.on("keydown", (e, d) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      e.stopPropagation();
+      showPersonPanel(d.id);
+      highlightNode(d.id);
+      router.navigate(`/tree/person/${d.id}`);
+      if (typeof _installPanelFocusTrap === "function") _installPanelFocusTrap();
+    }
   });
 
   // ── Fog-of-war hover reveal ──

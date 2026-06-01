@@ -246,12 +246,96 @@ export function personRoutePrefix() {
   return v === "tree" || v === "map" || v === "timeline" ? `/${v}` : "/tree";
 }
 
+// ─────────────────────────────────────────────────────────────
+// Focus trap utility
+// ─────────────────────────────────────────────────────────────
+
+const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+
+/**
+ * Trap keyboard focus inside containerEl.
+ * - Saves the previously focused element.
+ * - Moves focus to the first focusable child.
+ * - Keeps Tab / Shift+Tab cycling within the container.
+ * - Returns a release() function that removes the listener and
+ *   restores focus to the previously focused element.
+ *
+ * @param {Element} containerEl
+ * @returns {{ release: () => void }}
+ */
+export function trapFocus(containerEl) {
+  const previous = document.activeElement;
+
+  function getFocusable() {
+    return Array.from(containerEl.querySelectorAll(FOCUSABLE)).filter(
+      (el) => !el.closest("[hidden]") && el.offsetParent !== null
+    );
+  }
+
+  // Move focus into the container
+  const first = getFocusable()[0];
+  if (first) first.focus();
+
+  function onKeyDown(e) {
+    if (e.key !== "Tab") return;
+    const focusable = getFocusable();
+    if (focusable.length === 0) { e.preventDefault(); return; }
+    const firstEl = focusable[0];
+    const lastEl = focusable[focusable.length - 1];
+    if (e.shiftKey) {
+      if (document.activeElement === firstEl) {
+        e.preventDefault();
+        lastEl.focus();
+      }
+    } else {
+      if (document.activeElement === lastEl) {
+        e.preventDefault();
+        firstEl.focus();
+      }
+    }
+  }
+
+  containerEl.addEventListener("keydown", onKeyDown);
+
+  function release() {
+    containerEl.removeEventListener("keydown", onKeyDown);
+    if (previous && typeof previous.focus === "function") {
+      try { previous.focus(); } catch (_) {}
+    }
+  }
+
+  return { release };
+}
+
+// Track the active focus-trap release function for the panel
+let _panelFocusTrapRelease = null;
+
 export function closePersonPanel() {
   const panel = document.getElementById("person-panel");
   panel.classList.remove("panel-open");
   setTimeout(() => panel.classList.add("hidden"), 200);
   d3.selectAll(".node-group").classed("selected", false);
   if (S.MAP) setTimeout(() => S.MAP.invalidateSize(), 250);
+  if (_panelFocusTrapRelease) {
+    _panelFocusTrapRelease();
+    _panelFocusTrapRelease = null;
+  }
+}
+
+// Called externally (from the global Esc handler) to install focus trap when
+// the panel is opened by showPersonPanel() (which lives in 05-panel.js, which
+// we cannot edit).
+export function _installPanelFocusTrap() {
+  const panel = document.getElementById("person-panel");
+  if (!panel) return;
+  if (_panelFocusTrapRelease) {
+    _panelFocusTrapRelease();
+    _panelFocusTrapRelease = null;
+  }
+  // Give the panel time to render its content before trapping
+  setTimeout(() => {
+    _panelFocusTrapRelease = trapFocus(panel).release;
+  }, 50);
 }
 
 export function closeLightbox() {
@@ -545,3 +629,62 @@ export function searchPeopleLocal(query, limit = 8) {
     if (!e.target.closest(".header-search")) close();
   });
 })();
+
+// ─────────────────────────────────────────────────────────────
+// Global Escape key handler — closes the topmost open overlay/panel.
+// Priority (highest first):
+//   1. Photo picker (#photo-picker-overlay)
+//   2. Doc review overlay (#doc-review-overlay)
+//   3. Doc upload overlay (#doc-upload-overlay)
+//   4. GEDCOM overlay (#gedcom-overlay)
+//   5. Onboarding overlay (#onboarding-overlay)
+//   6. Person panel (#person-panel)
+// ─────────────────────────────────────────────────────────────
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+
+  const photoPickerOverlay = document.getElementById("photo-picker-overlay");
+  if (photoPickerOverlay && !photoPickerOverlay.classList.contains("hidden")) {
+    // closePhotoPicker is bridged from 12-photos.js
+    if (typeof closePhotoPicker === "function") closePhotoPicker();
+    else photoPickerOverlay.classList.add("hidden");
+    e.stopPropagation();
+    return;
+  }
+
+  const docReviewOverlay = document.getElementById("doc-review-overlay");
+  if (docReviewOverlay && !docReviewOverlay.classList.contains("hidden")) {
+    docReviewOverlay.classList.add("hidden");
+    e.stopPropagation();
+    return;
+  }
+
+  const docUploadOverlay = document.getElementById("doc-upload-overlay");
+  if (docUploadOverlay && !docUploadOverlay.classList.contains("hidden")) {
+    docUploadOverlay.classList.add("hidden");
+    e.stopPropagation();
+    return;
+  }
+
+  const gedcomOverlay = document.getElementById("gedcom-overlay");
+  if (gedcomOverlay && !gedcomOverlay.classList.contains("hidden")) {
+    gedcomOverlay.classList.add("hidden");
+    e.stopPropagation();
+    return;
+  }
+
+  const onboardingOverlay = document.getElementById("onboarding-overlay");
+  if (onboardingOverlay && !onboardingOverlay.classList.contains("hidden")) {
+    onboardingOverlay.classList.add("hidden");
+    e.stopPropagation();
+    return;
+  }
+
+  const panel = document.getElementById("person-panel");
+  if (panel && !panel.classList.contains("hidden") && panel.classList.contains("panel-open")) {
+    closePersonPanel();
+    router.navigate("/tree");
+    e.stopPropagation();
+    return;
+  }
+});

@@ -2,9 +2,11 @@
 // Shared mutable state lives in S (00-state.js); functions/consts are
 // bridged onto window by 99-main.js so inline onclick handlers resolve.
 import { S } from "./00-state.js";
+import { trapFocus } from "./03-data-nav.js";
 
 let CURRENT_DOC_ID = null;
 let CURRENT_PROPOSED = null;
+let _reviewModalTrap = null;
 
 (function initDocUpload() {
   const btn = document.getElementById("doc-upload-btn");
@@ -26,25 +28,21 @@ let CURRENT_PROPOSED = null;
   const historyList = document.getElementById("doc-history-list");
   const filePreviewEl = document.getElementById("doc-file-preview");
 
+  let _docUploadTrap = null;
+
   function openModal() {
     resetDocUI();
     overlay.classList.remove("hidden");
     loadDocHistory();
+    if (_docUploadTrap) { _docUploadTrap(); _docUploadTrap = null; }
+    const modal = overlay.querySelector(".doc-upload-modal");
+    if (modal) _docUploadTrap = trapFocus(modal).release;
   }
 
   function closeModal() {
     overlay.classList.add("hidden");
+    if (_docUploadTrap) { _docUploadTrap(); _docUploadTrap = null; }
   }
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") {
-      if (!document.getElementById("doc-review-overlay")?.classList.contains("hidden")) {
-        document.getElementById("doc-review-overlay").classList.add("hidden");
-      } else if (!overlay.classList.contains("hidden")) {
-        closeModal();
-      }
-    }
-  });
 
   document.addEventListener("dragover", (e) => {
     if (!e.target.closest(".doc-drop-zone") && !e.target.closest("#gedcom-drop-zone")) {
@@ -908,6 +906,11 @@ export function openReviewModal(proposed, filename, alreadyApplied) {
   _wireCollapsible(body);
   _wireToggles(body);
   overlay.classList.remove("hidden");
+  const reviewModal = overlay.querySelector(".doc-review-modal");
+  if (reviewModal) {
+    if (_reviewModalTrap) { _reviewModalTrap(); _reviewModalTrap = null; }
+    _reviewModalTrap = trapFocus(reviewModal).release;
+  }
 }
 
 export function _nameForId(id) {
@@ -1009,6 +1012,7 @@ document.getElementById("doc-review-apply")?.addEventListener("click", async () 
   applyBtn.disabled = false;
   applyBtn.textContent = "Apply Changes";
   document.getElementById("doc-review-overlay").classList.add("hidden");
+  if (_reviewModalTrap) { _reviewModalTrap(); _reviewModalTrap = null; }
   CURRENT_DOC_ID = null;
   CURRENT_PROPOSED = null;
 });
@@ -1016,15 +1020,18 @@ document.getElementById("doc-review-apply")?.addEventListener("click", async () 
 // Review modal: Cancel / close
 document.getElementById("doc-review-cancel")?.addEventListener("click", () => {
   document.getElementById("doc-review-overlay").classList.add("hidden");
+  if (_reviewModalTrap) { _reviewModalTrap(); _reviewModalTrap = null; }
   CURRENT_DOC_ID = null;
   CURRENT_PROPOSED = null;
 });
 document.getElementById("doc-review-close")?.addEventListener("click", () => {
   document.getElementById("doc-review-overlay").classList.add("hidden");
+  if (_reviewModalTrap) { _reviewModalTrap(); _reviewModalTrap = null; }
 });
 document.getElementById("doc-review-overlay")?.addEventListener("click", (e) => {
   if (e.target.id === "doc-review-overlay") {
     e.target.classList.add("hidden");
+    if (_reviewModalTrap) { _reviewModalTrap(); _reviewModalTrap = null; }
   }
 });
 

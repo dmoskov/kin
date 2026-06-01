@@ -2,8 +2,10 @@
 // Shared mutable state lives in S (00-state.js); functions/consts are
 // bridged onto window by 99-main.js so inline onclick handlers resolve.
 import { S } from "./00-state.js";
+import { trapFocus } from "./03-data-nav.js";
 
 let _photoPickerPasteHandler = null;
+let _photoPickerTrap = null;
 
 // ── Toast notification ────────────────────────────────────────────────
 
@@ -695,6 +697,11 @@ export async function openPhotoPicker(personId) {
   _updateGooglePhotosBtn();
 
   overlay.classList.remove("hidden");
+
+  // Focus trap
+  if (_photoPickerTrap) { _photoPickerTrap(); _photoPickerTrap = null; }
+  const pickerBox = overlay.querySelector(".photo-picker");
+  if (pickerBox) _photoPickerTrap = trapFocus(pickerBox).release;
 }
 
 export async function _uploadFiles(files, personId, progressEl, progressText) {
@@ -773,6 +780,7 @@ export function closePhotoPicker() {
     _photoPickerPasteHandler = null;
   }
   document.getElementById("photo-picker-overlay").classList.add("hidden");
+  if (_photoPickerTrap) { _photoPickerTrap(); _photoPickerTrap = null; }
   S.PHOTO_PICKER_PERSON = null;
 }
 
