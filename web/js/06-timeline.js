@@ -112,6 +112,18 @@ export function renderTimeline(filterPersonId = "all") {
   // Sort chronologically
   entries.sort((a, b) => a.date.localeCompare(b.date));
 
+  if (entries.length === 0) {
+    container.innerHTML = `<div class="empty-state">
+      <p class="empty-state-title">No dated events yet</p>
+      <p class="empty-state-hint">${
+        filterPersonId !== "all"
+          ? "This person has no dated events. Add birth, death, or marriage dates."
+          : "Add birth, death, or marriage dates to people and they'll appear on the timeline."
+      }</p>
+    </div>`;
+    return;
+  }
+
   // Use configured lanes, or a single fallback lane when none are defined
   const activeLanes = S.LANES.length > 0 ? S.LANES : [{ id: "all", label: "All", color: "var(--accent)" }];
 

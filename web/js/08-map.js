@@ -395,6 +395,7 @@ export async function renderMap() {
   plotPhotoMarkers(MAP_ALL_EVENTS);
   plotMigrationArcs(MAP_ALL_EVENTS);
   populateMapFilter();
+  document.getElementById("map-empty")?.classList.toggle("hidden", MAP_ALL_EVENTS.length > 0);
 
   // Fit bounds
   const allLatLngs = MAP_ALL_EVENTS.map((e) => e.latlng);
