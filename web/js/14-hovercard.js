@@ -112,7 +112,7 @@ export function scheduleHideHovercard(delay = 150) {
     clearTimeout(_hovercardTimer);
   });
   hc.addEventListener("mouseleave", () => {
-    scheduleHideHovercard(150);
+    scheduleHideHovercard(300);
   });
   hc.addEventListener("click", (e) => {
     const profileBtn = e.target.closest("[data-hovercard-profile]");
@@ -167,7 +167,7 @@ document.addEventListener("mouseover", (e) => {
 document.addEventListener("mouseout", (e) => {
   const link = e.target.closest(".person-link");
   if (link) {
-    scheduleHideHovercard(200);
+    scheduleHideHovercard(400);
   }
 });
 
