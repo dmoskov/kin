@@ -203,13 +203,13 @@ describe("computeFogDistance", () => {
     expect(fog["P2"]).toBe(1);
   });
 
-  it("child shared between center and partner is reachable (dist <= 2)", () => {
-    // C1 is a child of P1 (center, dist 0) and P2 (married-in, dist 1).
-    // traceDown exits early for P1 since P1 was added by traceUp first.
-    // C1 is thus reached via BFS from P2 (dist 1) as a child → dist 2.
+  it("a descendant of the center is distance 0 (blood)", () => {
+    // C1 is a child of P1 (center). Descendants of the center are blood
+    // relatives, so they must be distance 0 — regression for a bug where
+    // traceDown bailed on the center (already added by traceUp) and the
+    // center's descendants were wrongly left out of the bloodline.
     const fog = computeFogDistance(src);
-    expect(fog["C1"]).toBeDefined();
-    expect(fog["C1"]).toBeLessThanOrEqual(2);
+    expect(fog["C1"]).toBe(0);
   });
 
   it("in-law's parent has distance 2 or higher", () => {

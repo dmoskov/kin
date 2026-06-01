@@ -168,13 +168,21 @@ export function computeFogDistance(src) {
     unionPartner[u.partner2_id].push(u.partner1_id);
   }
   const bloodline = new Set();
+  // Separate visited sets per direction: otherwise tracing descendants would
+  // bail immediately because the center was already added while tracing
+  // ancestors, leaving the center's own descendants out of the bloodline
+  // (distance 0). Descendants are blood relatives and must be distance 0.
+  const seenUp = new Set();
+  const seenDown = new Set();
   function traceUp(pid) {
-    if (bloodline.has(pid)) return;
+    if (seenUp.has(pid)) return;
+    seenUp.add(pid);
     bloodline.add(pid);
     for (const par of parentsOf[pid] || []) traceUp(par);
   }
   function traceDown(pid) {
-    if (bloodline.has(pid)) return;
+    if (seenDown.has(pid)) return;
+    seenDown.add(pid);
     bloodline.add(pid);
     for (const kid of childrenOf[pid] || new Set()) traceDown(kid);
   }
