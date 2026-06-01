@@ -3,6 +3,34 @@
 // bridged onto window by 99-main.js so inline onclick handlers resolve.
 import { S } from "./00-state.js";
 
+function _calcAge(birthDate, deathDate) {
+  if (!birthDate) return null;
+  const bYear = parseInt(birthDate, 10);
+  if (isNaN(bYear)) return null;
+  const endDate = deathDate || new Date().toISOString().slice(0, 10);
+  const eYear = parseInt(endDate, 10);
+  if (isNaN(eYear)) return null;
+  return eYear - bYear;
+}
+
+const _EVENT_ICONS = {
+  birth: "✶", death: "✝", marriage: "♡",
+  career: "⚒", education: "⌂", immigration: "✈",
+  residence: "⌂", military: "⚔", custom: "★",
+};
+function _eventIcon(type) {
+  return _EVENT_ICONS[type] || _EVENT_ICONS.custom;
+}
+
+const _EVENT_COLORS = {
+  birth: "--event-birth", death: "--text-muted", marriage: "--event-marriage",
+  career: "--event-career", education: "--event-education",
+  immigration: "--accent", military: "--text-muted", custom: "--event-custom",
+};
+function _eventColorVar(type) {
+  return _EVENT_COLORS[type] || _EVENT_COLORS.custom;
+}
+
 export function showPersonPanel(personId) {
   const person = S.PEOPLE_MAP[personId];
   if (!person) return;
@@ -33,11 +61,35 @@ export function showPersonPanel(personId) {
     }
   }
 
+  // Hero header with large avatar
+  const heroSize = 80;
+  const heroThumb = personThumb(personId, heroSize);
+
+  // Lifespan string with age
+  let lifespanHtml = "";
+  if (person.birth_date || person.death_date) {
+    const parts = [];
+    if (person.birth_date) parts.push(person.birth_date);
+    if (person.death_date) parts.push(person.death_date);
+    else if (person.birth_date) parts.push("present");
+    const age = _calcAge(person.birth_date, person.death_date);
+    const ageStr = age !== null ? ` · age ${age}` : "";
+    lifespanHtml = `<div class="panel-lifespan">${parts.join(" – ")}${ageStr}</div>`;
+  }
+
   let html = `
-    <div class="panel-name">${person.fullName}</div>
-    ${relBadge}
-    <span class="panel-gender ${person.gender}">${person.gender}</span>
-    ${!S.CONFIG?.editorsEnabled || S.AUTH_USER?.is_editor ? `<button class="panel-edit-btn" onclick="openEditPersonForm('${personId}')">Edit</button>` : ""}
+    <div class="panel-hero">
+      <div class="panel-hero-avatar">${heroThumb}</div>
+      <div class="panel-hero-info">
+        <div class="panel-name">${person.fullName}</div>
+        ${relBadge}
+        <div class="panel-hero-meta">
+          <span class="panel-gender ${person.gender}">${person.gender}</span>
+          ${!S.CONFIG?.editorsEnabled || S.AUTH_USER?.is_editor ? `<button class="panel-edit-btn" onclick="openEditPersonForm('${personId}')">Edit</button>` : ""}
+        </div>
+        ${lifespanHtml}
+      </div>
+    </div>
     <div id="edit-person-form" class="add-relative-form hidden"></div>
   `;
 
@@ -55,34 +107,45 @@ export function showPersonPanel(personId) {
 
   // Vital stats
   if (person.birth_date || person.birth_place || person.maiden_name) {
-    html += `<div class="panel-section"><h3>Details</h3>`;
+    html += `<div class="panel-section"><h3>Details</h3><div class="panel-details-grid">`;
     if (person.birth_date) {
-      html += `<div class="panel-row"><span class="label">Born</span><span>${person.birth_date}${person.birth_place ? " in " + person.birth_place : ""}</span></div>`;
+      html += `<div class="panel-detail-item"><span class="panel-detail-icon">&#9679;</span><div class="panel-detail-body"><span class="panel-detail-label">Born</span><span class="panel-detail-value">${person.birth_date}${person.birth_place ? " · " + person.birth_place : ""}</span></div></div>`;
     }
     if (person.death_date) {
-      html += `<div class="panel-row"><span class="label">Died</span><span>${person.death_date}${person.death_place ? " in " + person.death_place : ""}</span></div>`;
+      html += `<div class="panel-detail-item"><span class="panel-detail-icon" style="color:var(--text-muted)">&#9679;</span><div class="panel-detail-body"><span class="panel-detail-label">Died</span><span class="panel-detail-value">${person.death_date}${person.death_place ? " · " + person.death_place : ""}</span></div></div>`;
     }
     if (person.maiden_name) {
-      html += `<div class="panel-row"><span class="label">Maiden name</span><span>${person.maiden_name}</span></div>`;
+      html += `<div class="panel-detail-item"><span class="panel-detail-icon" style="color:var(--text-muted)">&#9679;</span><div class="panel-detail-body"><span class="panel-detail-label">Maiden name</span><span class="panel-detail-value">${person.maiden_name}</span></div></div>`;
     }
     if (person.email) {
-      html += `<div class="panel-row"><span class="label">Email</span><span>${person.email}</span></div>`;
+      html += `<div class="panel-detail-item"><span class="panel-detail-icon" style="color:var(--text-muted)">&#9679;</span><div class="panel-detail-body"><span class="panel-detail-label">Email</span><span class="panel-detail-value">${person.email}</span></div></div>`;
     }
-    html += `</div>`;
+    html += `</div></div>`;
   }
 
+  // Siblings
+  const siblingIds = new Set();
+  const myParents = S.DATA.relationships.filter(r => r.child_id === personId).map(r => r.parent_id);
+  for (const pid of myParents) {
+    S.DATA.relationships.filter(r => r.parent_id === pid && r.child_id !== personId)
+      .forEach(r => siblingIds.add(r.child_id));
+  }
+  const siblings = [...siblingIds];
+
   // Family
-  if (parents.length || children.length || partners.length) {
-    const prefix = personRoutePrefix();
+  if (parents.length || children.length || partners.length || siblings.length) {
     html += `<div class="panel-section"><h3>Family</h3><ul class="panel-family-list">`;
     for (const pid of parents) {
-      html += `<li><a class="person-link" data-person-id="${pid}" href="javascript:void(0)">${personThumb(pid, 24)} ${personName(pid)}</a> <span class="label">(parent)</span></li>`;
+      html += `<li><a class="person-link" data-person-id="${pid}" href="javascript:void(0)">${personThumb(pid, 28)} ${personName(pid)}</a> <span class="panel-rel-pill panel-rel-parent">parent</span></li>`;
+    }
+    for (const pid of siblings) {
+      html += `<li><a class="person-link" data-person-id="${pid}" href="javascript:void(0)">${personThumb(pid, 28)} ${personName(pid)}</a> <span class="panel-rel-pill panel-rel-sibling">sibling</span></li>`;
     }
     for (const pid of partners) {
-      html += `<li><a class="person-link" data-person-id="${pid}" href="javascript:void(0)">${personThumb(pid, 24)} ${personName(pid)}</a> <span class="label">(partner)</span></li>`;
+      html += `<li><a class="person-link" data-person-id="${pid}" href="javascript:void(0)">${personThumb(pid, 28)} ${personName(pid)}</a> <span class="panel-rel-pill panel-rel-partner">partner</span></li>`;
     }
     for (const cid of children) {
-      html += `<li><a class="person-link" data-person-id="${cid}" href="javascript:void(0)">${personThumb(cid, 24)} ${personName(cid)}</a> <span class="label">(child)</span></li>`;
+      html += `<li><a class="person-link" data-person-id="${cid}" href="javascript:void(0)">${personThumb(cid, 28)} ${personName(cid)}</a> <span class="panel-rel-pill panel-rel-child">child</span></li>`;
     }
     html += `</ul></div>`;
   }
@@ -103,16 +166,24 @@ export function showPersonPanel(personId) {
 
   // Life events
   if (events.length) {
-    html += `<div class="panel-section"><h3>Life Events</h3>`;
+    html += `<div class="panel-section"><h3>Life Events</h3><div class="panel-events-timeline">`;
     for (const e of events) {
       const date = e.date ? e.date.substring(0, 7) : "?";
+      const icon = _eventIcon(e.event_type);
+      const colorVar = _eventColorVar(e.event_type);
       html += `
         <div class="panel-event">
-          <span class="panel-event-date">${date}</span>
-          <span class="panel-event-desc">${e.description || e.event_type}${e.place ? "<br><small>" + e.place + "</small>" : ""}</span>
+          <div class="panel-event-marker" style="--marker-color:var(${colorVar})">
+            <span class="panel-event-icon">${icon}</span>
+            <span class="panel-event-line"></span>
+          </div>
+          <div class="panel-event-body">
+            <span class="panel-event-date">${date}</span>
+            <span class="panel-event-desc">${e.description || e.event_type}${e.place ? " · <span class='panel-event-place'>" + e.place + "</span>" : ""}</span>
+          </div>
         </div>`;
     }
-    html += `</div>`;
+    html += `</div></div>`;
   }
 
   // Notes
@@ -122,6 +193,7 @@ export function showPersonPanel(personId) {
 
   content.innerHTML = html;
   panel.classList.remove("hidden");
+  requestAnimationFrame(() => panel.classList.add("panel-open"));
   if (S.MAP) setTimeout(() => S.MAP.invalidateSize(), 250);
 }
 

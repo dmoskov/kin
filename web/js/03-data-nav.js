@@ -231,7 +231,9 @@ export function personRoutePrefix() {
 }
 
 export function closePersonPanel() {
-  document.getElementById("person-panel").classList.add("hidden");
+  const panel = document.getElementById("person-panel");
+  panel.classList.remove("panel-open");
+  setTimeout(() => panel.classList.add("hidden"), 200);
   d3.selectAll(".node-group").classed("selected", false);
   if (S.MAP) setTimeout(() => S.MAP.invalidateSize(), 250);
 }
