@@ -10,21 +10,27 @@ export function buildHovercardHtml(personId) {
   const person = S.PEOPLE_MAP[personId];
   if (!person) return "";
 
+  const isDeceased = !!person.death_date;
+
   const photoHtml = person._profilePhotoPath
-    ? croppedImg(person._profilePhotoPath, person.fullName, 52, person._profileCrop, "hovercard-photo")
-    : "";
+    ? croppedImg(person._profilePhotoPath, person.fullName, 48, person._profileCrop, "hovercard-photo")
+    : `<div class="hovercard-avatar ${person.gender || ""}">${(person.given_name || person.fullName || "?")[0].toUpperCase()}</div>`;
 
   let dates = "";
   if (person.birth_date) {
     const by = person.birth_date.substring(0, 4);
-    dates = person.death_date
-      ? `${by} - ${person.death_date.substring(0, 4)}`
-      : `b. ${by}`;
+    if (person.death_date) {
+      const dy = person.death_date.substring(0, 4);
+      dates = `${by} – ${dy}`;
+    } else {
+      dates = `b. ${by}`;
+    }
   }
 
-  const place = person.birth_place || "";
+  const nameDisplay = person.maiden_name
+    ? `${person.fullName} <span class="hovercard-maiden">(née ${person.maiden_name})</span>`
+    : person.fullName;
 
-  // Viewer-relative relationship
   let relHtml = "";
   if (S.CENTER_ID_A && personId !== S.CENTER_ID_A) {
     const relLabel = calculateRelationship(S.CENTER_ID_A, personId);
@@ -33,28 +39,45 @@ export function buildHovercardHtml(personId) {
     }
   }
 
+  const heritage = matchHeritage(person.birth_place);
+  const heritageHtml = heritage && S.CONFIG?.heritageLabels !== false
+    ? `<span class="hovercard-heritage" style="border-color:${heritage.color}40;color:${heritage.color}">${heritage.region}</span>`
+    : "";
+
   const parents = S.DATA.relationships
     .filter((r) => r.child_id === personId)
     .map((r) => r.parent_id);
   const children = S.DATA.relationships
     .filter((r) => r.parent_id === personId)
     .map((r) => r.child_id);
-  const familyCount = parents.length + children.length;
-  const familySummary = familyCount > 0
-    ? `<div class="hovercard-family-summary">${parents.length} parent${parents.length !== 1 ? "s" : ""}, ${children.length} child${children.length !== 1 ? "ren" : ""}</div>`
+  const partners = S.DATA.unions
+    .filter((u) => u.partner1_id === personId || u.partner2_id === personId)
+    .map((u) => (u.partner1_id === personId ? u.partner2_id : u.partner1_id));
+
+  const parts = [];
+  if (partners.length) parts.push(`${partners.length} partner${partners.length !== 1 ? "s" : ""}`);
+  if (parents.length) parts.push(`${parents.length} parent${parents.length !== 1 ? "s" : ""}`);
+  if (children.length) parts.push(`${children.length} child${children.length !== 1 ? "ren" : ""}`);
+  const familySummary = parts.length > 0
+    ? `<div class="hovercard-family-summary">${parts.join('<span class="hovercard-sep">·</span>')}</div>`
     : "";
 
+  const deceasedCls = isDeceased ? " deceased" : "";
+
   return `
-    <div class="hovercard-top" data-hovercard-profile="${personId}">
+    <div class="hovercard-top${deceasedCls}" data-hovercard-profile="${personId}">
       ${photoHtml}
       <div class="hovercard-info">
-        <div class="hovercard-name">${person.fullName}</div>
+        <div class="hovercard-name">${nameDisplay}</div>
         ${relHtml}
-        ${dates ? `<div class="hovercard-dates">${dates}</div>` : ""}
-        ${place ? `<div class="hovercard-place">${place}</div>` : ""}
-        ${person.gender ? `<span class="hovercard-badge ${person.gender}">${person.gender}</span>` : ""}
+        <div class="hovercard-meta">
+          ${dates ? `<span class="hovercard-dates">${dates}</span>` : ""}
+          ${person.gender ? `<span class="hovercard-badge ${person.gender}">${person.gender}</span>` : ""}
+        </div>
+        ${person.birth_place ? `<div class="hovercard-place">${person.birth_place}</div>` : ""}
+        ${heritageHtml}
       </div>
-      <span class="hovercard-open-arrow">&#x203A;</span>
+      <span class="hovercard-open-arrow">›</span>
     </div>
     ${familySummary}
   `;
@@ -67,6 +90,8 @@ export function showHovercardAt(personId, x, y) {
   if (!html) return;
 
   hc.innerHTML = html;
+  hc.style.transition = "none";
+  hc.style.visibility = "hidden";
   hc.classList.remove("hidden");
   _hovercardVisible = true;
 
@@ -80,6 +105,12 @@ export function showHovercardAt(personId, x, y) {
 
   hc.style.top = `${top}px`;
   hc.style.left = `${left}px`;
+
+  hc.classList.add("hidden");
+  hc.offsetHeight;
+  hc.style.transition = "";
+  hc.style.visibility = "";
+  hc.classList.remove("hidden");
 }
 
 export function showHovercard(personId, anchorEl) {
