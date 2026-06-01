@@ -151,6 +151,16 @@ def _upsert(
     _execute(conn, sql, values)
 
 
+def _ensure_photo_id(conn: Any, file_path: str) -> int:
+    """Return the ``photos.id`` for *file_path* on *conn*, inserting if absent.
+
+    Operates on the caller's connection without committing, so it can take part
+    in a larger transaction. Callers that own the connection commit/close it.
+    """
+    _upsert(conn, "photos", ["file_path"], (file_path,), ["file_path"], update=False)
+    return _scalar(conn, f"SELECT id FROM photos WHERE file_path = {_ph()}", (file_path,))["id"]
+
+
 class TreeRepository:
     """Persistence layer for FamilyTree data (SQLite or PostgreSQL)."""
 
@@ -630,25 +640,14 @@ class TreeRepository:
         """Associate a news article with a person."""
         conn = self._conn()
         try:
-            if _is_pg():
-                _execute(
-                    conn,
-                    f"""
-                    INSERT INTO person_articles (person_id, article_id)
-                    VALUES ({_ph(2)})
-                    ON CONFLICT (person_id, article_id) DO NOTHING
-                """,
-                    (person_id, article_id),
-                )
-            else:
-                _execute(
-                    conn,
-                    f"""
-                    INSERT OR IGNORE INTO person_articles (person_id, article_id)
-                    VALUES ({_ph(2)})
-                """,
-                    (person_id, article_id),
-                )
+            _upsert(
+                conn,
+                "person_articles",
+                ["person_id", "article_id"],
+                (person_id, article_id),
+                ["person_id", "article_id"],
+                update=False,
+            )
             conn.commit()
         finally:
             conn.close()
@@ -870,13 +869,9 @@ class TreeRepository:
         """Return the photo id for a file_path, creating a row if needed."""
         conn = self._conn()
         try:
-            row = _fetchone(conn, f"SELECT id FROM photos WHERE file_path = {_ph()}", (file_path,))
-            if row:
-                return row["id"]
-            _upsert(conn, "photos", ["file_path"], (file_path,), ["file_path"], update=False)
+            photo_id = _ensure_photo_id(conn, file_path)
             conn.commit()
-            row = _scalar(conn, f"SELECT id FROM photos WHERE file_path = {_ph()}", (file_path,))
-            return row["id"]
+            return photo_id
         finally:
             conn.close()
 
@@ -1193,10 +1188,7 @@ class TreeRepository:
         """
         p = _ph()
         for idx, file_path in enumerate(person.photo_paths):
-            _upsert(conn, "photos", ["file_path"], (file_path,), ["file_path"], update=False)
-
-            row = _scalar(conn, f"SELECT id FROM photos WHERE file_path = {p}", (file_path,))
-            photo_id = row["id"]
+            photo_id = _ensure_photo_id(conn, file_path)
 
             caption = person.photo_captions.get(file_path, "")
 
