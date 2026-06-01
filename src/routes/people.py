@@ -6,7 +6,7 @@ import uuid
 from flask import Blueprint, jsonify, request
 
 import web_server
-from database.repository import TreeRepository
+from database.repository import TreeRepository, _fetchall, _fetchone, _ph
 from import_export.json_io import _person_to_dict
 from models.person import Gender, Person
 
@@ -196,17 +196,85 @@ def api_update_person(person_id):
     return jsonify(_person_to_dict(person))
 
 
+def _snapshot_person(repo: TreeRepository, person_id: str) -> dict:
+    """Gather all data needed to restore a person after deletion.
+
+    Queries relationships, unions, events, person_photos and person_articles
+    for the given person and returns a serialisable snapshot dict.
+    """
+    conn = repo._conn()
+    try:
+        p = _ph()
+        person_row = _fetchone(conn, f"SELECT * FROM people WHERE id = {p}", (person_id,))
+        relationships = _fetchall(
+            conn,
+            f"SELECT parent_id, child_id, rel_type FROM relationships WHERE parent_id = {p} OR child_id = {p}",
+            (person_id, person_id),
+        )
+        unions = _fetchall(
+            conn,
+            f"""
+            SELECT partner1_id, partner2_id, union_date, union_place,
+                   end_date, end_reason, notes
+            FROM unions
+            WHERE partner1_id = {p} OR partner2_id = {p}
+            """,
+            (person_id, person_id),
+        )
+        events = _fetchall(
+            conn,
+            f"""
+            SELECT person_id, event_type, date, end_date, place,
+                   description, source
+            FROM events WHERE person_id = {p}
+            """,
+            (person_id,),
+        )
+        person_photos = _fetchall(
+            conn,
+            f"""
+            SELECT person_id, photo_id, is_profile, display_order,
+                   caption, crop_x, crop_y, crop_w, crop_h
+            FROM person_photos WHERE person_id = {p}
+            """,
+            (person_id,),
+        )
+        person_articles = _fetchall(
+            conn,
+            f"SELECT person_id, article_id FROM person_articles WHERE person_id = {p}",
+            (person_id,),
+        )
+    finally:
+        conn.close()
+
+    return {
+        "person": dict(person_row) if person_row else {},
+        "relationships": [dict(r) for r in relationships],
+        "unions": [dict(u) for u in unions],
+        "events": [dict(e) for e in events],
+        "person_photos": [dict(pp) for pp in person_photos],
+        "person_articles": [dict(pa) for pa in person_articles],
+    }
+
+
 @people_bp.route("/api/people/<person_id>", methods=["DELETE"])
 @web_server.require_editor
 def api_delete_person(person_id):
     """Delete a person. Cascades to their relationships, unions, events,
     and citations via FK ON DELETE CASCADE (see schema).
 
+    Snapshots the person and all their edges into undo_log before deletion
+    so the action can be reversed via POST /api/undo.
+
     Returns 204 on success, 404 if the person didn't exist.
     """
     repo = TreeRepository()
     if repo.get_person(person_id) is None:
         return jsonify({"error": "person not found", "code": "not_found"}), 404
+
+    # Snapshot everything before the CASCADE wipes it.
+    snapshot = _snapshot_person(repo, person_id)
+    repo.push_undo("delete_person", snapshot)
 
     # delete_person returns True if a row was actually deleted. We already
     # confirmed existence above, so a False here would indicate a race.

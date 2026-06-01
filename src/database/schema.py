@@ -5,7 +5,7 @@ The schema mirrors the domain models in models/ and is designed for
 efficient querying.
 """
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 
 # ═══════════════════════════════════════════════════════════════════════
 # SQLite schema (local dev / tests)
@@ -261,6 +261,15 @@ CREATE INDEX IF NOT EXISTS idx_person_articles_article ON person_articles(articl
 CREATE INDEX IF NOT EXISTS idx_news_articles_date ON news_articles(date);
 """
 
+SCHEMA_V13 = """
+CREATE TABLE IF NOT EXISTS undo_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT DEFAULT (datetime('now')),
+    kind TEXT NOT NULL,
+    payload TEXT NOT NULL
+);
+"""
+
 SCHEMA_SQL = (
     SCHEMA_V1
     + SCHEMA_V2
@@ -274,6 +283,7 @@ SCHEMA_SQL = (
     + SCHEMA_V10
     + SCHEMA_V11
     + SCHEMA_V12
+    + SCHEMA_V13
 )
 
 MIGRATIONS = {
@@ -288,6 +298,7 @@ MIGRATIONS = {
     10: SCHEMA_V10,
     11: SCHEMA_V11,
     12: SCHEMA_V12,
+    13: SCHEMA_V13,
 }
 
 
@@ -529,6 +540,15 @@ CREATE INDEX IF NOT EXISTS idx_person_articles_article ON person_articles(articl
 CREATE INDEX IF NOT EXISTS idx_news_articles_date ON news_articles(date);
 """
 
+PG_SCHEMA_V13 = """
+CREATE TABLE IF NOT EXISTS undo_log (
+    id SERIAL PRIMARY KEY,
+    created_at TIMESTAMP DEFAULT NOW(),
+    kind TEXT NOT NULL,
+    payload TEXT NOT NULL
+);
+"""
+
 PG_SCHEMA_SQL = (
     PG_SCHEMA_V1
     + PG_SCHEMA_V2
@@ -542,6 +562,7 @@ PG_SCHEMA_SQL = (
     + PG_SCHEMA_V10
     + PG_SCHEMA_V11
     + PG_SCHEMA_V12
+    + PG_SCHEMA_V13
 )
 
 PG_MIGRATIONS = {
@@ -556,4 +577,5 @@ PG_MIGRATIONS = {
     10: PG_SCHEMA_V10,
     11: PG_SCHEMA_V11,
     12: PG_SCHEMA_V12,
+    13: PG_SCHEMA_V13,
 }

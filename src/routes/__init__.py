@@ -7,6 +7,7 @@ from routes.export import export_bp
 from routes.geocode import geocode_bp
 from routes.people import people_bp
 from routes.photos import photos_bp
+from routes.undo import undo_bp
 
 ALL_BLUEPRINTS = [
     auth_bp,
@@ -16,4 +17,5 @@ ALL_BLUEPRINTS = [
     geocode_bp,
     articles_bp,
     export_bp,
+    undo_bp,
 ]

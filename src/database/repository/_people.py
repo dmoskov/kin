@@ -13,7 +13,9 @@ class PeopleRepoMixin:
 
     def _conn(self) -> Any: ...  # provided by TreeRepository
 
-    def _sync_person_photos(self, conn: Any, person: "Person") -> None: ...  # provided by PhotosRepoMixin
+    def _sync_person_photos(
+        self, conn: Any, person: "Person"
+    ) -> None: ...  # provided by PhotosRepoMixin
 
     def _do_save_person(self, conn: Any, person: Person) -> None:
         params = (

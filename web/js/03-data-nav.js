@@ -7,6 +7,8 @@ export async function loadData() {
   const resp = await fetch("/api/data");
   if (!resp.ok) throw new Error(`Failed to load family data (HTTP ${resp.status})`);
   S.DATA = await resp.json();
+  // Update undo button visibility after every data load (fire-and-forget).
+  refreshUndoStatus();
   S.PEOPLE_MAP = {};
   for (const p of S.DATA.people) {
     const name = [p.given_name, p.surname].filter(Boolean).join(" ") || p.surname;
@@ -629,6 +631,65 @@ export function searchPeopleLocal(query, limit = 8) {
     if (!e.target.closest(".header-search")) close();
   });
 })();
+
+// ═══════════════════════════════════════════════════════════════
+// Undo — DB-backed undo for delete-person
+// ═══════════════════════════════════════════════════════════════
+
+const _undoBtn = document.getElementById("undo-btn");
+
+async function _refreshUndoBtn() {
+  try {
+    const resp = await fetch("/api/undo/status");
+    if (!resp.ok) return;
+    const { available } = await resp.json();
+    if (_undoBtn) _undoBtn.style.display = available ? "" : "none";
+  } catch (_) {}
+}
+
+export async function triggerUndo() {
+  try {
+    const resp = await fetch("/api/undo", { method: "POST" });
+    if (!resp.ok) {
+      if (typeof showToast === "function") showToast("Undo failed.");
+      return;
+    }
+    const data = await resp.json();
+    if (!data.restored) {
+      if (typeof showToast === "function") showToast("Nothing to undo.");
+      _refreshUndoBtn();
+      return;
+    }
+    // Reload data and refresh all views.
+    await loadData();
+    if (typeof autoComputeLanes === "function") autoComputeLanes();
+    if (typeof renderTree === "function") renderTree();
+    if (typeof refreshAllViews === "function") refreshAllViews();
+    _refreshUndoBtn();
+    const name = data.name || data.person_id || "person";
+    if (typeof showToast === "function") showToast(`Restored: ${name}`);
+  } catch (_) {
+    if (typeof showToast === "function") showToast("Undo failed.");
+  }
+}
+
+if (_undoBtn) {
+  _undoBtn.addEventListener("click", triggerUndo);
+}
+
+// Ctrl/Cmd+Z — only when focus is not in a text field.
+document.addEventListener("keydown", (e) => {
+  if (!e.key || e.key.toLowerCase() !== "z") return;
+  if (!e.ctrlKey && !e.metaKey) return;
+  const tag = document.activeElement?.tagName?.toLowerCase();
+  if (tag === "input" || tag === "textarea" || document.activeElement?.isContentEditable) return;
+  e.preventDefault();
+  triggerUndo();
+});
+
+// Poll once on load, then refresh after every data load so the button
+// reflects actual stack state. Exported so 99-main.js can call it after init.
+export function refreshUndoStatus() { _refreshUndoBtn(); }
 
 // ─────────────────────────────────────────────────────────────
 // Global Escape key handler — closes the topmost open overlay/panel.

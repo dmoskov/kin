@@ -34,6 +34,7 @@ from ._sql import (
     _upsert,
 )
 from ._tree import TreeRepoMixin
+from ._undo import UndoRepoMixin
 
 __all__ = [
     "TreeRepository",
@@ -56,6 +57,7 @@ class TreeRepository(
     PhotosRepoMixin,
     ArticlesRepoMixin,
     TreeRepoMixin,
+    UndoRepoMixin,
 ):
     """Persistence layer for FamilyTree data (SQLite or PostgreSQL)."""
 
