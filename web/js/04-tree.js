@@ -1385,3 +1385,46 @@ _treeContainerEl?.addEventListener("keydown", (e) => {
   else handled = false;
   if (handled) e.preventDefault();
 });
+
+// ── SVG Download ──────────────────────────────────────────────────────────────
+
+document.getElementById("tree-download-svg")?.addEventListener("click", () => {
+  const svgEl = document.getElementById("tree-svg");
+  if (!svgEl) return;
+
+  // Capture current bounding box to set width/height on the output
+  const bbox = svgEl.getBBox ? svgEl.getBBox() : null;
+  const vb = svgEl.getAttribute("viewBox");
+  const width = svgEl.getAttribute("width") || (bbox ? Math.ceil(bbox.width + 40) : 1200);
+  const height = svgEl.getAttribute("height") || (bbox ? Math.ceil(bbox.height + 40) : 800);
+
+  // Clone so we can add xmlns and a white background without mutating the live DOM
+  const clone = svgEl.cloneNode(true);
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+  clone.setAttribute("width", width);
+  clone.setAttribute("height", height);
+  if (!vb && bbox) {
+    clone.setAttribute("viewBox", `${bbox.x - 20} ${bbox.y - 20} ${Number(width)} ${Number(height)}`);
+  }
+
+  // Prepend a white background rect
+  const bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  bg.setAttribute("width", "100%");
+  bg.setAttribute("height", "100%");
+  bg.setAttribute("fill", "white");
+  clone.insertBefore(bg, clone.firstChild);
+
+  const serializer = new XMLSerializer();
+  const svgString = serializer.serializeToString(clone);
+  const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "family-tree.svg";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});

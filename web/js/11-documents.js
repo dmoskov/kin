@@ -1036,6 +1036,18 @@ document.getElementById("doc-review-overlay")?.addEventListener("click", (e) => 
 });
 
 // ═══════════════════════════════════════════════════════════════
+// GEDCOM Export
+// ═══════════════════════════════════════════════════════════════
+
+(function initGedcomExport() {
+  const btn = document.getElementById("export-gedcom-btn");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    window.location.href = "/api/export/gedcom";
+  });
+})();
+
+// ═══════════════════════════════════════════════════════════════
 // Photo Picker
 // ═══════════════════════════════════════════════════════════════
 
