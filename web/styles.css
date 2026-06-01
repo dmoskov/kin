@@ -2481,6 +2481,131 @@ main {
 
 .add-relative-error.hidden { display: none; }
 
+/* ── Link Existing mode toggle & search ─────────────────── */
+
+.arf-mode-toggle {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.arf-mode-btn {
+  flex: 1;
+  background: var(--bg);
+  border: none;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.arf-mode-btn + .arf-mode-btn {
+  border-left: 1px solid var(--border);
+}
+
+.arf-mode-btn.active {
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+.arf-mode-btn:not(.active):hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.arf-search-wrapper {
+  position: relative;
+  flex: 1;
+}
+
+.arf-search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 100;
+}
+
+.arf-search-results.hidden { display: none; }
+
+.arf-search-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.arf-search-item:hover {
+  background: var(--surface-hover);
+}
+
+.arf-search-item-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.arf-search-item-name {
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.arf-search-item-dates {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.arf-search-empty {
+  padding: 10px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.arf-selected-person {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface-hover);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+}
+
+.arf-selected-person.hidden { display: none; }
+
+.arf-selected-remove {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.arf-selected-remove:hover {
+  color: var(--text);
+}
+
 @media (max-width: 900px) {
   .timeline-row { grid-template-columns: repeat(2, 1fr) !important; }
   .timeline-row > :nth-child(2n) { border-right: none; }

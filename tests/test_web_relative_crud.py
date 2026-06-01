@@ -28,20 +28,29 @@ def app_client(tmp_path, monkeypatch):
     monkeypatch.setenv("FAMILY_TREE_DB", db_path)
 
     from database.connection import init_db
+
     init_db(db_path)
 
     import web_server
     import importlib
+
     importlib.reload(web_server)
     web_server.PRIVATE_DIR = tmp_path
     web_server.app.config["TESTING"] = True
 
     from database.repository import TreeRepository
+
     repo = TreeRepository(db_path)
 
-    repo.save_person(Person(id="parent1", given_name="Alice", surname="Test", gender=Gender.FEMALE))
-    repo.save_person(Person(id="child1", given_name="Bob", surname="Test", gender=Gender.MALE))
-    repo.save_person(Person(id="partner1", given_name="Carol", surname="Test", gender=Gender.FEMALE))
+    repo.save_person(
+        Person(id="parent1", given_name="Alice", surname="Test", gender=Gender.FEMALE)
+    )
+    repo.save_person(
+        Person(id="child1", given_name="Bob", surname="Test", gender=Gender.MALE)
+    )
+    repo.save_person(
+        Person(id="partner1", given_name="Carol", surname="Test", gender=Gender.FEMALE)
+    )
 
     with web_server.app.test_client() as client:
         yield client, repo, tmp_path
@@ -49,13 +58,17 @@ def app_client(tmp_path, monkeypatch):
 
 # ── POST /api/relationships ──────────────────────────────────────────────
 
+
 class TestCreateRelationship:
     def test_happy_path(self, app_client):
         client, repo, _ = app_client
-        resp = client.post("/api/relationships", json={
-            "parent_id": "parent1",
-            "child_id": "child1",
-        })
+        resp = client.post(
+            "/api/relationships",
+            json={
+                "parent_id": "parent1",
+                "child_id": "child1",
+            },
+        )
         assert resp.status_code == 201, resp.get_data(as_text=True)
         body = resp.get_json()
         assert body["parent_id"] == "parent1"
@@ -63,10 +76,14 @@ class TestCreateRelationship:
 
     def test_relationship_persists_in_api_data(self, app_client):
         client, _, _ = app_client
-        client.post("/api/relationships", json={"parent_id": "parent1", "child_id": "child1"})
+        client.post(
+            "/api/relationships", json={"parent_id": "parent1", "child_id": "child1"}
+        )
         data = client.get("/api/data").get_json()
         rels = data["relationships"]
-        assert any(r["parent_id"] == "parent1" and r["child_id"] == "child1" for r in rels)
+        assert any(
+            r["parent_id"] == "parent1" and r["child_id"] == "child1" for r in rels
+        )
 
     def test_missing_parent_id(self, app_client):
         client, _, _ = app_client
@@ -87,46 +104,61 @@ class TestCreateRelationship:
 
     def test_unknown_parent_returns_404(self, app_client):
         client, _, _ = app_client
-        resp = client.post("/api/relationships", json={
-            "parent_id": "does-not-exist",
-            "child_id": "child1",
-        })
+        resp = client.post(
+            "/api/relationships",
+            json={
+                "parent_id": "does-not-exist",
+                "child_id": "child1",
+            },
+        )
         assert resp.status_code == 404
         assert resp.get_json()["code"] == "not_found"
 
     def test_unknown_child_returns_404(self, app_client):
         client, _, _ = app_client
-        resp = client.post("/api/relationships", json={
-            "parent_id": "parent1",
-            "child_id": "does-not-exist",
-        })
+        resp = client.post(
+            "/api/relationships",
+            json={
+                "parent_id": "parent1",
+                "child_id": "does-not-exist",
+            },
+        )
         assert resp.status_code == 404
         assert resp.get_json()["code"] == "not_found"
 
     def test_empty_body(self, app_client):
         client, _, _ = app_client
-        resp = client.post("/api/relationships", data="", content_type="application/json")
+        resp = client.post(
+            "/api/relationships", data="", content_type="application/json"
+        )
         assert resp.status_code == 400
 
     def test_self_parent_rejected(self, app_client):
         client, _, _ = app_client
-        resp = client.post("/api/relationships", json={
-            "parent_id": "parent1",
-            "child_id": "parent1",
-        })
+        resp = client.post(
+            "/api/relationships",
+            json={
+                "parent_id": "parent1",
+                "child_id": "parent1",
+            },
+        )
         assert resp.status_code == 400
         assert resp.get_json()["code"] == "bad_request"
 
 
 # ── POST /api/unions ─────────────────────────────────────────────────────
 
+
 class TestCreateUnion:
     def test_happy_path(self, app_client):
         client, _, _ = app_client
-        resp = client.post("/api/unions", json={
-            "partner1_id": "parent1",
-            "partner2_id": "partner1",
-        })
+        resp = client.post(
+            "/api/unions",
+            json={
+                "partner1_id": "parent1",
+                "partner2_id": "partner1",
+            },
+        )
         assert resp.status_code == 201, resp.get_data(as_text=True)
         body = resp.get_json()
         assert body["partner1_id"] == "parent1"
@@ -134,12 +166,14 @@ class TestCreateUnion:
 
     def test_union_persists_in_api_data(self, app_client):
         client, _, _ = app_client
-        client.post("/api/unions", json={"partner1_id": "parent1", "partner2_id": "partner1"})
+        client.post(
+            "/api/unions", json={"partner1_id": "parent1", "partner2_id": "partner1"}
+        )
         data = client.get("/api/data").get_json()
         unions = data["unions"]
         assert any(
-            (u["partner1_id"] == "parent1" and u["partner2_id"] == "partner1") or
-            (u["partner1_id"] == "partner1" and u["partner2_id"] == "parent1")
+            (u["partner1_id"] == "parent1" and u["partner2_id"] == "partner1")
+            or (u["partner1_id"] == "partner1" and u["partner2_id"] == "parent1")
             for u in unions
         )
 
@@ -157,19 +191,25 @@ class TestCreateUnion:
 
     def test_unknown_partner1_returns_404(self, app_client):
         client, _, _ = app_client
-        resp = client.post("/api/unions", json={
-            "partner1_id": "does-not-exist",
-            "partner2_id": "partner1",
-        })
+        resp = client.post(
+            "/api/unions",
+            json={
+                "partner1_id": "does-not-exist",
+                "partner2_id": "partner1",
+            },
+        )
         assert resp.status_code == 404
         assert resp.get_json()["code"] == "not_found"
 
     def test_unknown_partner2_returns_404(self, app_client):
         client, _, _ = app_client
-        resp = client.post("/api/unions", json={
-            "partner1_id": "parent1",
-            "partner2_id": "does-not-exist",
-        })
+        resp = client.post(
+            "/api/unions",
+            json={
+                "partner1_id": "parent1",
+                "partner2_id": "does-not-exist",
+            },
+        )
         assert resp.status_code == 404
         assert resp.get_json()["code"] == "not_found"
 
@@ -180,23 +220,30 @@ class TestCreateUnion:
 
     def test_self_union_rejected(self, app_client):
         client, _, _ = app_client
-        resp = client.post("/api/unions", json={
-            "partner1_id": "parent1",
-            "partner2_id": "parent1",
-        })
+        resp = client.post(
+            "/api/unions",
+            json={
+                "partner1_id": "parent1",
+                "partner2_id": "parent1",
+            },
+        )
         assert resp.status_code == 400
         assert resp.get_json()["code"] == "bad_request"
 
 
 # ── PATCH /api/people/<id> (edit person form) ────────────────────────────
 
+
 class TestEditPerson:
     def test_update_birth_and_death_dates(self, app_client):
         client, repo, _ = app_client
-        resp = client.patch("/api/people/parent1", json={
-            "birth_date": "1940-06-15",
-            "death_date": "2010-11-03",
-        })
+        resp = client.patch(
+            "/api/people/parent1",
+            json={
+                "birth_date": "1940-06-15",
+                "death_date": "2010-11-03",
+            },
+        )
         assert resp.status_code == 200
         body = resp.get_json()
         assert body["birth_date"] == "1940-06-15"
@@ -204,10 +251,13 @@ class TestEditPerson:
 
     def test_update_birth_and_death_places(self, app_client):
         client, _, _ = app_client
-        resp = client.patch("/api/people/parent1", json={
-            "birth_place": "Toronto, Canada",
-            "death_place": "New York, NY",
-        })
+        resp = client.patch(
+            "/api/people/parent1",
+            json={
+                "birth_place": "Toronto, Canada",
+                "death_place": "New York, NY",
+            },
+        )
         assert resp.status_code == 200
         body = resp.get_json()
         assert body["birth_place"] == "Toronto, Canada"
@@ -215,10 +265,13 @@ class TestEditPerson:
 
     def test_update_name(self, app_client):
         client, _, _ = app_client
-        resp = client.patch("/api/people/parent1", json={
-            "given_name": "Alicia",
-            "surname": "Smith",
-        })
+        resp = client.patch(
+            "/api/people/parent1",
+            json={
+                "given_name": "Alicia",
+                "surname": "Smith",
+            },
+        )
         assert resp.status_code == 200
         body = resp.get_json()
         assert body["given_name"] == "Alicia"
@@ -265,3 +318,48 @@ class TestEditPerson:
         resp = client.patch("/api/people/parent1", json={"birth_date": "1940"})
         assert resp.status_code == 200
         assert resp.get_json()["birth_date"] == "1940"
+
+
+# ── GET /api/people/search ──────────────────────────────────────────────
+
+
+class TestSearchPeople:
+    def test_search_by_given_name(self, app_client):
+        client, _, _ = app_client
+        resp = client.get("/api/people/search?q=Alice")
+        assert resp.status_code == 200
+        results = resp.get_json()
+        assert len(results) >= 1
+        assert any(p["given_name"] == "Alice" for p in results)
+
+    def test_search_by_surname(self, app_client):
+        client, _, _ = app_client
+        resp = client.get("/api/people/search?q=Test")
+        assert resp.status_code == 200
+        results = resp.get_json()
+        assert len(results) == 3
+
+    def test_search_partial_match(self, app_client):
+        client, _, _ = app_client
+        resp = client.get("/api/people/search?q=Bo")
+        assert resp.status_code == 200
+        results = resp.get_json()
+        assert any(p["given_name"] == "Bob" for p in results)
+
+    def test_search_empty_query(self, app_client):
+        client, _, _ = app_client
+        resp = client.get("/api/people/search?q=")
+        assert resp.status_code == 200
+        assert resp.get_json() == []
+
+    def test_search_no_query_param(self, app_client):
+        client, _, _ = app_client
+        resp = client.get("/api/people/search")
+        assert resp.status_code == 200
+        assert resp.get_json() == []
+
+    def test_search_no_matches(self, app_client):
+        client, _, _ = app_client
+        resp = client.get("/api/people/search?q=Zzzznotexist")
+        assert resp.status_code == 200
+        assert resp.get_json() == []

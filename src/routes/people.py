@@ -106,6 +106,16 @@ def _coerce_person_payload(
     return out, None, 0
 
 
+@people_bp.route("/api/people/search", methods=["GET"])
+def api_search_people():
+    q = (request.args.get("q") or "").strip()
+    if not q:
+        return jsonify([])
+    repo = TreeRepository()
+    results = repo.search_people(q)
+    return jsonify([_person_to_dict(p) for p in results[:50]])
+
+
 @people_bp.route("/api/people", methods=["POST"])
 @web_server.require_editor
 def api_create_person():
