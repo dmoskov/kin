@@ -4635,3 +4635,49 @@ select.ge-input { padding: 3px 4px; }
 .tree-ctrl-btn:hover { background: var(--surface-hover); }
 .tree-container:focus { outline: none; }
 .tree-container:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+
+/* ── Global header person search ──────────────────────────── */
+.header-search { position: relative; }
+.header-search-input {
+  width: 190px;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.header-search-input::placeholder { color: var(--text-muted); }
+.header-search-results {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 260px;
+  max-height: 340px;
+  overflow-y: auto;
+  z-index: 50;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+.header-search-results.hidden { display: none; }
+.header-search-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.header-search-item:hover,
+.header-search-item.active { background: var(--surface-hover); }
+.header-search-name { color: var(--text); font-size: 13px; }
+.header-search-years { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+.header-search-empty { padding: 10px 12px; color: var(--text-muted); font-size: 13px; }
+@media (max-width: 600px) {
+  .header-search { flex: 1 1 100%; }
+  .header-search-input { width: 100%; }
+}

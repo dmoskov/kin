@@ -29,6 +29,13 @@
       <span class="badge" id="stats-badge"></span>
     </div>
     <div class="header-actions">
+      <div class="header-search" role="search">
+        <input type="text" id="global-search" class="header-search-input"
+               placeholder="Search people…" autocomplete="off" spellcheck="false"
+               role="combobox" aria-expanded="false" aria-controls="global-search-results"
+               aria-label="Search people" />
+        <div id="global-search-results" class="header-search-results hidden" role="listbox"></div>
+      </div>
       <nav role="tablist" aria-label="Views">
         <button class="tab active" data-view="tree" id="tab-tree" role="tab" aria-controls="view-tree" aria-selected="true">Tree</button>
         <button class="tab" data-view="timeline" id="tab-timeline" role="tab" aria-controls="view-timeline" aria-selected="false">Timeline</button>

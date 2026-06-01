@@ -408,3 +408,117 @@ document.querySelectorAll(".tab").forEach((tab) => {
 // ═══════════════════════════════════════════════════════════════
 
 // Central couple IDs — set via family-config.json; auto-detected from data if absent
+
+
+// ═══════════════════════════════════════════════════════════════
+// Person search (shared ranked matcher + global header search)
+// ═══════════════════════════════════════════════════════════════
+
+// Rank people against a free-text query. Matches across full name, maiden
+// name, nicknames, and birth/death years; requires every token to match, and
+// ranks exact > full-prefix > word-prefix > substring.
+export function searchPeopleLocal(query, limit = 8) {
+  const q = (query || "").trim().toLowerCase();
+  if (!q) return [];
+  const tokens = q.split(/\s+/);
+  const scored = [];
+  for (const p of Object.values(S.PEOPLE_MAP)) {
+    const name = (p.fullName || "").toLowerCase();
+    const extra = [p.maiden_name, ...(p.nicknames || [])].filter(Boolean).join(" ").toLowerCase();
+    const years = [p.birth_date, p.death_date].filter(Boolean).join(" ").toLowerCase();
+    const hay = `${name} ${extra} ${years}`;
+    if (!tokens.every((tok) => hay.includes(tok))) continue;
+    let score;
+    if (name === q) score = 100;
+    else if (name.startsWith(q)) score = 80;
+    else if (name.split(/\s+/).some((w) => w.startsWith(tokens[0]))) score = 60;
+    else if (name.includes(q)) score = 40;
+    else score = 20;
+    scored.push({ p, score });
+  }
+  scored.sort((a, b) => b.score - a.score || a.p.fullName.localeCompare(b.p.fullName));
+  return scored.slice(0, limit).map((s) => s.p);
+}
+
+// Global header search: type-to-find a person, arrow keys to navigate, Enter to
+// open their panel on the tree.
+(function initGlobalSearch() {
+  const input = document.getElementById("global-search");
+  const results = document.getElementById("global-search-results");
+  if (!input || !results) return;
+
+  let matches = [];
+  let active = -1;
+
+  function close() {
+    results.classList.add("hidden");
+    input.setAttribute("aria-expanded", "false");
+    active = -1;
+  }
+
+  function render() {
+    if (!matches.length) {
+      results.innerHTML = `<div class="header-search-empty">No matches</div>`;
+    } else {
+      results.innerHTML = matches
+        .map((p, i) => {
+          const years = [p.birth_date, p.death_date].map((d) => (d ? String(d).slice(0, 4) : "")).join("–").replace(/^–|–$/g, "");
+          return `<div class="header-search-item${i === active ? " active" : ""}" role="option" data-id="${p.id}" aria-selected="${i === active}">
+            <span class="header-search-name">${personName(p.id)}</span>
+            ${years ? `<span class="header-search-years">${years}</span>` : ""}
+          </div>`;
+        })
+        .join("");
+    }
+    results.classList.remove("hidden");
+    input.setAttribute("aria-expanded", "true");
+  }
+
+  function choose(id) {
+    if (!id) return;
+    close();
+    input.value = "";
+    switchTab("tree");
+    router.navigate(`/tree/person/${id}`);
+    showPersonPanel(id);
+    if (typeof centerTreeOnNode === "function") centerTreeOnNode(id);
+  }
+
+  input.addEventListener("input", () => {
+    matches = searchPeopleLocal(input.value);
+    active = -1;
+    if (input.value.trim()) render();
+    else close();
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (results.classList.contains("hidden")) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      active = Math.min(active + 1, matches.length - 1);
+      render();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      active = Math.max(active - 1, 0);
+      render();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      choose(matches[active >= 0 ? active : 0]?.id);
+    } else if (e.key === "Escape") {
+      close();
+      input.blur();
+    }
+  });
+
+  results.addEventListener("mousedown", (e) => {
+    const item = e.target.closest(".header-search-item");
+    if (item) {
+      e.preventDefault();
+      choose(item.dataset.id);
+    }
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".header-search")) close();
+  });
+})();
