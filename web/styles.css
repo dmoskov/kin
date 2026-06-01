@@ -682,6 +682,7 @@ main {
   width: 110px;
   height: 110px;
   object-fit: cover;
+  object-position: top center;
   border-radius: var(--radius);
   border: 2px solid var(--border);
   cursor: pointer;
@@ -884,17 +885,20 @@ main {
 .tstream-cell .tstream-rail {
   width: 28px;
 }
+.tstream-cell .tstream-photo-frame .tstream-photo-img {
+  max-height: 180px;
+}
 
-/* 16:9 photo aspect ratio container */
+/* Photo container — natural proportions, capped height */
 .tstream-photo-frame {
-  aspect-ratio: 16 / 9;
   overflow: hidden;
   background: var(--border);
 }
 .tstream-photo-frame .tstream-photo-img {
   width: 100%;
-  height: 100%;
+  max-height: 400px;
   object-fit: cover;
+  object-position: top center;
   display: block;
   cursor: pointer;
   transition: opacity 0.15s;
@@ -1189,6 +1193,7 @@ main {
   height: 48px;
   border-radius: 50%;
   object-fit: cover;
+  object-position: top center;
   border: 2px solid var(--border);
   flex-shrink: 0;
 }
@@ -1370,6 +1375,7 @@ main {
   height: 26px;
   border-radius: 50%;
   object-fit: cover;
+  object-position: top center;
   border: 2px solid var(--border);
 }
 .user-pill-name {
@@ -1909,6 +1915,7 @@ main {
 .person-thumb {
   border-radius: 50%;
   object-fit: cover;
+  object-position: top center;
   flex-shrink: 0;
   border: 1.5px solid var(--border);
   vertical-align: middle;
@@ -1995,6 +2002,7 @@ main {
   width: 100%;
   aspect-ratio: 1;
   object-fit: cover;
+  object-position: top center;
 }
 .photo-picker-item .check {
   position: absolute;
@@ -2239,6 +2247,7 @@ main {
   height: 48px;
   border-radius: 6px;
   object-fit: cover;
+  object-position: top center;
   border: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -3494,8 +3503,9 @@ main {
 
 .timeline-photo-thumb {
   width: 60px;
-  height: 44px;
+  height: 60px;
   object-fit: cover;
+  object-position: top center;
   border-radius: 4px;
   border: 1px solid var(--border);
   cursor: pointer;
@@ -3604,6 +3614,7 @@ main {
   width: 100%;
   max-height: 360px;
   object-fit: cover;
+  object-position: top center;
   display: block;
   cursor: pointer;
   transition: opacity 0.15s;
@@ -4138,8 +4149,9 @@ main {
 }
 .photos-grid-img img {
   width: 100%;
-  aspect-ratio: 1;
+  aspect-ratio: 4 / 5;
   object-fit: cover;
+  object-position: top center;
   display: block;
 }
 
@@ -4502,6 +4514,7 @@ select.ge-input { padding: 3px 4px; }
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: top center;
 }
 
 .map-photo-count {
@@ -4531,6 +4544,7 @@ select.ge-input { padding: 3px 4px; }
   width: 70px;
   height: 70px;
   object-fit: cover;
+  object-position: top center;
   border-radius: 6px;
   cursor: pointer;
   transition: opacity 0.15s;
