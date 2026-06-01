@@ -158,6 +158,9 @@ let MAP_MARKERS = [];      // { marker, latlng, events: [{date, year, type, pers
 let MAP_ARCS = [];         // { polyline, arrowHead, personId, fromYear, toYear }
 let MAP_ALL_EVENTS = [];   // flat list of {date, year, type, personId, place, desc, latlng}
 let mapAnimTimer = null;
+// The slider/filter/play controls are static DOM elements; their listeners are
+// wired once (renderMap can run repeatedly via refreshAllViews).
+let _mapListenersWired = false;
 
 // Temporal brightness constants (MIN_YEAR computed dynamically from data)
 let MIN_YEAR = 1650;    // will be recalculated from actual data
@@ -409,6 +412,17 @@ function buildMapEvents() {
 
 async function renderMap() {
   await _geocodeReady;
+  // Stop any in-flight time-lapse animation before tearing down the map, so the
+  // old interval doesn't keep firing against the rebuilt map / stuck play button.
+  if (mapAnimTimer) {
+    clearInterval(mapAnimTimer);
+    mapAnimTimer = null;
+    const oldPlay = document.getElementById("map-play");
+    if (oldPlay) {
+      oldPlay.classList.remove("playing");
+      oldPlay.innerHTML = "&#9654;";
+    }
+  }
   if (MAP) { MAP.remove(); MAP = null; }
   MAP_MARKERS = [];
   MAP_ARCS = [];
@@ -456,21 +470,21 @@ async function renderMap() {
   slider.value = MAX_YEAR;
   yearStartLabel.textContent = MIN_YEAR;
   yearEndLabel.textContent = MAX_YEAR;
-  slider.addEventListener("input", () => {
-    const maxYear = parseInt(slider.value);
-    yearEndLabel.textContent = maxYear;
-    updateMapForYear(maxYear);
-  });
-
-  // Wire up person filter
-  document.getElementById("map-person-filter").addEventListener("change", () => {
-    const maxYear = parseInt(slider.value);
-    updateMapForYear(maxYear);
-  });
-
-  // Play button
-  const playBtn = document.getElementById("map-play");
-  playBtn.addEventListener("click", toggleMapAnimation);
+  // Wire control listeners once — these elements persist across renderMap calls,
+  // so re-binding every time would stack duplicate handlers.
+  if (!_mapListenersWired) {
+    slider.addEventListener("input", () => {
+      const maxYear = parseInt(slider.value);
+      yearEndLabel.textContent = maxYear;
+      updateMapForYear(maxYear);
+    });
+    document.getElementById("map-person-filter").addEventListener("change", () => {
+      const maxYear = parseInt(slider.value);
+      updateMapForYear(maxYear);
+    });
+    document.getElementById("map-play").addEventListener("click", toggleMapAnimation);
+    _mapListenersWired = true;
+  }
 }
 
 function plotMapMarkers(events) {

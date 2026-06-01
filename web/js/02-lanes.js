@@ -5,12 +5,6 @@ let LANES = [];
 
 let LANE_CACHE = {};  // personId → lane id
 
-// Auto-generate lane colors (muted, distinct)
-const _AUTO_LANE_COLORS = [
-  "#b33a3a", "#2e6ca4", "#d4a843", "#4a7c59",
-  "#9c4a70", "#6b5b95", "#c4956a", "#3a8b8b",
-];
-
 /**
  * Ensure CENTER_ID_A and CENTER_ID_B point to valid people.
  * If they don't exist in PEOPLE_MAP, auto-detect the best center couple.
@@ -39,93 +33,9 @@ function _resolveCenterIds() {
   }
 }
 
-/**
- * Auto-detect lanes when CONFIG.lanes is not set.
- *
- * Strategy: find the center couple, trace each partner's parents to create
- * one lane per parent line (typically 4 lanes for 4 grandparents). If no
- * center couple, find root ancestors and group by surname.
- */
-function _autoDetectLanes() {
-  if (!DATA || DATA.people.length < 2) return [];
-
-  _resolveCenterIds();
-
-  const parentsOf = {};
-  for (const r of DATA.relationships) {
-    if (!parentsOf[r.child_id]) parentsOf[r.child_id] = [];
-    parentsOf[r.child_id].push(r.parent_id);
-  }
-
-  // Find center couple
-  const centerA = CENTER_ID_A && PEOPLE_MAP[CENTER_ID_A] ? CENTER_ID_A : null;
-  const centerB = CENTER_ID_B && PEOPLE_MAP[CENTER_ID_B] ? CENTER_ID_B : null;
-
-  if (centerA || centerB) {
-    // Build lanes from each parent of each center person
-    const lanes = [];
-    const centerPeople = [centerA, centerB].filter(Boolean);
-
-    for (const centerId of centerPeople) {
-      const parents = parentsOf[centerId] || [];
-      if (parents.length > 0) {
-        // One lane per parent (grandparent line)
-        for (const parentId of parents) {
-          const p = PEOPLE_MAP[parentId];
-          if (!p) continue;
-          const surname = p.surname || p.given_name || parentId;
-          lanes.push({
-            id: parentId,
-            label: surname,
-            rootIds: [parentId],
-            color: _AUTO_LANE_COLORS[lanes.length % _AUTO_LANE_COLORS.length],
-          });
-        }
-      } else {
-        // Center person has no parents — make them a lane root
-        const p = PEOPLE_MAP[centerId];
-        const surname = p?.surname || p?.given_name || centerId;
-        lanes.push({
-          id: centerId,
-          label: surname,
-          rootIds: [centerId],
-          color: _AUTO_LANE_COLORS[lanes.length % _AUTO_LANE_COLORS.length],
-        });
-      }
-    }
-    if (lanes.length > 0) return lanes;
-  }
-
-  // Fallback: group root ancestors (no parents) by surname
-  const roots = DATA.people.filter(p => !parentsOf[p.id] || parentsOf[p.id].length === 0);
-  const bySurname = {};
-  for (const r of roots) {
-    const key = r.surname || "Unknown";
-    if (!bySurname[key]) bySurname[key] = [];
-    bySurname[key].push(r.id);
-  }
-
-  const surnames = Object.keys(bySurname).sort();
-  // Only create lanes if there are 2-8 surname groups; otherwise it's too many/too few
-  if (surnames.length < 2 || surnames.length > 8) return [];
-
-  return surnames.map((surname, i) => ({
-    id: `auto-${surname.toLowerCase().replace(/\s+/g, "-")}`,
-    label: surname,
-    rootIds: bySurname[surname],
-    color: _AUTO_LANE_COLORS[i % _AUTO_LANE_COLORS.length],
-  }));
-}
-
 function buildLaneCache() {
   LANE_CACHE = {};
   if (!DATA) return;
-
-  // Auto-detect lanes if none configured
-  if (LANES.length === 0) {
-    const autoLanes = _autoDetectLanes();
-    if (autoLanes.length > 0) LANES = autoLanes;
-  }
 
   // Build parent → children and child → parents lookups
   const childrenOf = {};

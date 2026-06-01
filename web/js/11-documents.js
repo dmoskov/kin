@@ -258,8 +258,8 @@ let CURRENT_PROPOSED = null;
 
     const pollResult = await pollParseStatus(CURRENT_DOC_ID, total, chunkFill, chunkText);
     if (!pollResult) {
-      setStep("doc-step-analyze", "error", "Parsing failed");
-      showError("AI analysis failed", "An error occurred while processing the document.");
+      // pollParseStatus already showed the error or stalled state (the latter
+      // reveals the Resume button) — don't clobber it with a generic error.
       return;
     }
 
