@@ -4136,3 +4136,57 @@ select.ge-input { padding: 3px 4px; }
   cursor: pointer;
 }
 .app-error-retry:hover { background: var(--accent-hover); }
+
+
+/* ═══════════════════════════════════════════════════════════════
+   Responsive header / nav (mobile)
+   ═══════════════════════════════════════════════════════════════ */
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  header {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px 16px;
+  }
+  .header-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+  }
+  /* Tabs scroll horizontally so they're never clipped off-screen. */
+  nav[role="tablist"] {
+    order: -1;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  nav[role="tablist"]::-webkit-scrollbar { display: none; }
+  .tab {
+    white-space: nowrap;
+    flex: 0 0 auto;
+  }
+}
+
+@media (max-width: 600px) {
+  h1 { font-size: 18px; }
+  /* Let the "Viewing as" control take a full row and shrink to fit. */
+  .header-actions .viewing-as-section {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .viewing-as-global-select {
+    flex: 1;
+    min-width: 0;
+  }
+  .doc-upload-btn {
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+}
