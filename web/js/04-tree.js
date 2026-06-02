@@ -195,6 +195,18 @@ export function computeFogDistance(src) {
     traceUp(S.CENTER_ID_B);
     traceDown(S.CENTER_ID_B);
   }
+  // The center couple's own siblings are immediate family (distance 0), not
+  // distant in-laws. They're neither ancestors nor descendants, so without
+  // this they'd be unreachable by the BFS below (which seeds from partners)
+  // and fall through to max fog — hidden until the "Everyone" depth level.
+  function addSiblings(pid) {
+    if (!pid) return;
+    for (const par of parentsOf[pid] || []) {
+      for (const sib of childrenOf[par] || new Set()) bloodline.add(sib);
+    }
+  }
+  addSiblings(S.CENTER_ID_A);
+  addSiblings(S.CENTER_ID_B);
   const fog = {};
   for (const id of bloodline) fog[id] = 0;
   // Partners of bloodline = distance 1

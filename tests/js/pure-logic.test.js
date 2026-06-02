@@ -159,6 +159,7 @@ describe("computeFogDistance", () => {
   //       C1
   //
   //   P3 = P2's parent (in-law ancestor, dist 2)
+  //   SIB = P1's sibling (another child of GP1+GP2)
   //   UNRELATED = nobody connected
 
   const src = {
@@ -167,6 +168,7 @@ describe("computeFogDistance", () => {
       { id: "P1" }, { id: "P2" },
       { id: "C1" },
       { id: "P3" },
+      { id: "SIB" },
       { id: "UNRELATED" },
     ],
     relationships: [
@@ -175,6 +177,8 @@ describe("computeFogDistance", () => {
       { parent_id: "P1", child_id: "C1" },
       { parent_id: "P2", child_id: "C1" },
       { parent_id: "P3", child_id: "P2" },
+      { parent_id: "GP1", child_id: "SIB" },
+      { parent_id: "GP2", child_id: "SIB" },
     ],
     unions: [
       { partner1_id: "P1", partner2_id: "P2" },
@@ -217,6 +221,14 @@ describe("computeFogDistance", () => {
     // P3 is a parent of P2 (dist 1), so at least dist 2
     expect(fog["P3"]).toBeGreaterThanOrEqual(2);
     expect(fog["P3"]).toBeDefined();
+  });
+
+  it("the center's sibling is distance 0 (immediate family, not a far in-law)", () => {
+    // Regression: siblings are neither ancestors nor descendants, and the
+    // outward BFS only seeds from partners — so siblings used to fall through
+    // to max fog and disappear from the tree until the "Everyone" depth level.
+    const fog = computeFogDistance(src);
+    expect(fog["SIB"]).toBe(0);
   });
 
   it("unrelated person is absent from the map", () => {
