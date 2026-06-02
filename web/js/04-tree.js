@@ -818,7 +818,18 @@ export function renderTree() {
   const layout = buildButterflyLayout();
   if (!layout || layout.nodes.length === 0) return;
 
-  const { nodes, links, unions, genRange } = layout;
+  // Apply tree depth filter — hide people beyond the selected complexity level.
+  // depth 1 = bloodline + partners (fog 0-1), 2 = + in-law parents (fog 0-2),
+  // 4 = everyone. Value 4 means "show all" (no filtering).
+  const treeDepth = S.TREE_DEPTH;
+  const maxFog = treeDepth >= 4 ? Infinity : treeDepth;
+  const visibleIds = new Set(
+    layout.nodes.filter(n => (n.fogLevel || 0) <= maxFog).map(n => n.id)
+  );
+  const nodes = layout.nodes.filter(n => visibleIds.has(n.id));
+  const links = layout.links.filter(l => visibleIds.has(l.from.id) && visibleIds.has(l.to.id));
+  const unions = layout.unions.filter(u => visibleIds.has(u.id1) && visibleIds.has(u.id2));
+  const { genRange } = layout;
 
   // Calculate bounds
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
@@ -1377,6 +1388,17 @@ document.getElementById("tree-zoom-in")?.addEventListener("click", () => zoomTre
 document.getElementById("tree-zoom-out")?.addEventListener("click", () => zoomTreeBy(1 / 1.3));
 document.getElementById("tree-fit")?.addEventListener("click", () => fitTreeToScreen());
 document.getElementById("tree-center-me")?.addEventListener("click", () => centerTreeOnMe());
+
+// Tree depth (complexity) control
+const _treeDepthSelect = document.getElementById("tree-depth-select");
+if (_treeDepthSelect) {
+  _treeDepthSelect.value = String(S.TREE_DEPTH);
+  _treeDepthSelect.addEventListener("change", () => {
+    S.TREE_DEPTH = parseInt(_treeDepthSelect.value, 10);
+    localStorage.setItem("ft-tree-depth", String(S.TREE_DEPTH));
+    renderTree();
+  });
+}
 
 const _treeContainerEl = document.querySelector(".tree-container");
 _treeContainerEl?.addEventListener("keydown", (e) => {

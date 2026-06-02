@@ -161,8 +161,9 @@ export async function _fetchGeocodeAndPoll(places) {
       MAP_MARKERS = [];
       MAP_ARCS = [];
       buildMapEvents();
-      plotMapMarkers(MAP_ALL_EVENTS);
-      plotMigrationArcs(MAP_ALL_EVENTS);
+      const refreshed = _filterEventsByDepth(MAP_ALL_EVENTS);
+      plotMapMarkers(refreshed);
+      plotMigrationArcs(refreshed);
     }
 
     // Poll again if places are still being resolved in the background
@@ -284,6 +285,11 @@ export function _computeMapFog() {
   // cause ancestors/relatives to disappear from the map. Shared algorithm with
   // the tree layout via computeFogDistance (defined in 04-tree.js).
   return computeFogDistance(S.ORIGINAL_DATA || S.DATA);
+}
+
+function _filterEventsByDepth(events) {
+  const maxFog = S.MAP_DEPTH >= 4 ? Infinity : S.MAP_DEPTH;
+  return events.filter(e => (e.fogLevel || 0) <= maxFog);
 }
 
 export function buildMapEvents() {
@@ -448,14 +454,15 @@ export async function renderMap() {
     .addTo(S.MAP);
 
   buildMapEvents();
-  plotMapMarkers(MAP_ALL_EVENTS);
-  plotPhotoMarkers(MAP_ALL_EVENTS);
-  plotMigrationArcs(MAP_ALL_EVENTS);
-  populateMapFilter();
-  document.getElementById("map-empty")?.classList.toggle("hidden", MAP_ALL_EVENTS.length > 0);
+  const mapDepthEvents = _filterEventsByDepth(MAP_ALL_EVENTS);
+  plotMapMarkers(mapDepthEvents);
+  plotPhotoMarkers(mapDepthEvents);
+  plotMigrationArcs(mapDepthEvents);
+  populateMapFilter(mapDepthEvents);
+  document.getElementById("map-empty")?.classList.toggle("hidden", mapDepthEvents.length > 0);
 
   // Fit bounds
-  const allLatLngs = MAP_ALL_EVENTS.map((e) => e.latlng);
+  const allLatLngs = mapDepthEvents.map((e) => e.latlng);
   if (allLatLngs.length > 0) {
     S.MAP.fitBounds(allLatLngs, { padding: [50, 50], maxZoom: 6 });
   }
@@ -482,8 +489,15 @@ export async function renderMap() {
       updateMapForYear(maxYear);
     });
     document.getElementById("map-play").addEventListener("click", toggleMapAnimation);
+    document.getElementById("map-depth-select")?.addEventListener("change", (e) => {
+      S.MAP_DEPTH = parseInt(e.target.value, 10);
+      localStorage.setItem("ft-map-depth", String(S.MAP_DEPTH));
+      renderMap();
+    });
     _mapListenersWired = true;
   }
+  const mapDepthSelect = document.getElementById("map-depth-select");
+  if (mapDepthSelect) mapDepthSelect.value = String(S.MAP_DEPTH);
 }
 
 export function plotMapMarkers(events) {
@@ -846,13 +860,14 @@ export function updateMapForYear(maxYear) {
   plotPhotoMarkers(filteredPhotoEvents);
 }
 
-export function populateMapFilter() {
+export function populateMapFilter(events) {
   const select = document.getElementById("map-person-filter");
   // Clear existing options except "Everyone"
   while (select.options.length > 1) select.remove(1);
 
-  // Only include people who have map events
-  const peopleWithEvents = new Set(MAP_ALL_EVENTS.map((e) => e.personId));
+  // Only include people who have visible map events
+  const src = events || MAP_ALL_EVENTS;
+  const peopleWithEvents = new Set(src.map((e) => e.personId));
   const sorted = Object.values(S.PEOPLE_MAP)
     .filter((p) => peopleWithEvents.has(p.id))
     .sort((a, b) => a.fullName.localeCompare(b.fullName));

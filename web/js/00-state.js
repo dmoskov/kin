@@ -17,6 +17,8 @@ export const S = {
   LANES: [],
   SHOW_TIMELINE_STREAM: localStorage.getItem("showTimelineStream") !== "false",
   MAP: null,
+  TREE_DEPTH: parseInt(localStorage.getItem("ft-tree-depth") || "1", 10),
+  MAP_DEPTH: parseInt(localStorage.getItem("ft-map-depth") || "1", 10),
   _geocodeReady: Promise.resolve(),
   ALL_PHOTOS: null,
   PHOTO_PICKER_PERSON: null,

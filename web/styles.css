@@ -1750,6 +1750,11 @@ main {
   flex-shrink: 0;
 }
 
+.map-filter {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
 .map-filter select {
   background: var(--bg);
   border: 1px solid var(--border);
@@ -1759,8 +1764,8 @@ main {
   padding: 6px 10px;
   border-radius: var(--radius);
   cursor: pointer;
-  min-width: 160px;
 }
+#map-person-filter { min-width: 160px; }
 
 .map-slider {
   display: flex;
@@ -4730,6 +4735,19 @@ select.ge-input { padding: 3px 4px; }
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 .tree-ctrl-btn:hover { background: var(--surface-hover); }
+.tree-depth-select {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  min-width: 0;
+  width: auto;
+}
 .tree-container:focus { outline: none; }
 .tree-container:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 

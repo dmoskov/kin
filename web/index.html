@@ -103,6 +103,11 @@
           <button class="tree-ctrl-btn" id="tree-fit" aria-label="Fit tree to screen" title="Fit to screen">&#9974;</button>
           <button class="tree-ctrl-btn" id="tree-center-me" aria-label="Center on me" title="Center on me">&#9678;</button>
           <button class="tree-ctrl-btn" id="tree-download-svg" aria-label="Download tree as SVG" title="Download tree as SVG">&#11015;</button>
+          <select id="tree-depth-select" class="tree-depth-select" title="How much of the tree to show">
+            <option value="1">Close family</option>
+            <option value="2">Extended family</option>
+            <option value="4">Everyone</option>
+          </select>
         </div>
         <div id="focus-banner" class="focus-banner hidden">
           <span class="focus-banner-label">Focused on: <strong id="focus-banner-name"></strong></span>
@@ -147,6 +152,11 @@
         </div>
         <div class="map-controls">
           <div class="map-filter">
+            <select id="map-depth-select" title="How much of the family to show on the map">
+              <option value="1">Close family</option>
+              <option value="2">Extended family</option>
+              <option value="4">Everyone</option>
+            </select>
             <select id="map-person-filter">
               <option value="all">Everyone</option>
             </select>
