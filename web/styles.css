@@ -236,7 +236,7 @@ main {
   stroke-width: 2;
   transition: filter 0.15s ease;
 }
-.node-group:hover .node-rect { filter: brightness(1.2); }
+.node-group:hover .node-rect { filter: brightness(1.12) drop-shadow(0 4px 10px rgba(0, 0, 0, 0.30)); }
 .node-group.selected .node-rect {
   stroke-width: 3;
   filter: brightness(1.3) drop-shadow(0 0 8px rgba(108, 124, 255, 0.4));
@@ -272,6 +272,19 @@ main {
 .node-photo {
   pointer-events: none;
   border-radius: 50%;
+}
+
+.node-monogram {
+  pointer-events: none;
+  opacity: 0.92;
+}
+.node-monogram-text {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  fill: var(--surface);
+  pointer-events: none;
+  user-select: none;
 }
 
 .link {
@@ -2072,26 +2085,22 @@ main {
 }
 
 .person-picker {
-  display: flex;
-  flex-direction: column;
-  width: 220px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
+  position: relative;
+  width: 240px;
 }
 
 .picker-search {
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   color: var(--text);
   font-family: inherit;
   font-size: 13px;
-  padding: 9px 12px;
+  padding: 10px 12px;
   outline: none;
   width: 100%;
   box-sizing: border-box;
+  transition: border-color 0.15s;
 }
 
 .picker-search::placeholder {
@@ -2099,24 +2108,42 @@ main {
 }
 
 .picker-search:focus {
-  border-bottom-color: var(--accent);
+  border-color: var(--accent);
 }
 
 .picker-list {
-  max-height: 240px;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.28);
+  max-height: 280px;
   overflow-y: auto;
   overscroll-behavior: contain;
+  z-index: 60;
+  padding: 4px;
+  text-align: left;
 }
+.picker-list.hidden { display: none; }
 
 .picker-item {
-  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 8px;
+  border-radius: 7px;
   font-size: 13px;
   color: var(--text);
   cursor: pointer;
+  transition: background 0.1s;
+}
+.picker-item-name {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: background 0.1s;
 }
 
 .picker-item:hover {
@@ -2148,6 +2175,70 @@ main {
 }
 
 .rel-result.hidden { display: none; }
+
+/* ── Relationships empty state (watermark + quick suggestions) ── */
+
+.rel-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  padding-top: 24px;
+}
+.rel-empty.hidden { display: none; }
+.rel-empty-mark {
+  width: 96px;
+  height: 96px;
+  border-radius: 22px;
+  opacity: 0.16;
+  filter: grayscale(0.2);
+}
+.rel-suggestions { width: 100%; }
+.rel-suggest-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+}
+.rel-suggest-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+}
+.rel-suggest-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  transition: border-color 0.15s, background 0.15s;
+}
+.rel-suggest-chip:hover {
+  border-color: var(--accent);
+  background: var(--surface-hover);
+}
+.rel-suggest-x {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+.rel-suggest-name {
+  margin-left: 4px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rel-suggest-chip .person-thumb,
+.rel-suggest-chip .person-thumb-placeholder { flex-shrink: 0; }
 
 .rel-label {
   font-size: 32px;
@@ -2209,6 +2300,15 @@ main {
 #map {
   flex: 1;
   z-index: 1;
+}
+
+/* Warm the base map toward the parchment brand palette. Only the tile pane is
+   filtered, so migration arcs, markers and popups (in other panes) stay crisp. */
+.leaflet-tile-pane {
+  filter: sepia(0.55) saturate(0.85) hue-rotate(-12deg) brightness(0.9) contrast(1.05);
+}
+[data-theme="light"] .leaflet-tile-pane {
+  filter: sepia(0.32) saturate(0.8) hue-rotate(-6deg) brightness(1.02) contrast(0.95);
 }
 
 .map-controls {
@@ -5332,8 +5432,18 @@ select.ge-input { padding: 3px 4px; }
   bottom: 16px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
   z-index: 5;
+}
+/* Segmented pill: buttons share one rounded container with hairline dividers. */
+.tree-ctrl-group {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
 }
 .tree-ctrl-btn {
   width: 34px;
@@ -5344,11 +5454,13 @@ select.ge-input { padding: 3px 4px; }
   font-size: 17px;
   line-height: 1;
   color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  background: transparent;
+  border: none;
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: background 0.12s;
+}
+.tree-ctrl-group .tree-ctrl-btn + .tree-ctrl-btn {
+  border-top: 1px solid var(--border);
 }
 .tree-ctrl-btn:hover { background: var(--surface-hover); }
 .tree-depth-select {

@@ -916,22 +916,23 @@ export function renderTree() {
   });
   svg.call(zoom);
 
-  // Start zoomed in on center couple, user can zoom out
+  // Frame the whole visible tree on load (fit-to-view), clamped so a tiny
+  // family doesn't balloon and a sprawling one stays readable. Falls back to
+  // centering on the focal couple when the tree is too big to fit usefully.
+  const contentWidth = maxX - minX + padding * 2;
+  const contentHeight = maxY - minY + padding * 2;
+  const rawFit = Math.min(width / contentWidth, height / contentHeight);
+  const fitScale = Math.max(0.2, Math.min(rawFit, 1.0));
   const centerNodeA = nodes.find(n => n.id === S.CENTER_ID_A);
   const centerNodeB = nodes.find(n => n.id === S.CENTER_ID_B);
-  if (centerNodeA) {
-    const focusX = centerNodeB
-      ? (centerNodeA.cx + centerNodeB.cx) / 2
-      : centerNodeA.cx;
+
+  if (rawFit < 0.45 && centerNodeA) {
+    // Tree won't fit at a readable scale — center on the focal couple instead.
+    const focusX = centerNodeB ? (centerNodeA.cx + centerNodeB.cx) / 2 : centerNodeA.cx;
     const focusY = centerNodeA.y + NODE_H / 2;
-    const INITIAL_SCALE = 0.9;
-    const itx = width / 2 - focusX * INITIAL_SCALE;
-    const ity = height / 2 - focusY * INITIAL_SCALE;
-    svg.call(zoom.transform, d3.zoomIdentity.translate(itx, ity).scale(INITIAL_SCALE));
+    const k = 0.7;
+    svg.call(zoom.transform, d3.zoomIdentity.translate(width / 2 - focusX * k, height / 2 - focusY * k).scale(k));
   } else {
-    const contentWidth = maxX - minX + padding * 2;
-    const contentHeight = maxY - minY + padding * 2;
-    const fitScale = Math.min(width / contentWidth, height / contentHeight, 0.85);
     const ftx = width / 2 - ((minX + maxX) / 2) * fitScale;
     const fty = height / 2 - ((minY + maxY) / 2) * fitScale;
     svg.call(zoom.transform, d3.zoomIdentity.translate(ftx, fty).scale(fitScale));
@@ -1128,10 +1129,28 @@ export function renderTree() {
     }
   });
 
-  // Text x offset: shift right when photo is present
-  function textX(d) {
-    return hasPhoto(d) ? PHOTO_PAD + PHOTO_SIZE + 4 + (NODE_W - PHOTO_PAD - PHOTO_SIZE - 4) / 2 : NODE_W / 2;
-  }
+  // Monogram fallback for people without a profile photo — a colored initial
+  // disc, so EVERY node carries a "face" (matching the panel/list avatars).
+  const monoGroups = nodeGroups.filter((d) => !hasPhoto(d));
+  monoGroups
+    .append("circle")
+    .attr("class", "node-monogram")
+    .attr("cx", PHOTO_PAD + PHOTO_SIZE / 2)
+    .attr("cy", NODE_H / 2)
+    .attr("r", PHOTO_SIZE / 2)
+    .attr("fill", (d) => d.person.gender === "female" ? "var(--female)" : "var(--male)");
+  monoGroups
+    .append("text")
+    .attr("class", "node-monogram-text")
+    .attr("x", PHOTO_PAD + PHOTO_SIZE / 2)
+    .attr("y", NODE_H / 2)
+    .attr("text-anchor", "middle")
+    .attr("dominant-baseline", "central")
+    .text((d) => ((d.person.given_name || d.person.fullName || "?").trim()[0] || "?").toUpperCase());
+
+  // Every node now has an avatar, so text is always shifted right of it.
+  const TEXT_X = PHOTO_PAD + PHOTO_SIZE + 6 + (NODE_W - PHOTO_PAD - PHOTO_SIZE - 6) / 2;
+  function textX() { return TEXT_X; }
 
   nodeGroups
     .append("text")

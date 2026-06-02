@@ -9,6 +9,7 @@ export function populateRelSelectors() {
   );
   setupPersonPicker("picker-a", sorted, computeRelationship);
   setupPersonPicker("picker-b", sorted, computeRelationship);
+  renderRelSuggestions();
 }
 
 export function setupPersonPicker(pickerId, people, onChange) {
@@ -30,8 +31,8 @@ export function setupPersonPicker(pickerId, people, onChange) {
       container._selectedId = p.id;
       input.value = p.fullName;
       input.dataset.locked = p.fullName;
-      renderList(p.fullName);
     }
+    list.classList.add("hidden"); // a choice was made — collapse the dropdown
     onChange();
   }
 
@@ -53,7 +54,11 @@ export function setupPersonPicker(pickerId, people, onChange) {
       item.className =
         "picker-item" + (p.id === container._selectedId ? " picker-item-selected" : "");
       item.dataset.id = p.id;
-      item.textContent = p.fullName;
+      item.innerHTML = personThumb(p.id, 24);
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "picker-item-name";
+      nameSpan.textContent = p.fullName;
+      item.appendChild(nameSpan);
       item.addEventListener("mousedown", (e) => {
         e.preventDefault();
         select(p);
@@ -71,6 +76,18 @@ export function setupPersonPicker(pickerId, people, onChange) {
     }
     active = -1;
     renderList(input.value);
+    list.classList.remove("hidden");
+  });
+
+  // Combobox behavior: the list stays collapsed until the field is focused,
+  // so the view isn't dominated by two full rosters on load.
+  input.addEventListener("focus", () => {
+    active = -1;
+    renderList(input.value === input.dataset.locked ? "" : input.value);
+    list.classList.remove("hidden");
+  });
+  input.addEventListener("blur", () => {
+    setTimeout(() => list.classList.add("hidden"), 150);
   });
 
   input.addEventListener("keydown", (e) => {
@@ -90,6 +107,46 @@ export function setupPersonPicker(pickerId, people, onChange) {
   });
 
   renderList("");
+  list.classList.add("hidden"); // collapsed until focused
+}
+
+// Suggested "quick relationship" chips shown in the empty state: the current
+// viewer paired with a small varied sample of relatives. One click computes it.
+export function renderRelSuggestions() {
+  const wrap = document.getElementById("rel-suggestions");
+  if (!wrap) return;
+  const anchor = S.CENTER_ID_A;
+  const anchorP = anchor && S.PEOPLE_MAP[anchor];
+  if (!anchorP) { wrap.innerHTML = ""; return; }
+
+  const others = Object.values(S.PEOPLE_MAP).filter(p => p.id !== anchor && p.fullName);
+  if (!others.length) { wrap.innerHTML = ""; return; }
+
+  const picks = [];
+  const byBirth = others.filter(p => p.birth_date).sort((a, b) => a.birth_date.localeCompare(b.birth_date));
+  if (byBirth[0]) picks.push(byBirth[0]); // earliest-born ancestor — usually a fun result
+  const byName = [...others].sort((a, b) => a.fullName.localeCompare(b.fullName));
+  const step = Math.max(1, Math.floor(byName.length / 4));
+  for (let i = 0; i < byName.length && picks.length < 4; i += step) {
+    const p = byName[i];
+    if (p.id !== anchor && !picks.some(x => x.id === p.id)) picks.push(p);
+  }
+
+  let html = `<div class="rel-suggest-label">Quick relationships from ${escapeHtml(anchorP.fullName)}</div><div class="rel-suggest-chips">`;
+  for (const p of picks) {
+    html += `<button class="rel-suggest-chip" data-a="${anchor}" data-b="${p.id}">
+      ${personThumb(anchor, 26)}<span class="rel-suggest-x">&#8596;</span>${personThumb(p.id, 26)}
+      <span class="rel-suggest-name">${escapeHtml(p.fullName)}</span>
+    </button>`;
+  }
+  html += `</div>`;
+  wrap.innerHTML = html;
+  wrap.querySelectorAll(".rel-suggest-chip").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      prefillRelPickers(btn.dataset.a, btn.dataset.b);
+      computeRelationship();
+    });
+  });
 }
 
 export function computeRelationship() {
@@ -98,11 +155,15 @@ export function computeRelationship() {
   const idA = (pickerA && pickerA._selectedId) || "";
   const idB = (pickerB && pickerB._selectedId) || "";
   const result = document.getElementById("rel-result");
+  const empty = document.getElementById("rel-empty");
 
   if (!idA || !idB) {
     result.classList.add("hidden");
+    if (empty) empty.classList.remove("hidden"); // show suggestions until both picked
     return;
   }
+
+  if (empty) empty.classList.add("hidden");
 
   if (idA && idB) {
     router.navigate(`/relationships/${idA}/${idB}`, { replace: true });

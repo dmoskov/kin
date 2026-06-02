@@ -214,11 +214,15 @@ export function renderTimeline(filterPersonId = "all") {
       html += buildStreamCellHtml(streamEntries);
       html += `</div>`;
     }
-    for (const lane of activeLanes) {
+    activeLanes.forEach((lane, laneIndex) => {
       const decadeEntries = byLaneDecade[lane.id][decade] || [];
       const isEmpty = decadeEntries.length === 0;
       html += `<div class="timeline-cell${isEmpty ? " timeline-cell-empty" : ""}">`;
-      html += `<div class="timeline-decade${isEmpty ? " timeline-decade-empty" : ""}">${decade}s</div>`;
+      // Decade label only in the first lane — a single left-edge "ruler" rather
+      // than the same watermark repeated faintly in every column.
+      if (laneIndex === 0) {
+        html += `<div class="timeline-decade">${decade}s</div>`;
+      }
       for (const e of decadeEntries) {
         const isCross = e.crossLane;
         html += `
@@ -233,7 +237,7 @@ export function renderTimeline(filterPersonId = "all") {
           </div>`;
       }
       html += `</div>`;
-    }
+    });
     html += `</div>`;
   }
 
