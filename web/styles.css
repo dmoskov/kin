@@ -2988,6 +2988,81 @@ main {
 
 .add-relative-error.hidden { display: none; }
 
+/* ── Invite by email ───────────────────────────────────────── */
+
+.panel-invite-section .invite-hint {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  line-height: 1.4;
+}
+
+.invite-email-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.invite-has-email {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.invite-email-badge {
+  display: inline-block;
+  font-size: 12px;
+  color: var(--accent);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 10px;
+  width: fit-content;
+}
+
+.invite-msg-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.invite-msg-text {
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  line-height: 1.5;
+  user-select: all;
+}
+
+.invite-copy-btn {
+  background: var(--accent);
+  border: none;
+  color: var(--bg);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 16px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.15s;
+  width: fit-content;
+}
+
+.invite-copy-btn:hover {
+  background: var(--accent-hover);
+}
+
+.invite-copied {
+  font-size: 12px;
+  color: var(--event-birth);
+  transition: opacity 0.2s;
+}
+
+.invite-copied.hidden { display: none; }
+
 /* ── Link Existing mode toggle & search ─────────────────── */
 
 .arf-mode-toggle {
