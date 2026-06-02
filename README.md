@@ -6,14 +6,16 @@ An interactive genealogy app — model your family history, visualize relationsh
 
 ## Features
 
-- **Interactive tree** — D3-powered family tree with expandable generations
-- **Timeline** — chronological view of births, deaths, immigration, careers, education
-- **Relationship calculator** — "How are these two people related?"
-- **Heritage map** — immigration flows colored by region of origin
-- **In-browser editing** — add parents, siblings, children, and partners directly from the tree; edit a person's name, dates, and places without touching a seed script
-- **Photo gallery** — upload photos in the browser, attach them to people, add captions
+- **Interactive tree** — D3-powered family tree with expandable generations and fog-of-war dimming of distant branches
+- **Timeline** — chronological view of births, deaths, immigration, careers, education; click any entry to jump to that person
+- **Relationship calculator** — "How are these two people related?" with a full chain explanation
+- **Heritage map** — immigration flows colored by region of origin, with animated time-lapse
+- **In-browser editing** — add parents, siblings, children, and partners directly from the tree; edit a person's name, dates, and places without touching a seed script; full undo/redo
+- **Photo gallery** — upload photos in the browser, attach them to people, add captions; full-screen lightbox and timeline gallery view; optional Google Photos import
 - **Document parsing** — upload a birth certificate / obituary / photo and have the AI extract people, dates, and relationships for review before applying
+- **News article tracking** — link newspaper clippings and articles to the people they mention
 - **GEDCOM import** — load data from standard genealogy software
+- **Sources & citations** — attach documentary evidence to any fact with confidence levels
 - **Theming** — full dark/light mode with customizable color palettes
 
 ## Quick Start
@@ -186,7 +188,7 @@ For birth certificates, obituaries, family photos with caption text, or similar
 records, the **Documents** panel can OCR the file and propose changes:
 
 1. Click **📄 Upload Document** in the top toolbar.
-2. Drop or select an image (JPG/PNG/WEBP/GIF) or PDF. Max **15 MB**
+2. Drop or select an image (JPG/PNG/WEBP/GIF) or PDF. Max **50 MB**
    (`MAX_DOC_BYTES`).
 3. Once uploaded, click **Parse with AI**. The server runs the document through
    an LLM and returns proposed people / relationships / events.
@@ -241,6 +243,10 @@ python3 -m cli show <id>      # Show details for a person
 python3 -m cli relationship <id1> <id2>  # How are they related?
 python3 -m cli timeline --all # Full timeline
 python3 -m cli stats          # Family stats
+python3 -m cli audit          # Check tree for integrity issues (--fix to auto-repair)
+python3 -m cli sources        # List all sources
+python3 -m cli add-source     # Add a documentary source
+python3 -m cli cite           # Attach a source citation to a fact
 ```
 
 ## Data Model
@@ -283,16 +289,19 @@ src/
 
 web/                 # Dashboard frontend
 ├── index.html
-├── app.js           # D3 tree, timeline, relationship calculator
 ├── styles.css
-└── family-config.example.json  # Template — copy to private/config/
+├── family-config.example.json  # Template — copy to private/config/
+└── js/              # Modular frontend (loaded in order by index.html)
+    ├── 00-state.js  # Shared state
+    ├── 01-core.js … 08-map.js  # Tree, timeline, map, relationship calc
+    └── 09-init.js … 99-main.js # Auth, photos, documents, gallery, lightbox
 
 data/                # Seed scripts & example data
 ├── example_family.json
 └── seed_longfellow.py  # Example: public historical family
 
 tests/               # Test suite (synthetic data only)
-deploy/              # EC2 deployment scripts (nginx, gunicorn, systemd)
+deploy/              # Deployment scripts and config (nginx, gunicorn, systemd, .env.example)
 
 private/             # YOUR family data (gitignored)
 ├── config/family-config.json
@@ -354,7 +363,7 @@ docker run -p 8000:8000 -v $(pwd)/private:/app/private family-tree
 | `FAMILY_TREE_DB`   | SQLite path override (local dev only).                 | `data/family.db`     |
 | `SECRET_KEY`       | Flask session key — set in production.                 | `dev-secret-...`     |
 | `MAX_PHOTO_BYTES`  | Per-file cap for `/api/photos/upload`.                 | `8388608` (8 MB)     |
-| `MAX_DOC_BYTES`    | Per-file cap for `/api/documents/upload`.              | `15728640` (15 MB)   |
+| `MAX_DOC_BYTES`    | Per-file cap for `/api/documents/upload`.              | `52428800` (50 MB)   |
 | `GOOGLE_CLIENT_ID` | Enables Google Sign-In on the dashboard.               | _(sign-in disabled)_ |
 | `EDITORS`          | Comma-separated Gmail addresses with edit access. Anyone not listed can view but not edit. Editors may sign in even without a person record in the tree. Example: `alice@gmail.com,bob@gmail.com` | _(unset — editing unrestricted)_ |
 | `ANTHROPIC_API_KEY`| Enables **Parse with AI** for uploaded documents.      | _(parsing disabled)_ |
