@@ -24,19 +24,85 @@ from models.source import Source, SourceType
 from models.tree import FamilyTree
 
 SOURCE_DOC = "longfellow-descendants-2009"
+SOURCE_FARNHAM = "farnham-2002"
+SOURCE_FINDAGRAVE = "findagrave"
+SOURCE_ME_HISTORICAL = "me-historical-society"
 
 
 def build_longfellow_tree() -> FamilyTree:
     """Build the Longfellow descendant tree from the 4 Dec 2009 report."""
     tree = FamilyTree()
 
-    # ── Source ──────────────────────────────────────────────────────────
+    # ── Sources ─────────────────────────────────────────────────────────
     tree.add_source(Source(
         id=SOURCE_DOC,
         name="Descendants of William Longfellow",
         source_type=SourceType.DOCUMENT,
         date="2009-12-04",
         description="Descendant report for William Longfellow (1650–1690), 10 generations.",
+    ))
+    tree.add_source(Source(
+        id=SOURCE_FARNHAM,
+        name="A Longfellow Genealogy",
+        source_type=SourceType.PUBLIC,
+        author="Russell C. Farnham & Dorothy E. Crawford",
+        date="2002",
+        description=(
+            "Comprising the English ancestry and descendants of the immigrant "
+            "William Longfellow of Newbury, Massachusetts, and Henry Wadsworth "
+            "Longfellow. Walrus Publishers, 1188 pages."
+        ),
+    ))
+    tree.add_source(Source(
+        id=SOURCE_FINDAGRAVE,
+        name="Find A Grave",
+        source_type=SourceType.PUBLIC,
+        url="https://www.findagrave.com",
+        description="Online cemetery records and gravestone photographs.",
+    ))
+    tree.add_source(Source(
+        id=SOURCE_ME_HISTORICAL,
+        name="Maine Historical Society Collections",
+        source_type=SourceType.PUBLIC,
+        url="https://www.mainehistory.org",
+        description="Maine Historical Society library and archival collections.",
+    ))
+
+    # ╔══════════════════════════════════════════════════════════════════╗
+    # ║  ENGLISH ANCESTORS                                              ║
+    # ╚══════════════════════════════════════════════════════════════════╝
+
+    tree.add_person(Person(
+        id="william-longfellow-sr",
+        given_name="William",
+        surname="Longfellow",
+        gender=Gender.MALE,
+        birth_date="1619",
+        birth_place="Horsforth, Yorkshire, England",
+        death_date="1676",
+        death_place="Horsforth, Yorkshire, England",
+        notes=(
+            "Father of the immigrant William Longfellow. Resided in Horsforth, "
+            "Yorkshire, England. Source: Farnham (2002)."
+        ),
+    ))
+
+    tree.add_person(Person(
+        id="elizabeth-thornton",
+        given_name="Elizabeth",
+        surname="Thornton",
+        gender=Gender.FEMALE,
+        birth_date="~1622",
+        birth_place="Yorkshire, England",
+        notes=(
+            "Mother of the immigrant William Longfellow. Wife of William Longfellow Sr. "
+            "Source: Farnham (2002)."
+        ),
+    ))
+    tree.add_union(Union(
+        partner1_id="william-longfellow-sr",
+        partner2_id="elizabeth-thornton",
+        notes="Married in Yorkshire, England.",
     ))
 
     # ╔══════════════════════════════════════════════════════════════════╗
@@ -48,23 +114,37 @@ def build_longfellow_tree() -> FamilyTree:
         given_name="William",
         surname="Longfellow",
         gender=Gender.MALE,
-        birth_date="1650",
-        death_date="1690",
-        notes="Progenitor of the Longfellow line. Born 1650/51, died 1690.",
+        birth_date="1650-10-20",
+        birth_place="Horsforth, Yorkshire, England",
+        death_date="1690-10-31",
+        death_place="Anticosti Island, Quebec, Canada",
+        notes=(
+            "Progenitor of the Longfellow line in America. Born 20 Oct 1650/51 in "
+            "Horsforth, Yorkshire, England. Immigrated to Newbury, MA c. 1676. "
+            "Died 31 Oct 1690 in the Phips expedition to Quebec. "
+            "Find A Grave Memorial #22571205."
+        ),
     ))
+    tree.add_relationship(Relationship(parent_id="william-longfellow-sr", child_id="william-longfellow-1650"))
+    tree.add_relationship(Relationship(parent_id="elizabeth-thornton", child_id="william-longfellow-1650"))
 
     tree.add_person(Person(
         id="anne-sewall",
         given_name="Anne",
         surname="Sewall",
         gender=Gender.FEMALE,
-        notes="Wife of William Longfellow. Death date unknown.",
+        birth_place="Newbury, Massachusetts",
+        notes=(
+            "Wife of William Longfellow. Sister of Chief Justice Samuel Sewall. "
+            "Death date unknown. Samuel Sewall's diary references eight children."
+        ),
     ))
     tree.add_union(Union(
         partner1_id="william-longfellow-1650",
         partner2_id="anne-sewall",
-        union_date="1668-11-10",
-        notes="Married November 10, 1668.",
+        union_date="1678-11-10",
+        union_place="Newbury, Massachusetts",
+        notes="Married November 10, 1678.",
     ))
 
     # -- Children of William & Anne --
@@ -108,8 +188,14 @@ def build_longfellow_tree() -> FamilyTree:
         surname="Longfellow",
         gender=Gender.MALE,
         birth_date="1685-09-22",
+        birth_place="Newbury, Massachusetts",
         death_date="1764-11-17",
-        notes="Lieut. Stephen Longfellow. Son of William & Anne Sewall. Continued the line.",
+        death_place="Byfield (Newbury Falls), Essex County, Massachusetts",
+        notes=(
+            "Lieut. Stephen Longfellow, 'the Blacksmith.' Son of William & Anne Sewall. "
+            "Locksmith and farmer in Byfield (Newbury Falls), Essex County, MA. "
+            "Find A Grave Memorial #14327894. Buried Elm Street, Byfield."
+        ),
     ))
     tree.add_relationship(Relationship(parent_id="william-longfellow-1650", child_id="stephen-longfellow-1685"))
     tree.add_relationship(Relationship(parent_id="anne-sewall", child_id="stephen-longfellow-1685"))
@@ -131,10 +217,34 @@ def build_longfellow_tree() -> FamilyTree:
         surname="Longfellow",
         gender=Gender.MALE,
         birth_date="1690-02-05",
-        notes="Son of William & Anne Sewall. Death date unknown.",
+        birth_place="Newbury, Massachusetts",
+        death_date="1731",
+        death_place="Hampton Falls, New Hampshire",
+        notes=(
+            "Youngest son of William & Anne Sewall. Died 1731 in Hampton Falls, NH. "
+            "Source: Farnham (2002)."
+        ),
     ))
     tree.add_relationship(Relationship(parent_id="william-longfellow-1650", child_id="nathan-longfellow-1690"))
     tree.add_relationship(Relationship(parent_id="anne-sewall", child_id="nathan-longfellow-1690"))
+
+    # -- Nathan Longfellow's branch (Generation 2b) --
+
+    tree.add_person(Person(
+        id="jonathan-longfellow-1714",
+        given_name="Jonathan",
+        surname="Longfellow",
+        gender=Gender.MALE,
+        birth_date="1714",
+        birth_place="Deerfield (Nottingham), New Hampshire",
+        death_date="1774",
+        death_place="Machias, Maine",
+        notes=(
+            "Son of Nathan Longfellow (1690). Founder of Deerfield, NH. "
+            "Died 1774 in Machias, Maine. Source: Farnham (2002)."
+        ),
+    ))
+    tree.add_relationship(Relationship(parent_id="nathan-longfellow-1690", child_id="jonathan-longfellow-1714"))
 
     # ╔══════════════════════════════════════════════════════════════════╗
     # ║  SECOND GENERATION                                              ║
@@ -147,13 +257,15 @@ def build_longfellow_tree() -> FamilyTree:
         given_name="Abigail",
         surname="Thompson",
         gender=Gender.FEMALE,
+        birth_place="Newbury, Massachusetts",
         notes="Wife of Lieut. Stephen Longfellow. Death date unknown.",
     ))
     tree.add_union(Union(
         partner1_id="stephen-longfellow-1685",
         partner2_id="abigail-thompson",
-        union_date="1713-03-25",
-        notes="Married March 25, 1713.",
+        union_date="1714-03-25",
+        union_place="Newbury, Massachusetts",
+        notes="Married March 25, 1714.",
     ))
 
     # -- Children of Stephen & Abigail --
@@ -212,11 +324,286 @@ def build_longfellow_tree() -> FamilyTree:
         surname="Longfellow",
         gender=Gender.MALE,
         birth_date="1723-02-07",
+        birth_place="Byfield, Essex County, Massachusetts",
         death_date="1790-05-01",
-        notes="Son of Lieut. Stephen & Abigail Thompson.",
+        death_place="Gorham, Maine",
+        notes=(
+            "Stephen Longfellow, 'the Schoolmaster.' Son of Lieut. Stephen & Abigail "
+            "Thompson. Invited to teach in Falmouth (Portland), Maine (1744–1745). "
+            "Held roles as town clerk, judicial court clerk, register of probate for "
+            "Cumberland County. Find A Grave Memorial #101663338. Buried Eastern "
+            "Cemetery, Portland, Maine (Plot Sec. F, Gr 32)."
+        ),
     ))
     tree.add_relationship(Relationship(parent_id="stephen-longfellow-1685", child_id="stephen-longfellow-1723"))
     tree.add_relationship(Relationship(parent_id="abigail-thompson", child_id="stephen-longfellow-1723"))
+
+    # -- Stephen (1723) "the Schoolmaster" branch: the poet's line --
+
+    tree.add_person(Person(
+        id="tabitha-bragdon",
+        given_name="Tabitha",
+        surname="Bragdon",
+        gender=Gender.FEMALE,
+        death_date="1777-06-11",
+        death_place="Portland (Falmouth), Maine",
+        notes=(
+            "Wife of Stephen Longfellow (1723). Died 11 Jun 1777 in Portland. "
+            "Buried beside Stephen at Eastern Cemetery, Portland, Maine."
+        ),
+    ))
+    tree.add_union(Union(
+        partner1_id="stephen-longfellow-1723",
+        partner2_id="tabitha-bragdon",
+        union_date="1749-10-19",
+        union_place="Falmouth (Portland), Maine",
+        notes="Married October 19, 1749.",
+    ))
+
+    # -- Children of Stephen (1723) & Tabitha Bragdon --
+
+    tree.add_person(Person(
+        id="stephen-longfellow-1750",
+        given_name="Stephen",
+        surname="Longfellow",
+        gender=Gender.MALE,
+        birth_date="1750-08-13",
+        birth_place="Falmouth (Portland), Maine",
+        death_date="1824-05-28",
+        death_place="Gorham, Maine",
+        notes=(
+            "Stephen Longfellow, 'the Judge.' Son of Stephen & Tabitha Bragdon. "
+            "Judge of court of common pleas (1798–1811). State senator and "
+            "representative to Massachusetts general court."
+        ),
+    ))
+    tree.add_relationship(Relationship(parent_id="stephen-longfellow-1723", child_id="stephen-longfellow-1750"))
+    tree.add_relationship(Relationship(parent_id="tabitha-bragdon", child_id="stephen-longfellow-1750"))
+
+    tree.add_person(Person(
+        id="patience-young",
+        given_name="Patience",
+        surname="Young",
+        gender=Gender.FEMALE,
+        notes="Wife of Stephen Longfellow (1750), 'the Judge.'",
+    ))
+    tree.add_union(Union(
+        partner1_id="stephen-longfellow-1750",
+        partner2_id="patience-young",
+        union_date="1773-12-13",
+        notes="Married December 13, 1773.",
+    ))
+
+    # -- Children of Stephen (1750) & Patience Young --
+
+    tree.add_person(Person(
+        id="stephen-longfellow-1776",
+        given_name="Stephen",
+        surname="Longfellow",
+        gender=Gender.MALE,
+        birth_date="1776-03-23",
+        birth_place="Gorham, Maine",
+        death_date="1849-08-23",
+        death_place="Portland, Maine",
+        notes=(
+            "Son of Stephen & Patience Young. Lawyer, Bowdoin College trustee "
+            "(19 years), president of Maine Historical Society (1834). "
+            "Father of the poet Henry Wadsworth Longfellow."
+        ),
+    ))
+    tree.add_relationship(Relationship(parent_id="stephen-longfellow-1750", child_id="stephen-longfellow-1776"))
+    tree.add_relationship(Relationship(parent_id="patience-young", child_id="stephen-longfellow-1776"))
+
+    tree.add_person(Person(
+        id="zilpah-wadsworth",
+        given_name="Zilpah",
+        surname="Wadsworth",
+        gender=Gender.FEMALE,
+        birth_date="1778",
+        birth_place="Duxbury, Massachusetts",
+        death_date="1851",
+        death_place="Portland, Maine",
+        notes=(
+            "Wife of Stephen Longfellow (1776). Daughter of General Peleg Wadsworth, "
+            "Revolutionary War major-general. Mother of the poet."
+        ),
+    ))
+    tree.add_union(Union(
+        partner1_id="stephen-longfellow-1776",
+        partner2_id="zilpah-wadsworth",
+        union_date="1804-01-01",
+        notes="Married January 1, 1804.",
+    ))
+
+    # -- Children of Stephen (1776) & Zilpah Wadsworth --
+
+    tree.add_person(Person(
+        id="henry-wadsworth-longfellow-1807",
+        given_name="Henry Wadsworth",
+        surname="Longfellow",
+        gender=Gender.MALE,
+        birth_date="1807-02-27",
+        birth_place="Portland, Maine",
+        death_date="1882-03-24",
+        death_place="Cambridge, Massachusetts",
+        notes=(
+            "Most famous American poet of his era. Harvard professor of modern "
+            "languages (22 years). Works include Evangeline, The Song of Hiawatha, "
+            "The Courtship of Miles Standish. Born in the Wadsworth-Longfellow House "
+            "on Congress Street, Portland, ME."
+        ),
+    ))
+    tree.add_relationship(Relationship(parent_id="stephen-longfellow-1776", child_id="henry-wadsworth-longfellow-1807"))
+    tree.add_relationship(Relationship(parent_id="zilpah-wadsworth", child_id="henry-wadsworth-longfellow-1807"))
+
+    # -- Henry Wadsworth Longfellow's first marriage --
+
+    tree.add_person(Person(
+        id="mary-storer-potter",
+        given_name="Mary Storer",
+        surname="Potter",
+        gender=Gender.FEMALE,
+        death_date="1835",
+        death_place="Rotterdam, Netherlands",
+        notes=(
+            "First wife of Henry Wadsworth Longfellow. Married 1831. "
+            "Died 1835 in Rotterdam from complications of miscarriage."
+        ),
+    ))
+    tree.add_union(Union(
+        partner1_id="henry-wadsworth-longfellow-1807",
+        partner2_id="mary-storer-potter",
+        union_date="1831",
+        end_date="1835",
+        end_reason="death",
+        notes="Married 1831. She died 1835 in Rotterdam.",
+    ))
+
+    # -- Henry Wadsworth Longfellow's second marriage --
+
+    tree.add_person(Person(
+        id="fanny-appleton",
+        given_name="Fanny",
+        surname="Appleton",
+        gender=Gender.FEMALE,
+        birth_date="1817",
+        death_date="1861",
+        death_place="Cambridge, Massachusetts",
+        notes=(
+            "Second wife of Henry Wadsworth Longfellow. Married 1843. "
+            "Died 1861 from burns when her dress caught fire. "
+            "Daughter of industrialist Nathan Appleton."
+        ),
+    ))
+    tree.add_union(Union(
+        partner1_id="henry-wadsworth-longfellow-1807",
+        partner2_id="fanny-appleton",
+        union_date="1843",
+        end_date="1861",
+        end_reason="death",
+        notes="Married 1843. She died July 1861 from accidental burns.",
+    ))
+
+    # -- Children of Henry Wadsworth & Fanny Appleton --
+
+    tree.add_person(Person(
+        id="charles-longfellow-1844",
+        given_name="Charles",
+        surname="Longfellow",
+        gender=Gender.MALE,
+        birth_date="1844",
+        birth_place="Cambridge, Massachusetts",
+        death_date="1893",
+        notes="Eldest son of Henry Wadsworth & Fanny Appleton Longfellow.",
+    ))
+    tree.add_relationship(Relationship(parent_id="henry-wadsworth-longfellow-1807", child_id="charles-longfellow-1844"))
+    tree.add_relationship(Relationship(parent_id="fanny-appleton", child_id="charles-longfellow-1844"))
+
+    tree.add_person(Person(
+        id="ernest-longfellow-1845",
+        given_name="Ernest Wadsworth",
+        surname="Longfellow",
+        gender=Gender.MALE,
+        birth_date="1845",
+        birth_place="Cambridge, Massachusetts",
+        death_date="1921",
+        notes="Second son of Henry Wadsworth & Fanny Appleton Longfellow.",
+    ))
+    tree.add_relationship(Relationship(parent_id="henry-wadsworth-longfellow-1807", child_id="ernest-longfellow-1845"))
+    tree.add_relationship(Relationship(parent_id="fanny-appleton", child_id="ernest-longfellow-1845"))
+
+    tree.add_person(Person(
+        id="fanny-longfellow-1847",
+        given_name="Fanny",
+        surname="Longfellow",
+        gender=Gender.FEMALE,
+        birth_date="1847",
+        birth_place="Cambridge, Massachusetts",
+        death_date="1883",
+        notes="Daughter of Henry Wadsworth & Fanny Appleton Longfellow.",
+    ))
+    tree.add_relationship(Relationship(parent_id="henry-wadsworth-longfellow-1807", child_id="fanny-longfellow-1847"))
+    tree.add_relationship(Relationship(parent_id="fanny-appleton", child_id="fanny-longfellow-1847"))
+
+    tree.add_person(Person(
+        id="alice-longfellow-1850",
+        given_name="Alice",
+        surname="Longfellow",
+        gender=Gender.FEMALE,
+        birth_date="1850",
+        birth_place="Cambridge, Massachusetts",
+        death_date="1928",
+        notes=(
+            "Daughter of Henry Wadsworth & Fanny Appleton Longfellow. "
+            "Lived in the Longfellow House (Craigie House) until her death."
+        ),
+    ))
+    tree.add_relationship(Relationship(parent_id="henry-wadsworth-longfellow-1807", child_id="alice-longfellow-1850"))
+    tree.add_relationship(Relationship(parent_id="fanny-appleton", child_id="alice-longfellow-1850"))
+
+    tree.add_person(Person(
+        id="edith-longfellow-1853",
+        given_name="Edith",
+        surname="Longfellow",
+        gender=Gender.FEMALE,
+        birth_date="1853",
+        birth_place="Cambridge, Massachusetts",
+        notes="Daughter of Henry Wadsworth & Fanny Appleton Longfellow.",
+    ))
+    tree.add_relationship(Relationship(parent_id="henry-wadsworth-longfellow-1807", child_id="edith-longfellow-1853"))
+    tree.add_relationship(Relationship(parent_id="fanny-appleton", child_id="edith-longfellow-1853"))
+
+    tree.add_person(Person(
+        id="anne-longfellow-1855",
+        given_name="Anne Allegra",
+        surname="Longfellow",
+        gender=Gender.FEMALE,
+        birth_date="1855",
+        birth_place="Cambridge, Massachusetts",
+        death_date="1855",
+        notes="Daughter of Henry Wadsworth & Fanny Appleton Longfellow. Died as infant.",
+    ))
+    tree.add_relationship(Relationship(parent_id="henry-wadsworth-longfellow-1807", child_id="anne-longfellow-1855"))
+    tree.add_relationship(Relationship(parent_id="fanny-appleton", child_id="anne-longfellow-1855"))
+
+    # -- General Peleg Wadsworth (Zilpah's father, Revolutionary War hero) --
+
+    tree.add_person(Person(
+        id="peleg-wadsworth",
+        given_name="Peleg",
+        surname="Wadsworth",
+        gender=Gender.MALE,
+        birth_date="1748",
+        birth_place="Duxbury, Massachusetts",
+        death_date="1829",
+        death_place="Hiram, Maine",
+        notes=(
+            "General Peleg Wadsworth, Revolutionary War major-general. "
+            "Father of Zilpah Wadsworth Longfellow. Built the Wadsworth-Longfellow "
+            "House on Congress Street, Portland, ME — now a National Historic Site."
+        ),
+    ))
+    tree.add_relationship(Relationship(parent_id="peleg-wadsworth", child_id="zilpah-wadsworth"))
 
     tree.add_person(Person(
         id="samuel-longfellow-1725",
@@ -1056,7 +1443,562 @@ def build_longfellow_tree() -> FamilyTree:
     # ║  LIFE EVENTS                                                     ║
     # ╚══════════════════════════════════════════════════════════════════╝
 
-    # -- Mildred Rena Longfellow --
+    # ── William Longfellow (1650) ──────────────────────────────────────
+    tree.add_event(LifeEvent(
+        person_id="william-longfellow-1650",
+        event_type=EventType.BIRTH,
+        date="1650-10-20",
+        place="Horsforth, Yorkshire, England",
+        description="Born 20 Oct 1650/51 in Horsforth, Yorkshire, England",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="william-longfellow-1650",
+        event_type=EventType.IMMIGRATION,
+        date="1676",
+        place="Newbury, Massachusetts",
+        description="Immigrated from Horsforth, Yorkshire to Newbury, MA c. 1676",
+        source=SOURCE_FARNHAM,
+        date_circa=True,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="william-longfellow-1650",
+        event_type=EventType.MARRIAGE,
+        date="1678-11-10",
+        place="Newbury, Massachusetts",
+        description="Married Anne Sewall, sister of Chief Justice Samuel Sewall",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="william-longfellow-1650",
+        event_type=EventType.MILITARY,
+        date="1690",
+        place="Anticosti Island, Quebec, Canada",
+        description="Served as ensign in the Phips expedition to Quebec, 1690. Died in service.",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="william-longfellow-1650",
+        event_type=EventType.DEATH,
+        date="1690-10-31",
+        place="Anticosti Island, Quebec, Canada",
+        description="Died 31 Oct 1690 at Anticosti Island during the Phips expedition",
+        source=SOURCE_FINDAGRAVE,
+    ))
+
+    # ── Stephen Longfellow (1685) "the Blacksmith" ────────────────────
+    tree.add_event(LifeEvent(
+        person_id="stephen-longfellow-1685",
+        event_type=EventType.BIRTH,
+        date="1685-09-22",
+        place="Newbury, Massachusetts",
+        description="Born 22 Sep 1685 in Newbury, Massachusetts",
+        source=SOURCE_DOC,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="stephen-longfellow-1685",
+        event_type=EventType.CAREER,
+        place="Byfield (Newbury Falls), Essex County, Massachusetts",
+        description="Locksmith and farmer in Byfield (Newbury Falls), Essex County, MA",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="stephen-longfellow-1685",
+        event_type=EventType.MARRIAGE,
+        date="1714-03-25",
+        place="Newbury, Massachusetts",
+        description="Married Abigail Thompson",
+        source=SOURCE_DOC,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="stephen-longfellow-1685",
+        event_type=EventType.DEATH,
+        date="1764-11-17",
+        place="Byfield (Newbury Falls), Essex County, Massachusetts",
+        description="Died 17 Nov 1764 in Byfield. Buried Elm Street, Byfield.",
+        source=SOURCE_FINDAGRAVE,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="stephen-longfellow-1685",
+        event_type=EventType.RELIGION,
+        place="Byfield Parish Church, Newbury, Massachusetts",
+        description="Member of Byfield Parish Church (established 1702; renamed 1704 for Judge Nathanial Byfield)",
+        source=SOURCE_FARNHAM,
+    ))
+
+    # ── Stephen Longfellow (1723) "the Schoolmaster" ──────────────────
+    tree.add_event(LifeEvent(
+        person_id="stephen-longfellow-1723",
+        event_type=EventType.BIRTH,
+        date="1723-02-07",
+        place="Byfield, Essex County, Massachusetts",
+        description="Born 7 Feb 1723 in Byfield, Essex County, MA",
+        source=SOURCE_DOC,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="stephen-longfellow-1723",
+        event_type=EventType.EDUCATION,
+        date="1744",
+        place="Falmouth (Portland), Maine",
+        description="Invited to teach in Falmouth (Portland), Maine (1744–1745 letter documented)",
+        source=SOURCE_ME_HISTORICAL,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="stephen-longfellow-1723",
+        event_type=EventType.CAREER,
+        place="Falmouth (Portland), Maine",
+        description="Town clerk, judicial court clerk, register of probate for Cumberland County",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="stephen-longfellow-1723",
+        event_type=EventType.MARRIAGE,
+        date="1749-10-19",
+        place="Falmouth (Portland), Maine",
+        description="Married Tabitha Bragdon",
+        source=SOURCE_DOC,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="stephen-longfellow-1723",
+        event_type=EventType.RESIDENCE,
+        place="Gorham, Maine",
+        description="Resided in Gorham, Maine in later life",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="stephen-longfellow-1723",
+        event_type=EventType.DEATH,
+        date="1790-05-01",
+        place="Gorham, Maine",
+        description="Died 1 May 1790 in Gorham, Maine. Buried Eastern Cemetery, Portland, ME (Plot Sec. F, Gr 32).",
+        source=SOURCE_FINDAGRAVE,
+    ))
+
+    # ── Tabitha Bragdon ────────────────────────────────────────────────
+    tree.add_event(LifeEvent(
+        person_id="tabitha-bragdon",
+        event_type=EventType.DEATH,
+        date="1777-06-11",
+        place="Portland (Falmouth), Maine",
+        description="Died 11 Jun 1777 in Portland. Buried beside Stephen at Eastern Cemetery, Portland, ME.",
+        source=SOURCE_FARNHAM,
+    ))
+
+    # ── Stephen Longfellow (1750) "the Judge" ─────────────────────────
+    tree.add_event(LifeEvent(
+        person_id="stephen-longfellow-1750",
+        event_type=EventType.BIRTH,
+        date="1750-08-13",
+        place="Falmouth (Portland), Maine",
+        description="Born 13 Aug 1750 in Falmouth (Portland), Maine",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="stephen-longfellow-1750",
+        event_type=EventType.MARRIAGE,
+        date="1773-12-13",
+        description="Married Patience Young",
+        source=SOURCE_DOC,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="stephen-longfellow-1750",
+        event_type=EventType.CAREER,
+        date="1798",
+        end_date="1811",
+        place="Gorham, Maine",
+        description="Judge of court of common pleas (1798–1811)",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="stephen-longfellow-1750",
+        event_type=EventType.CAREER,
+        place="Massachusetts",
+        description="State senator and representative to Massachusetts general court",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="stephen-longfellow-1750",
+        event_type=EventType.DEATH,
+        date="1824-05-28",
+        place="Gorham, Maine",
+        description="Died 28 May 1824 in Gorham, Maine",
+        source=SOURCE_FARNHAM,
+    ))
+
+    # ── Stephen Longfellow (1776) ─────────────────────────────────────
+    tree.add_event(LifeEvent(
+        person_id="stephen-longfellow-1776",
+        event_type=EventType.BIRTH,
+        date="1776-03-23",
+        place="Gorham, Maine",
+        description="Born 23 Mar 1776 in Gorham, Maine",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="stephen-longfellow-1776",
+        event_type=EventType.EDUCATION,
+        place="Brunswick, Maine",
+        description="Graduated from Bowdoin College",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="stephen-longfellow-1776",
+        event_type=EventType.CAREER,
+        place="Portland, Maine",
+        description="Lawyer in Portland, Maine",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="stephen-longfellow-1776",
+        event_type=EventType.MARRIAGE,
+        date="1804-01-01",
+        place="Portland, Maine",
+        description="Married Zilpah Wadsworth, daughter of General Peleg Wadsworth",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="stephen-longfellow-1776",
+        event_type=EventType.CAREER,
+        date="1815",
+        end_date="1834",
+        place="Brunswick, Maine",
+        description="Bowdoin College trustee (19 years)",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="stephen-longfellow-1776",
+        event_type=EventType.CAREER,
+        date="1834",
+        place="Portland, Maine",
+        description="President of Maine Historical Society (1834)",
+        source=SOURCE_ME_HISTORICAL,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="stephen-longfellow-1776",
+        event_type=EventType.DEATH,
+        date="1849-08-23",
+        place="Portland, Maine",
+        description="Died 23 Aug 1849 in Portland, Maine",
+        source=SOURCE_FARNHAM,
+    ))
+
+    # ── Zilpah Wadsworth ──────────────────────────────────────────────
+    tree.add_event(LifeEvent(
+        person_id="zilpah-wadsworth",
+        event_type=EventType.BIRTH,
+        date="1778",
+        place="Duxbury, Massachusetts",
+        description="Born 1778 in Duxbury, Massachusetts. Daughter of General Peleg Wadsworth.",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="zilpah-wadsworth",
+        event_type=EventType.RESIDENCE,
+        place="Portland, Maine",
+        description="Resided in the Wadsworth-Longfellow House on Congress Street, Portland, ME",
+        source=SOURCE_ME_HISTORICAL,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="zilpah-wadsworth",
+        event_type=EventType.DEATH,
+        date="1851",
+        place="Portland, Maine",
+        description="Died 1851 in Portland, Maine",
+        source=SOURCE_FARNHAM,
+    ))
+
+    # ── General Peleg Wadsworth ───────────────────────────────────────
+    tree.add_event(LifeEvent(
+        person_id="peleg-wadsworth",
+        event_type=EventType.BIRTH,
+        date="1748",
+        place="Duxbury, Massachusetts",
+        description="Born 1748 in Duxbury, Massachusetts",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="peleg-wadsworth",
+        event_type=EventType.MILITARY,
+        date="1775",
+        end_date="1783",
+        place="Massachusetts and Maine",
+        description="Revolutionary War major-general. Commanded forces in Massachusetts and Maine.",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="peleg-wadsworth",
+        event_type=EventType.RESIDENCE,
+        place="Portland, Maine",
+        description="Built the Wadsworth-Longfellow House on Congress Street, Portland, ME — now a National Historic Site",
+        source=SOURCE_ME_HISTORICAL,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="peleg-wadsworth",
+        event_type=EventType.DEATH,
+        date="1829",
+        place="Hiram, Maine",
+        description="Died 1829 in Hiram, Maine",
+        source=SOURCE_FARNHAM,
+    ))
+
+    # ── Henry Wadsworth Longfellow (1807) ─────────────────────────────
+    tree.add_event(LifeEvent(
+        person_id="henry-wadsworth-longfellow-1807",
+        event_type=EventType.BIRTH,
+        date="1807-02-27",
+        place="Portland, Maine",
+        description="Born 27 Feb 1807 in the Wadsworth-Longfellow House, Portland, ME",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="henry-wadsworth-longfellow-1807",
+        event_type=EventType.EDUCATION,
+        date="1825",
+        place="Brunswick, Maine",
+        description="Graduated from Bowdoin College, 1825",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="henry-wadsworth-longfellow-1807",
+        event_type=EventType.EDUCATION,
+        date="1826",
+        end_date="1829",
+        place="Europe",
+        description="Traveled to Europe to study languages (1826–1829)",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="henry-wadsworth-longfellow-1807",
+        event_type=EventType.CAREER,
+        date="1829",
+        end_date="1835",
+        place="Brunswick, Maine",
+        description="Professor of modern languages at Bowdoin College (1829–1835)",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="henry-wadsworth-longfellow-1807",
+        event_type=EventType.MARRIAGE,
+        date="1831",
+        place="Portland, Maine",
+        description="First marriage to Mary Storer Potter",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="henry-wadsworth-longfellow-1807",
+        event_type=EventType.EDUCATION,
+        date="1835",
+        end_date="1836",
+        place="Europe",
+        description="Traveled to Europe for study and bereavement after Mary's death (1835–1836)",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="henry-wadsworth-longfellow-1807",
+        event_type=EventType.CAREER,
+        date="1836",
+        end_date="1854",
+        place="Cambridge, Massachusetts",
+        description="Harvard professor of modern languages (22 years), Smith Professor of French and Spanish",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="henry-wadsworth-longfellow-1807",
+        event_type=EventType.RESIDENCE,
+        date="1837",
+        place="Cambridge, Massachusetts",
+        description="Took lodgings at Craigie House (now Longfellow House–Washington's Headquarters NHS), 105 Brattle Street, Cambridge, MA",
+        source=SOURCE_ME_HISTORICAL,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="henry-wadsworth-longfellow-1807",
+        event_type=EventType.MARRIAGE,
+        date="1843",
+        place="Boston, Massachusetts",
+        description="Second marriage to Fanny Appleton, daughter of industrialist Nathan Appleton",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="henry-wadsworth-longfellow-1807",
+        event_type=EventType.CAREER,
+        date="1847",
+        place="Cambridge, Massachusetts",
+        description="Published Evangeline: A Tale of Acadie",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="henry-wadsworth-longfellow-1807",
+        event_type=EventType.CAREER,
+        date="1855",
+        place="Cambridge, Massachusetts",
+        description="Published The Song of Hiawatha",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="henry-wadsworth-longfellow-1807",
+        event_type=EventType.CAREER,
+        date="1858",
+        place="Cambridge, Massachusetts",
+        description="Published The Courtship of Miles Standish",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="henry-wadsworth-longfellow-1807",
+        event_type=EventType.DEATH,
+        date="1882-03-24",
+        place="Cambridge, Massachusetts",
+        description="Died 24 Mar 1882 in Cambridge, MA. Buried at Mount Auburn Cemetery, Cambridge.",
+        source=SOURCE_FARNHAM,
+    ))
+
+    # ── Mary Storer Potter ────────────────────────────────────────────
+    tree.add_event(LifeEvent(
+        person_id="mary-storer-potter",
+        event_type=EventType.DEATH,
+        date="1835",
+        place="Rotterdam, Netherlands",
+        description="Died 1835 in Rotterdam from complications of miscarriage while traveling in Europe",
+        source=SOURCE_FARNHAM,
+    ))
+
+    # ── Fanny Appleton ────────────────────────────────────────────────
+    tree.add_event(LifeEvent(
+        person_id="fanny-appleton",
+        event_type=EventType.BIRTH,
+        date="1817",
+        place="Boston, Massachusetts",
+        description="Born 1817 in Boston. Daughter of industrialist Nathan Appleton.",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="fanny-appleton",
+        event_type=EventType.DEATH,
+        date="1861-07",
+        place="Cambridge, Massachusetts",
+        description="Died July 1861 from burns when her dress caught fire at the Longfellow House, Cambridge",
+        source=SOURCE_FARNHAM,
+    ))
+
+    # ── Nathan Longfellow (1690) ─────────────────────────────────────
+    tree.add_event(LifeEvent(
+        person_id="nathan-longfellow-1690",
+        event_type=EventType.BIRTH,
+        date="1690-02-05",
+        place="Newbury, Massachusetts",
+        description="Born 5 Feb 1690 in Newbury, Massachusetts",
+        source=SOURCE_DOC,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="nathan-longfellow-1690",
+        event_type=EventType.RESIDENCE,
+        place="Hampton Falls, New Hampshire",
+        description="Resided in Hampton Falls, New Hampshire",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="nathan-longfellow-1690",
+        event_type=EventType.DEATH,
+        date="1731",
+        place="Hampton Falls, New Hampshire",
+        description="Died 1731 in Hampton Falls, NH",
+        source=SOURCE_FARNHAM,
+    ))
+
+    # ── Jonathan Longfellow (1714) ───────────────────────────────────
+    tree.add_event(LifeEvent(
+        person_id="jonathan-longfellow-1714",
+        event_type=EventType.BIRTH,
+        date="1714",
+        place="Deerfield (Nottingham), New Hampshire",
+        description="Born 1714 in Deerfield (Nottingham), NH",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="jonathan-longfellow-1714",
+        event_type=EventType.RESIDENCE,
+        place="Deerfield, New Hampshire",
+        description="Founder of Deerfield, NH",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="jonathan-longfellow-1714",
+        event_type=EventType.RESIDENCE,
+        place="Machias, Maine",
+        description="Later resided in Machias, Maine",
+        source=SOURCE_FARNHAM,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="jonathan-longfellow-1714",
+        event_type=EventType.DEATH,
+        date="1774",
+        place="Machias, Maine",
+        description="Died 1774 in Machias, Maine",
+        source=SOURCE_FARNHAM,
+    ))
+
+    # ── William Longfellow (1714) ────────────────────────────────────
+    tree.add_event(LifeEvent(
+        person_id="william-longfellow-1714",
+        event_type=EventType.BIRTH,
+        date="1714-09-10",
+        place="Byfield, Essex County, Massachusetts",
+        description="Born 10 Sep 1714 in Byfield, Essex County, MA. Baptized at Byfield Parish Church.",
+        source=SOURCE_DOC,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="william-longfellow-1714",
+        event_type=EventType.MARRIAGE,
+        date="1740-01-24",
+        description="Married Hepsibah Plumer, January 24, 1739/40",
+        source=SOURCE_DOC,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="william-longfellow-1714",
+        event_type=EventType.DEATH,
+        date="1787-08",
+        description="Died Aug 1787",
+        source=SOURCE_DOC,
+    ))
+
+    # ── Stephen Longfellow (1746) ────────────────────────────────────
+    tree.add_event(LifeEvent(
+        person_id="stephen-longfellow-1746",
+        event_type=EventType.BIRTH,
+        date="1746-11-18",
+        description="Born 18 Nov 1746",
+        source=SOURCE_DOC,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="stephen-longfellow-1746",
+        event_type=EventType.MARRIAGE,
+        description="Married Mary Pritchard",
+        source=SOURCE_DOC,
+    ))
+
+    # ── John Longfellow (1781) ───────────────────────────────────────
+    tree.add_event(LifeEvent(
+        person_id="john-longfellow-1781",
+        event_type=EventType.BIRTH,
+        date="1781-08-02",
+        description="Born 2 Aug 1781",
+        source=SOURCE_DOC,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="john-longfellow-1781",
+        event_type=EventType.MARRIAGE,
+        date="1803-09-04",
+        description="Married Lydia Brown, September 4, 1803",
+        source=SOURCE_DOC,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="john-longfellow-1781",
+        event_type=EventType.DEATH,
+        date="1828-01-16",
+        description="Died 16 Jan 1828",
+        source=SOURCE_DOC,
+    ))
+
+    # ── Mildred Rena Longfellow ──────────────────────────────────────
     tree.add_event(LifeEvent(
         person_id="mildred-rena-longfellow-1885",
         event_type=EventType.RESIDENCE,
@@ -1064,8 +2006,22 @@ def build_longfellow_tree() -> FamilyTree:
         description="Resided in Minneapolis, Hennepin County, Minnesota",
         source=SOURCE_DOC,
     ))
+    tree.add_event(LifeEvent(
+        person_id="mildred-rena-longfellow-1885",
+        event_type=EventType.MARRIAGE,
+        date="1905-11-20",
+        description="First marriage to Dr. Lindley Ambrose Parkinson Sr.",
+        source=SOURCE_DOC,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="mildred-rena-longfellow-1885",
+        event_type=EventType.MARRIAGE,
+        date="1934-01-09",
+        description="Second marriage to Arthur R. Smith",
+        source=SOURCE_DOC,
+    ))
 
-    # -- Mildred E. Parkinson --
+    # ── Mildred E. Parkinson ──────────────────────────────────────────
     tree.add_event(LifeEvent(
         person_id="mildred-e-parkinson-1906",
         event_type=EventType.RESIDENCE,
@@ -1083,7 +2039,7 @@ def build_longfellow_tree() -> FamilyTree:
         source=SOURCE_DOC,
     ))
 
-    # -- Sterling Thomas Walters Sr --
+    # ── Sterling Thomas Walters Sr ───────────────────────────────────
     tree.add_event(LifeEvent(
         person_id="sterling-walters-sr",
         event_type=EventType.RESIDENCE,
@@ -1093,12 +2049,29 @@ def build_longfellow_tree() -> FamilyTree:
         source=SOURCE_DOC,
     ))
 
-    # -- Helen May Hornsby --
+    # ── Helen May Hornsby ─────────────────────────────────────────────
     tree.add_event(LifeEvent(
         person_id="helen-may-hornsby",
         event_type=EventType.RESIDENCE,
         place="Anoka, Anoka County, Minnesota",
         description="Resided in Anoka, Anoka County, Minnesota",
+        source=SOURCE_DOC,
+    ))
+
+    # ── Dr. Lindley Ambrose Parkinson Sr ─────────────────────────────
+    tree.add_event(LifeEvent(
+        person_id="lindley-parkinson-sr",
+        event_type=EventType.CAREER,
+        place="Minnesota",
+        description="Physician (Dr.) in Minnesota",
+        source=SOURCE_DOC,
+    ))
+    tree.add_event(LifeEvent(
+        person_id="lindley-parkinson-sr",
+        event_type=EventType.DEATH,
+        date="1927-07-21",
+        place="Wright, Carlton County, Minnesota",
+        description="Died 21 Jul 1927 in Wright, Carlton County, MN. Buried Riverside Cemetery, Riverside, St. Louis County, MN.",
         source=SOURCE_DOC,
     ))
 

@@ -3,6 +3,7 @@ name = "family-tree"
 version = "0.2.0"
 requires-python = ">=3.11"
 description = "Map your family tree — database-backed, shareable, with relationship calculation and timelines."
+license = "MIT"
 
 [project.scripts]
 family-tree = "cli:main"

@@ -37,8 +37,15 @@ web/photos/
 *.pdf
 *.zip
 
+# Personal genealogy research notes (contains real family PII)
+docs/
+
 # Environment
 .env
 
 # macOS
 .DS_Store
+
+
+# Stray attachments
+_attachments/
