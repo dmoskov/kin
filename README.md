@@ -1,10 +1,3 @@
-# ⚠️ This repository has moved
-
-This project is now maintained at **[dmoskov/kin](https://github.com/dmoskov/kin)**.
-Please update your bookmarks, forks, and clone URLs.
-
----
-
 # Family Tree
 
 An interactive genealogy app — model your family history, visualize relationships, and explore a timeline of life events.
@@ -30,8 +23,8 @@ An interactive genealogy app — model your family history, visualize relationsh
 ### Option A: Docker (recommended)
 
 ```bash
-git clone https://github.com/dmoskov/family-tree.git
-cd family-tree
+git clone https://github.com/dmoskov/kin.git
+cd kin
 docker compose up
 # Open http://localhost:8000
 ```
@@ -41,8 +34,8 @@ That's it — the app starts with an empty tree and walks you through adding you
 ### Option B: Local Python
 
 ```bash
-git clone https://github.com/dmoskov/family-tree.git
-cd family-tree
+git clone https://github.com/dmoskov/kin.git
+cd kin
 git config core.hooksPath .githooks   # enable pre-commit PII guard
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
