@@ -479,14 +479,16 @@ def api_create_union():
     )
     repo.save_union(union)
     repo.auto_link_siblings()
-    return jsonify({
-        "partner1_id": p1,
-        "partner2_id": p2,
-        "union_date": union_date,
-        "union_place": union_place,
-        "end_date": end_date,
-        "end_reason": end_reason,
-    }), 201
+    return jsonify(
+        {
+            "partner1_id": p1,
+            "partner2_id": p2,
+            "union_date": union_date,
+            "union_place": union_place,
+            "end_date": end_date,
+            "end_reason": end_reason,
+        }
+    ), 201
 
 
 @people_bp.route("/api/unions", methods=["PATCH"])
