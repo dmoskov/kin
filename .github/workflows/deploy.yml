@@ -1,9 +1,8 @@
 name: Deploy
 
-# Deploy to the production server after CI passes on main. Builds the JS
-# bundle, rsyncs web/ + src/, installs deps, and restarts the service.
-# Server identifiers live in repo secrets (DEPLOY_HOST, DEPLOY_SSH_KEY) so they
-# stay out of the public source tree. Can also be run manually.
+# Deploy to production after CI passes on main (covers direct pushes to main by
+# a human/PAT). Auto-merged task branches are deployed by auto-merge.yml itself,
+# because a GITHUB_TOKEN merge does not re-trigger CI. Also runnable manually.
 
 on:
   workflow_run:
@@ -14,69 +13,11 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: deploy-production
-  cancel-in-progress: false
-
 jobs:
   deploy:
-    # Auto path: only after CI succeeds on main. Manual path: workflow_dispatch.
     if: >
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.head_branch == 'main')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Build JS bundle
-        run: bash scripts/build_js.sh
-
-      - name: Deploy over SSH
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-        run: |
-          set -euo pipefail
-          test -n "$DEPLOY_HOST" || { echo "DEPLOY_HOST secret not set"; exit 1; }
-          mkdir -p ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          SSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=20"
-          REMOTE="ec2-user@${DEPLOY_HOST}"
-          DIR="/home/ec2-user/family-tree"
-
-          echo "Syncing web/ and src/..."
-          rsync -az --delete -e "$SSH" web/ "${REMOTE}:${DIR}/web/"
-          rsync -az --delete --exclude=__pycache__ --exclude='*.egg-info' \
-            -e "$SSH" src/ "${REMOTE}:${DIR}/src/"
-          rsync -az -e "$SSH" requirements.txt "${REMOTE}:${DIR}/requirements.txt"
-
-          echo "Installing deps + restarting service..."
-          $SSH "$REMOTE" \
-            "cd ${DIR} && ./venv/bin/pip install -q -r requirements.txt && sudo systemctl restart familytree"
-
-      - name: Verify service is healthy
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-        run: |
-          set -euo pipefail
-          SSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=20"
-          REMOTE="ec2-user@${DEPLOY_HOST}"
-          for i in $(seq 1 10); do
-            active=$($SSH "$REMOTE" "sudo -n systemctl is-active familytree" 2>/dev/null || true)
-            if [ "$active" = "active" ]; then
-              # local health check on the gunicorn port
-              code=$($SSH "$REMOTE" "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/api/data" 2>/dev/null || true)
-              echo "service active; /api/data -> $code"
-              [ "$code" = "200" ] && exit 0
-            fi
-            sleep 3
-          done
-          echo "Service did not become healthy in time"; exit 1
+    uses: ./.github/workflows/deploy-reusable.yml
+    secrets: inherit

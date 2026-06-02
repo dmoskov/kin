@@ -1,9 +1,9 @@
 name: Auto-merge task branches
 
-# When CI passes on a task/** branch, merge it into main automatically.
-# Uses a direct merge commit (matching this repo's existing merge style) — no
-# PR required. A conflicting branch is left untouched for a human to resolve.
-# Merging to main then triggers CI on main, which triggers Deploy on success.
+# When CI passes on a task/** branch, merge it into main automatically and
+# deploy. Uses a direct merge commit (matching this repo's merge style) — no PR
+# required; conflicting branches are left for a human. Deploy is called in this
+# same run because a GITHUB_TOKEN merge would not re-trigger CI/Deploy on main.
 
 on:
   workflow_run:
@@ -19,22 +19,33 @@ jobs:
       github.event.workflow_run.conclusion == 'success' &&
       startsWith(github.event.workflow_run.head_branch, 'task/')
     runs-on: ubuntu-latest
+    outputs:
+      merged: ${{ steps.merge.outputs.merged }}
     steps:
-      - name: Merge passing task branch into main
+      - id: merge
+        name: Merge passing task branch into main
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           BRANCH: ${{ github.event.workflow_run.head_branch }}
         run: |
           echo "CI passed on '$BRANCH' — attempting merge into main"
-          # merges API: 201 created / 204 nothing to merge -> success (exit 0);
+          # merges API: 201 created / 204 nothing to merge -> success;
           # 409 conflict -> gh api exits non-zero, leave for a human.
           if gh api -X POST "repos/$REPO/merges" \
                -f base=main -f head="$BRANCH" \
                -f commit_message="Merge $BRANCH (CI passed)"; then
+            echo "merged=true" >> "$GITHUB_OUTPUT"
             echo "Merged '$BRANCH' into main."
             gh api -X DELETE "repos/$REPO/git/refs/heads/$BRANCH" \
               && echo "Deleted merged branch '$BRANCH'." || echo "(branch delete skipped)"
           else
+            echo "merged=false" >> "$GITHUB_OUTPUT"
             echo "::warning title=Manual merge needed::'$BRANCH' could not be auto-merged (likely a conflict with main)."
           fi
+
+  deploy:
+    needs: merge
+    if: needs.merge.outputs.merged == 'true'
+    uses: ./.github/workflows/deploy-reusable.yml
+    secrets: inherit
