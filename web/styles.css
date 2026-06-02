@@ -873,7 +873,7 @@ main {
 /* ── Stream column in grid ─────────────────────────────────── */
 
 .timeline-grid.has-stream .timeline-row {
-  grid-template-columns: repeat(calc(var(--lane-count) - 1), 1fr) minmax(300px, 1.4fr);
+  grid-template-columns: var(--stream-grid);
 }
 
 /* Alternating decade row tinting */
@@ -882,18 +882,20 @@ main {
 }
 
 .tstream-cell {
-  border-left: 3px solid var(--accent);
+  border-right: 3px solid var(--accent);
+  border-left: none;
   background: color-mix(in srgb, var(--accent) 3%, transparent);
   position: relative;
   padding-top: 8px;
   animation: streamFadeIn 0.3s ease-out;
 }
 @keyframes streamFadeIn {
-  from { opacity: 0; transform: translateX(12px); }
+  from { opacity: 0; transform: translateX(-12px); }
   to   { opacity: 1; transform: translateX(0); }
 }
 .tstream-col-header {
-  border-left: 3px solid var(--accent);
+  border-right: 3px solid var(--accent);
+  border-left: none;
   background: color-mix(in srgb, var(--accent) 3%, var(--bg));
 }
 
@@ -997,6 +999,7 @@ main {
   display: flex;
   flex-direction: column;
   min-height: 200px;
+  overflow-x: auto;
 }
 
 .timeline-row {

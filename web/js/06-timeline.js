@@ -171,10 +171,29 @@ export function renderTimeline(filterPersonId = "all") {
   const colCount = activeLanes.length + (S.SHOW_TIMELINE_STREAM ? 1 : 0);
 
   // Decade-row-first layout: each decade is a row spanning all lanes so heights stay aligned
-  let html = `<div class="timeline-grid${S.SHOW_TIMELINE_STREAM ? " has-stream" : ""}" style="--lane-count:${colCount}">`;
+  // When stream is active: stream gets 1/3 width, lanes share remaining 2/3
+  const swimLaneCount = activeLanes.length;
+  let streamGridCols = "";
+  if (S.SHOW_TIMELINE_STREAM) {
+    if (swimLaneCount > 0) {
+      const streamFr = swimLaneCount / 2;
+      const laneCols = Array(swimLaneCount).fill("minmax(180px, 1fr)").join(" ");
+      streamGridCols = `${streamFr}fr ${laneCols}`;
+    } else {
+      streamGridCols = "1fr";
+    }
+  }
+  let html = `<div class="timeline-grid${S.SHOW_TIMELINE_STREAM ? " has-stream" : ""}" style="--lane-count:${colCount}${streamGridCols ? `;--stream-grid:${streamGridCols}` : ""}">`;
 
   // Sticky header row
   html += `<div class="timeline-row timeline-header-row">`;
+  if (S.SHOW_TIMELINE_STREAM) {
+    html += `<div class="timeline-cell-header tstream-col-header" style="border-bottom-color:var(--accent)">
+      <span class="lane-color-dot" style="background:var(--accent)"></span>
+      Stream
+      <span class="lane-count">${entries.length}</span>
+    </div>`;
+  }
   for (const lane of activeLanes) {
     html += `
       <div class="timeline-cell-header" style="border-bottom-color:${lane.color}">
@@ -183,18 +202,18 @@ export function renderTimeline(filterPersonId = "all") {
         <span class="lane-count">${byLane[lane.id].length}</span>
       </div>`;
   }
-  if (S.SHOW_TIMELINE_STREAM) {
-    html += `<div class="timeline-cell-header tstream-col-header" style="border-bottom-color:var(--accent)">
-      <span class="lane-color-dot" style="background:var(--accent)"></span>
-      Stream
-      <span class="lane-count">${entries.length}</span>
-    </div>`;
-  }
   html += `</div>`;
 
   // One row per decade
   for (const decade of decades) {
     html += `<div class="timeline-row">`;
+    // Stream column first (left side)
+    if (S.SHOW_TIMELINE_STREAM) {
+      const streamEntries = byDecade[decade] || [];
+      html += `<div class="timeline-cell tstream-cell${streamEntries.length === 0 ? " timeline-cell-empty" : ""}">`;
+      html += buildStreamCellHtml(streamEntries);
+      html += `</div>`;
+    }
     for (const lane of activeLanes) {
       const decadeEntries = byLaneDecade[lane.id][decade] || [];
       const isEmpty = decadeEntries.length === 0;
@@ -213,13 +232,6 @@ export function renderTimeline(filterPersonId = "all") {
             </div>
           </div>`;
       }
-      html += `</div>`;
-    }
-    // Stream column for this decade (no decade label — the lane columns already show it)
-    if (S.SHOW_TIMELINE_STREAM) {
-      const streamEntries = byDecade[decade] || [];
-      html += `<div class="timeline-cell tstream-cell${streamEntries.length === 0 ? " timeline-cell-empty" : ""}">`;
-      html += buildStreamCellHtml(streamEntries);
       html += `</div>`;
     }
     html += `</div>`;
