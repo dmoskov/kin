@@ -190,11 +190,16 @@ export function showPersonPanel(personId) {
     for (const pid of siblings) {
       html += `<li><a class="person-link" data-person-id="${pid}" href="javascript:void(0)">${personThumb(pid, 28)} ${personName(pid)}</a> <span class="panel-rel-pill panel-rel-sibling">sibling</span></li>`;
     }
+    const _canEditUnion = !S.CONFIG?.editorsEnabled || S.AUTH_USER?.is_editor;
+    const _unionEditBtn = (pid) =>
+      _canEditUnion
+        ? ` <button class="panel-event-edit-btn" onclick="openEditUnionForm('${personId}', '${pid}')" title="Edit marriage">✎</button>`
+        : "";
     for (const pid of partners) {
-      html += `<li><a class="person-link" data-person-id="${pid}" href="javascript:void(0)">${personThumb(pid, 28)} ${personName(pid)}</a> <span class="panel-rel-pill panel-rel-partner">partner</span></li>`;
+      html += `<li><a class="person-link" data-person-id="${pid}" href="javascript:void(0)">${personThumb(pid, 28)} ${personName(pid)}</a> <span class="panel-rel-pill panel-rel-partner">partner</span>${_unionEditBtn(pid)}</li>`;
     }
     for (const pid of exPartners) {
-      html += `<li><a class="person-link" data-person-id="${pid}" href="javascript:void(0)">${personThumb(pid, 28)} ${personName(pid)}</a> <span class="panel-rel-pill panel-rel-ex">ex</span></li>`;
+      html += `<li><a class="person-link" data-person-id="${pid}" href="javascript:void(0)">${personThumb(pid, 28)} ${personName(pid)}</a> <span class="panel-rel-pill panel-rel-ex">ex</span>${_unionEditBtn(pid)}</li>`;
     }
     for (const cid of children) {
       html += `<li><a class="person-link" data-person-id="${cid}" href="javascript:void(0)">${personThumb(cid, 28)} ${personName(cid)}</a> <span class="panel-rel-pill panel-rel-child">child</span></li>`;
@@ -1251,6 +1256,103 @@ export async function deleteEvent(eventId, personId) {
     return;
   }
 
+  await loadData();
+  autoComputeLanes(S.CENTER_ID_A, S.CENTER_ID_B);
+  refreshAllViews();
+  showPersonPanel(personId);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Edit Marriage / Union
+// ═══════════════════════════════════════════════════════════════
+
+export function openEditUnionForm(personId, partnerId) {
+  const union = (S.DATA.unions || []).find(
+    (u) =>
+      (u.partner1_id === personId && u.partner2_id === partnerId) ||
+      (u.partner1_id === partnerId && u.partner2_id === personId)
+  );
+  if (!union) return;
+
+  const panel = document.getElementById("panel-content");
+  if (!panel) return;
+
+  let container = document.getElementById("edit-union-overlay");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "edit-union-overlay";
+    container.className = "edit-event-overlay";
+    panel.appendChild(container);
+  }
+
+  const esc = escapeHtml;
+  const partnerName = personName(partnerId);
+  container.innerHTML = `
+    <div class="add-relative-form-inner">
+      <h3 style="margin:0 0 10px">Marriage with ${esc(partnerName)}</h3>
+      <div class="add-relative-row">
+        <input id="euf-date" type="text" placeholder="Married (e.g. 1958 or 1958-06)" class="add-relative-input" value="${esc(union.union_date || "")}" />
+        <input id="euf-place" type="text" placeholder="Place (optional)" class="add-relative-input" value="${esc(union.union_place || "")}" />
+      </div>
+      <div class="add-relative-row">
+        <input id="euf-end-date" type="text" placeholder="Ended (e.g. 1972) — leave blank if still together" class="add-relative-input" value="${esc(union.end_date || "")}" />
+        <select id="euf-end-reason" class="add-relative-input">
+          ${["", "divorce", "death", "separation"]
+            .map(
+              (r) =>
+                `<option value="${r}" ${(union.end_reason || "") === r ? "selected" : ""}>${r ? r[0].toUpperCase() + r.slice(1) : "Reason…"}</option>`
+            )
+            .join("")}
+        </select>
+      </div>
+      <div class="add-relative-row">
+        <input id="euf-notes" type="text" placeholder="Notes (optional)" class="add-relative-input" value="${esc(union.notes || "")}" />
+      </div>
+      <div class="add-relative-actions">
+        <button class="add-relative-submit" onclick="submitEditUnion('${personId}', '${partnerId}')">Save</button>
+        <button class="add-relative-cancel" onclick="document.getElementById('edit-union-overlay')?.remove()">Cancel</button>
+      </div>
+      <div id="euf-error" class="add-relative-error hidden"></div>
+    </div>
+  `;
+  container.classList.remove("hidden");
+  document.getElementById("euf-date")?.focus();
+}
+
+export async function submitEditUnion(personId, partnerId) {
+  const errorEl = document.getElementById("euf-error");
+  const endDate = document.getElementById("euf-end-date").value.trim();
+  const endReason = document.getElementById("euf-end-reason").value;
+  const body = {
+    partner1_id: personId,
+    partner2_id: partnerId,
+    union_date: document.getElementById("euf-date").value.trim() || null,
+    union_place: document.getElementById("euf-place").value.trim() || null,
+    end_date: endDate || null,
+    // Only meaningful when the marriage ended; clear it otherwise.
+    end_reason: endDate ? endReason || null : null,
+    notes: document.getElementById("euf-notes").value.trim() || null,
+  };
+
+  try {
+    const res = await fetch("/api/unions", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      errorEl.textContent = data.error || "Failed to save.";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+  } catch {
+    errorEl.textContent = "Network error.";
+    errorEl.classList.remove("hidden");
+    return;
+  }
+
+  document.getElementById("edit-union-overlay")?.remove();
   await loadData();
   autoComputeLanes(S.CENTER_ID_A, S.CENTER_ID_B);
   refreshAllViews();
