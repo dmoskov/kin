@@ -58,6 +58,8 @@ export const GEOCODE = {
   "Yale University":                              [41.31, -72.93],
   // ── New York ──
   "New York, NY":                                 [40.71, -74.01],
+  "Ossining, NY":                                 [41.16, -73.86],
+  "Ithaca, NY":                                   [42.44, -76.50],
   "Ellis Island, New York Harbor":                [40.70, -74.04],
   "Ellis Island, New York Harbor, USA":           [40.70, -74.04],
   "Niagara Falls, NY":                            [43.09, -79.06],
@@ -103,6 +105,7 @@ export const GEOCODE = {
   "San Diego, San Diego County, California":      [32.72, -117.16],
   "Maine":                                        [45.71, -68.86],
   "Chapel Hill, NC":                              [35.91, -79.06],
+  "Washington, DC":                                [38.91, -77.04],
   "USA":                                          [39.83, -98.58],
   "United States":                                [39.83, -98.58],
 };
