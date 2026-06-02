@@ -21,6 +21,7 @@
   --event-education: #d4a843;
   --event-custom: #a87cc4;
   --event-marriage: #d47c8a;
+  --event-residence: #6c9cbb;
   --radius: 10px;
   --panel-width: 380px;
   --node-text: #ece5d8;
@@ -51,6 +52,7 @@
   --event-education: #a0832e;
   --event-custom: #7a4a9c;
   --event-marriage: #9c4a5a;
+  --event-residence: #4a7c9c;
   --node-text: #2c2418;
   --node-text-dim: rgba(44,36,24,0.65);
   --node-text-faint: rgba(44,36,24,0.45);
@@ -717,6 +719,175 @@ main {
 }
 .panel-event-photo:hover {
   opacity: 0.85;
+}
+
+.panel-event-actions {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: 6px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.panel-event:hover .panel-event-actions,
+.panel-place-entry:hover .panel-event-actions { opacity: 1; }
+.panel-event-edit-btn, .panel-event-del-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  color: var(--text-muted);
+  line-height: 1;
+}
+.panel-event-edit-btn:hover { color: var(--accent); background: var(--surface-hover); }
+.panel-event-del-btn:hover { color: #e74c3c; background: rgba(231, 76, 60, 0.1); }
+
+.panel-add-event-btn, .panel-add-place-btn {
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  margin-top: 8px;
+  transition: all 0.15s;
+  width: 100%;
+  text-align: center;
+}
+.panel-add-event-btn:hover, .panel-add-place-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── Places Timeline ─────────────────────────────────────────── */
+
+.panel-places-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding-left: 4px;
+}
+
+.panel-place-entry {
+  display: flex;
+  gap: 10px;
+  padding: 0;
+  font-size: 13px;
+  min-height: 52px;
+  position: relative;
+}
+.panel-place-entry:last-child .panel-place-line { display: none; }
+
+.panel-place-marker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  width: 28px;
+  padding-top: 2px;
+}
+
+.panel-place-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 2px solid var(--event-residence);
+  color: var(--event-residence);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.panel-place-dot.born { border-color: var(--event-birth); color: var(--event-birth); }
+.panel-place-dot.death { border-color: var(--text-muted); color: var(--text-muted); }
+.panel-place-dot.immigration,
+.panel-place-dot.emigration,
+.panel-place-dot.naturalization { border-color: var(--accent); color: var(--accent); }
+.panel-place-dot.residence { border-color: var(--event-residence); color: var(--event-residence); }
+
+.panel-place-line {
+  flex: 1;
+  width: 2px;
+  background: var(--border);
+  margin: 3px 0;
+  min-height: 12px;
+}
+
+.panel-place-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 0 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.panel-place-name {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.panel-place-dates {
+  color: var(--text-muted);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.panel-place-type-pill {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  line-height: 1.5;
+}
+.panel-place-type-pill.birth { background: rgba(106, 179, 122, 0.15); color: var(--event-birth); }
+.panel-place-type-pill.death { background: rgba(136, 136, 136, 0.15); color: var(--text-muted); }
+.panel-place-type-pill.residence { background: rgba(108, 156, 187, 0.15); color: var(--event-residence); }
+.panel-place-type-pill.immigration,
+.panel-place-type-pill.emigration,
+.panel-place-type-pill.naturalization { background: rgba(196, 149, 106, 0.15); color: var(--accent); }
+
+.panel-place-desc {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.apf-circa-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 0;
+}
+.apf-circa-label input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+
+.edit-event-overlay {
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 12px;
+  margin: 12px -16px -16px;
+  border-radius: 0 0 var(--radius) var(--radius);
+  z-index: 5;
 }
 
 /* ── Person Photo Gallery ──────────────────────────────────── */

@@ -75,6 +75,7 @@ def load_tree(path: str) -> FamilyTree:
             place=e.get("place"),
             description=e.get("description", ""),
             source=e.get("source"),
+            date_circa=bool(e.get("date_circa")),
         )
         tree.add_event(event)
 
@@ -189,6 +190,8 @@ def _event_to_dict(e: LifeEvent) -> dict[str, Any]:
             d[key] = val
     if e.description:
         d["description"] = e.description
+    if e.date_circa:
+        d["date_circa"] = True
     return d
 
 

@@ -5,7 +5,7 @@ The schema mirrors the domain models in models/ and is designed for
 efficient querying.
 """
 
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 
 # ═══════════════════════════════════════════════════════════════════════
 # SQLite schema (local dev / tests)
@@ -277,6 +277,10 @@ ALTER TABLE relationships ADD COLUMN visibility TEXT NOT NULL DEFAULT 'everyone'
     CHECK (visibility IN ('everyone', 'self_and_children', 'private'));
 """
 
+SCHEMA_V15 = """
+ALTER TABLE events ADD COLUMN date_circa INTEGER DEFAULT 0;
+"""
+
 SCHEMA_SQL = (
     SCHEMA_V1
     + SCHEMA_V2
@@ -291,6 +295,7 @@ SCHEMA_SQL = (
     + SCHEMA_V11
     + SCHEMA_V12
     + SCHEMA_V13
+    + SCHEMA_V15
 )
 
 MIGRATIONS = {
@@ -307,6 +312,7 @@ MIGRATIONS = {
     12: SCHEMA_V12,
     13: SCHEMA_V13,
     14: SCHEMA_V14,
+    15: SCHEMA_V15,
 }
 
 
@@ -564,6 +570,10 @@ ALTER TABLE relationships ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFA
     CHECK (visibility IN ('everyone', 'self_and_children', 'private'));
 """
 
+PG_SCHEMA_V15 = """
+ALTER TABLE events ADD COLUMN IF NOT EXISTS date_circa BOOLEAN DEFAULT FALSE;
+"""
+
 PG_SCHEMA_SQL = (
     PG_SCHEMA_V1
     + PG_SCHEMA_V2
@@ -578,6 +588,7 @@ PG_SCHEMA_SQL = (
     + PG_SCHEMA_V11
     + PG_SCHEMA_V12
     + PG_SCHEMA_V13
+    + PG_SCHEMA_V15
 )
 
 PG_MIGRATIONS = {
@@ -594,4 +605,5 @@ PG_MIGRATIONS = {
     12: PG_SCHEMA_V12,
     13: PG_SCHEMA_V13,
     14: PG_SCHEMA_V14,
+    15: PG_SCHEMA_V15,
 }

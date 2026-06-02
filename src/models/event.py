@@ -40,6 +40,7 @@ class LifeEvent:
     place: str | None = None
     description: str = ""
     source: str | None = None  # where we learned this (document, oral, etc.)
+    date_circa: bool = False
 
     @property
     def year(self) -> int | None:

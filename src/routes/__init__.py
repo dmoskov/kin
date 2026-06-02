@@ -3,6 +3,7 @@
 from routes.articles import articles_bp
 from routes.auth import auth_bp
 from routes.documents import documents_bp
+from routes.events import events_bp
 from routes.export import export_bp
 from routes.geocode import geocode_bp
 from routes.people import people_bp
@@ -16,6 +17,7 @@ ALL_BLUEPRINTS = [
     documents_bp,
     geocode_bp,
     articles_bp,
+    events_bp,
     export_bp,
     undo_bp,
 ]

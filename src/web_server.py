@@ -29,7 +29,6 @@ from database.repository import TreeRepository
 from import_export.json_io import (
     _article_to_dict,
     _citation_to_dict,
-    _event_to_dict,
     _person_to_dict,
     _rel_to_dict,
     _source_to_dict,
@@ -300,6 +299,33 @@ def serve_photo(filename):
     )
 
 
+def _build_events_with_ids(repo, tree):
+    """Build event dicts that include the database row id."""
+    conn = repo._conn()
+    try:
+        from database.repository import _fetchall
+
+        rows = _fetchall(
+            conn,
+            "SELECT id, person_id, event_type, date, end_date, place, description, source, date_circa FROM events",
+        )
+        result = []
+        for row in rows:
+            d = {"id": row["id"], "person_id": row["person_id"], "event_type": row["event_type"]}
+            for key in ("date", "end_date", "place", "source"):
+                val = row.get(key)
+                if val is not None:
+                    d[key] = val
+            if row.get("description"):
+                d["description"] = row["description"]
+            if row.get("date_circa"):
+                d["date_circa"] = True
+            result.append(d)
+        return result
+    finally:
+        conn.close()
+
+
 @app.route("/api/data")
 def api_data():
     """Return the full family tree as JSON (read from DB on each request)."""
@@ -352,11 +378,12 @@ def api_data():
         for aid in aids:
             article_person_map.setdefault(aid, []).append(pid)
 
+    events_with_ids = _build_events_with_ids(repo, tree)
     data = {
         "people": [_person_to_dict(p) for p in tree.people.values()],
         "relationships": [_rel_to_dict(r) for r in tree.relationships],
         "unions": [_union_to_dict(u) for u in tree.unions],
-        "events": [_event_to_dict(e) for e in tree.events],
+        "events": events_with_ids,
         "sources": [_source_to_dict(s) for s in tree.sources.values()],
         "citations": [_citation_to_dict(c) for c in tree.citations],
         "articles": [

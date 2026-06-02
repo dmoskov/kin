@@ -129,6 +129,7 @@ class TreeRepoMixin:
                         place=row["place"],
                         description=row["description"] or "",
                         source=row["source"],
+                        date_circa=bool(row.get("date_circa")),
                     )
                 )
 

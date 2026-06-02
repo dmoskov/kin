@@ -123,6 +123,7 @@ def _restore_person(repo: TreeRepository, payload: dict) -> dict:
             place=e.get("place") or None,
             description=e.get("description") or "",
             source=e.get("source") or None,
+            date_circa=bool(e.get("date_circa")),
         )
         repo.save_event(event)
 

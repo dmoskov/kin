@@ -16,7 +16,9 @@ function _calcAge(birthDate, deathDate) {
 const _EVENT_ICONS = {
   birth: "✶", death: "✝", marriage: "♡",
   career: "⚒", education: "⌂", immigration: "✈",
-  residence: "⌂", military: "⚔", custom: "★",
+  emigration: "✈", residence: "⌂", military: "⚔",
+  naturalization: "⚑", religion: "✦", medical: "✚",
+  custom: "★",
 };
 function _eventIcon(type) {
   return _EVENT_ICONS[type] || _EVENT_ICONS.custom;
@@ -25,10 +27,28 @@ function _eventIcon(type) {
 const _EVENT_COLORS = {
   birth: "--event-birth", death: "--text-muted", marriage: "--event-marriage",
   career: "--event-career", education: "--event-education",
-  immigration: "--accent", military: "--text-muted", custom: "--event-custom",
+  immigration: "--accent", emigration: "--accent",
+  residence: "--event-residence", military: "--text-muted",
+  naturalization: "--accent", custom: "--event-custom",
 };
 function _eventColorVar(type) {
   return _EVENT_COLORS[type] || _EVENT_COLORS.custom;
+}
+
+const _EVENT_TYPE_LABELS = {
+  birth: "Birth", death: "Death", marriage: "Marriage", divorce: "Divorce",
+  immigration: "Immigration", emigration: "Emigration", naturalization: "Naturalization",
+  education: "Education", career: "Career", military: "Military",
+  residence: "Residence", religion: "Religion", medical: "Medical", custom: "Other",
+};
+
+function _formatEventDate(date, endDate, circa) {
+  if (!date) return "?";
+  const prefix = circa ? "c. " : "";
+  const start = date.length > 7 ? date.substring(0, 7) : date;
+  if (!endDate) return prefix + start;
+  const end = endDate.length > 7 ? endDate.substring(0, 7) : endDate;
+  return prefix + start + " – " + end;
 }
 
 export function showPersonPanel(personId) {
@@ -202,12 +222,23 @@ export function showPersonPanel(personId) {
     </div>`;
   }
 
-  // Life events + dated photos merged into one timeline
+  // ── Places & Residences section (residence/immigration/etc. events) ──
+  html += _buildPlacesSection(personId, person, events);
+
+  // Life events + dated photos merged into one timeline. Place-type events
+  // (residence/immigration/emigration/naturalization) are rendered in the
+  // Places section above, so exclude them here.
+  const PLACE_EVENT_TYPES = new Set([
+    "residence", "immigration", "emigration", "naturalization",
+  ]);
   const personPhotos = (S.DATA.photos || []).filter((p) =>
     p.date && (p.tagged_people || []).some((tp) => tp.person_id === personId)
   );
+  const canEditEvents = !S.CONFIG?.editorsEnabled || S.AUTH_USER?.is_editor;
   const timelineItems = [
-    ...events.map((e) => ({ kind: "event", date: e.date || "", sortDate: e.date || "9999", ...e })),
+    ...events
+      .filter((e) => !PLACE_EVENT_TYPES.has(e.event_type))
+      .map((e) => ({ kind: "event", date: e.date || "", sortDate: e.date || "9999", ...e })),
     ...personPhotos.map((p) => {
       const tag = (p.tagged_people || []).find((tp) => tp.person_id === personId);
       return {
@@ -224,11 +255,16 @@ export function showPersonPanel(personId) {
   if (timelineItems.length) {
     html += `<div class="panel-section"><h3>Life Events</h3><div class="panel-events-timeline">`;
     for (const e of timelineItems) {
-      const date = e.date ? e.date.substring(0, 7) : "?";
+      const date = e.kind === "photo"
+        ? (e.date ? e.date.substring(0, 7) : "?")
+        : _formatEventDate(e.date, e.end_date, e.date_circa);
       const icon = e.kind === "photo" ? "📷" : _eventIcon(e.event_type);
       const colorVar = e.kind === "photo" ? "--event-custom" : _eventColorVar(e.event_type);
       const photoThumb = e.kind === "photo" && e.photoPath
         ? `<img class="panel-event-photo" src="/${e.photoPath}" alt="" loading="lazy" onclick="openLightbox('/${e.photoPath}', '${(e.description || "").replace(/'/g, "\\'")}', '${e.photoPath}')" />`
+        : "";
+      const editActions = (e.kind === "event" && canEditEvents && e.id)
+        ? `<span class="panel-event-actions"><button class="panel-event-edit-btn" onclick="openEditEventForm(${e.id}, '${personId}')" title="Edit">✎</button><button class="panel-event-del-btn" onclick="deleteEvent(${e.id}, '${personId}')" title="Delete">×</button></span>`
         : "";
       html += `
         <div class="panel-event">
@@ -238,12 +274,21 @@ export function showPersonPanel(personId) {
           </div>
           <div class="panel-event-body">
             <span class="panel-event-date">${date}</span>
-            <span class="panel-event-desc">${escapeHtml(e.description || e.event_type)}${e.place ? " · <span class='panel-event-place'>" + escapeHtml(e.place) + "</span>" : ""}${e.source && e.source.startsWith("http") ? ` · <a class="panel-event-source" href="${escapeHtml(e.source)}" target="_blank" rel="noopener">source</a>` : ""}</span>
+            <span class="panel-event-desc">${escapeHtml(e.description || (e.kind === "event" ? (_EVENT_TYPE_LABELS[e.event_type] || e.event_type) : ""))}${e.place ? " · <span class='panel-event-place'>" + escapeHtml(e.place) + "</span>" : ""}${e.source && e.source.startsWith("http") ? ` · <a class="panel-event-source" href="${escapeHtml(e.source)}" target="_blank" rel="noopener">source</a>` : ""}</span>
             ${photoThumb}
+            ${editActions}
           </div>
         </div>`;
     }
     html += `</div></div>`;
+  }
+
+  // Add event button (editors only)
+  if (!S.CONFIG?.editorsEnabled || S.AUTH_USER?.is_editor) {
+    html += `<div class="panel-section">
+      <button class="panel-add-event-btn" onclick="openAddEventForm('${personId}')">+ Add Life Event</button>
+      <div id="add-event-form" class="add-relative-form hidden"></div>
+    </div>`;
   }
 
   // Notes
@@ -839,6 +884,369 @@ export async function copyInviteMessage(personId) {
     copiedEl.classList.remove("hidden");
     setTimeout(() => copiedEl.classList.add("hidden"), 2000);
   }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Places & Residences Section
+// ═══════════════════════════════════════════════════════════════
+
+function _buildPlacesSection(personId, person, events) {
+  const placeEvents = events.filter(e =>
+    e.event_type === "residence" || e.event_type === "immigration" ||
+    e.event_type === "emigration" || e.event_type === "naturalization"
+  );
+
+  const hasPlaceData = person.birth_place || person.death_place || placeEvents.length > 0;
+  if (!hasPlaceData) return "";
+
+  const canEdit = !S.CONFIG?.editorsEnabled || S.AUTH_USER?.is_editor;
+  let html = `<div class="panel-section"><h3>Places</h3><div class="panel-places-timeline">`;
+
+  // Birth place entry
+  if (person.birth_place) {
+    html += `
+      <div class="panel-place-entry panel-place-birth">
+        <div class="panel-place-marker"><span class="panel-place-dot born"></span><span class="panel-place-line"></span></div>
+        <div class="panel-place-body">
+          <div class="panel-place-name">${escapeHtml(person.birth_place)}</div>
+          <div class="panel-place-dates"><span class="panel-place-type-pill birth">Born</span>${person.birth_date ? " " + escapeHtml(person.birth_date) : ""}</div>
+        </div>
+      </div>`;
+  }
+
+  // Residence & migration events
+  for (const e of placeEvents) {
+    if (!e.place && !e.description) continue;
+    const dateStr = _formatEventDate(e.date, e.end_date, e.date_circa);
+    const typeLabel = _EVENT_TYPE_LABELS[e.event_type] || e.event_type;
+    const typeClass = e.event_type;
+    const icon = _eventIcon(e.event_type);
+    html += `
+      <div class="panel-place-entry">
+        <div class="panel-place-marker"><span class="panel-place-dot ${typeClass}">${icon}</span><span class="panel-place-line"></span></div>
+        <div class="panel-place-body">
+          <div class="panel-place-name">${escapeHtml(e.place || e.description || typeLabel)}</div>
+          <div class="panel-place-dates">
+            <span class="panel-place-type-pill ${typeClass}">${typeLabel}</span>
+            ${dateStr !== "?" ? " " + dateStr : ""}
+          </div>
+          ${e.description && e.place ? `<div class="panel-place-desc">${escapeHtml(e.description)}</div>` : ""}
+          ${canEdit && e.id ? `<span class="panel-event-actions"><button class="panel-event-edit-btn" onclick="openEditEventForm(${e.id}, '${personId}')" title="Edit">✎</button><button class="panel-event-del-btn" onclick="deleteEvent(${e.id}, '${personId}')" title="Delete">×</button></span>` : ""}
+        </div>
+      </div>`;
+  }
+
+  // Death place entry
+  if (person.death_place) {
+    html += `
+      <div class="panel-place-entry panel-place-death">
+        <div class="panel-place-marker"><span class="panel-place-dot death">✝</span></div>
+        <div class="panel-place-body">
+          <div class="panel-place-name">${escapeHtml(person.death_place)}</div>
+          <div class="panel-place-dates"><span class="panel-place-type-pill death">Died</span>${person.death_date ? " " + escapeHtml(person.death_date) : ""}</div>
+        </div>
+      </div>`;
+  }
+
+  html += `</div>`;
+
+  // Add place button (editors only)
+  if (canEdit) {
+    html += `<button class="panel-add-place-btn" onclick="openAddPlaceForm('${personId}')">+ Add Place</button>`;
+    html += `<div id="add-place-form" class="add-relative-form hidden"></div>`;
+  }
+  html += `</div>`;
+
+  return html;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Add Place Form
+// ═══════════════════════════════════════════════════════════════
+
+export function openAddPlaceForm(personId) {
+  const form = document.getElementById("add-place-form");
+  if (!form) return;
+
+  form.innerHTML = `
+    <div class="add-relative-form-inner">
+      <div class="add-relative-row">
+        <select id="apf-type" class="add-relative-input">
+          <option value="residence">Residence</option>
+          <option value="immigration">Immigration</option>
+          <option value="emigration">Emigration</option>
+          <option value="naturalization">Naturalization</option>
+        </select>
+      </div>
+      <div class="add-relative-row">
+        <input id="apf-place" type="text" placeholder="Place (e.g. Boston, MA)" class="add-relative-input" />
+      </div>
+      <div class="add-relative-row">
+        <input id="apf-date" type="text" placeholder="Start date (e.g. 1985 or 1985-03)" class="add-relative-input" />
+        <input id="apf-end-date" type="text" placeholder="End date (optional)" class="add-relative-input" />
+      </div>
+      <div class="add-relative-row">
+        <label class="apf-circa-label"><input id="apf-circa" type="checkbox" /> Approximate date</label>
+      </div>
+      <div class="add-relative-row">
+        <input id="apf-desc" type="text" placeholder="Description (optional)" class="add-relative-input" />
+      </div>
+      <div class="add-relative-actions">
+        <button class="add-relative-submit" onclick="submitAddPlace('${personId}')">Add Place</button>
+        <button class="add-relative-cancel" onclick="document.getElementById('add-place-form').classList.add('hidden')">Cancel</button>
+      </div>
+      <div id="apf-error" class="add-relative-error hidden"></div>
+    </div>
+  `;
+  form.classList.remove("hidden");
+  document.getElementById("apf-place")?.focus();
+}
+
+export async function submitAddPlace(personId) {
+  const eventType = document.getElementById("apf-type").value;
+  const place = document.getElementById("apf-place").value.trim();
+  const date = document.getElementById("apf-date").value.trim();
+  const endDate = document.getElementById("apf-end-date").value.trim();
+  const circa = document.getElementById("apf-circa").checked;
+  const desc = document.getElementById("apf-desc").value.trim();
+  const errorEl = document.getElementById("apf-error");
+
+  if (!place && !desc) {
+    errorEl.textContent = "Enter at least a place or description.";
+    errorEl.classList.remove("hidden");
+    return;
+  }
+
+  try {
+    const body = { person_id: personId, event_type: eventType };
+    if (place) body.place = place;
+    if (date) body.date = date;
+    if (endDate) body.end_date = endDate;
+    if (circa) body.date_circa = true;
+    if (desc) body.description = desc;
+
+    const res = await fetch("/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      errorEl.textContent = data.error || "Failed to add place.";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+  } catch {
+    errorEl.textContent = "Network error. Please try again.";
+    errorEl.classList.remove("hidden");
+    return;
+  }
+
+  await loadData();
+  autoComputeLanes(S.CENTER_ID_A, S.CENTER_ID_B);
+  refreshAllViews();
+  showPersonPanel(personId);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Add Life Event Form
+// ═══════════════════════════════════════════════════════════════
+
+export function openAddEventForm(personId) {
+  const form = document.getElementById("add-event-form");
+  if (!form) return;
+
+  form.innerHTML = `
+    <div class="add-relative-form-inner">
+      <div class="add-relative-row">
+        <select id="aef-type" class="add-relative-input">
+          <option value="education">Education</option>
+          <option value="career">Career</option>
+          <option value="military">Military</option>
+          <option value="religion">Religion</option>
+          <option value="medical">Medical</option>
+          <option value="custom">Other</option>
+        </select>
+      </div>
+      <div class="add-relative-row">
+        <input id="aef-desc" type="text" placeholder="Description" class="add-relative-input" />
+      </div>
+      <div class="add-relative-row">
+        <input id="aef-date" type="text" placeholder="Start date (e.g. 1985)" class="add-relative-input" />
+        <input id="aef-end-date" type="text" placeholder="End date (optional)" class="add-relative-input" />
+      </div>
+      <div class="add-relative-row">
+        <label class="apf-circa-label"><input id="aef-circa" type="checkbox" /> Approximate date</label>
+      </div>
+      <div class="add-relative-row">
+        <input id="aef-place" type="text" placeholder="Place (optional)" class="add-relative-input" />
+      </div>
+      <div class="add-relative-actions">
+        <button class="add-relative-submit" onclick="submitAddEvent('${personId}')">Add Event</button>
+        <button class="add-relative-cancel" onclick="document.getElementById('add-event-form').classList.add('hidden')">Cancel</button>
+      </div>
+      <div id="aef-error" class="add-relative-error hidden"></div>
+    </div>
+  `;
+  form.classList.remove("hidden");
+  document.getElementById("aef-desc")?.focus();
+}
+
+export async function submitAddEvent(personId) {
+  const eventType = document.getElementById("aef-type").value;
+  const desc = document.getElementById("aef-desc").value.trim();
+  const date = document.getElementById("aef-date").value.trim();
+  const endDate = document.getElementById("aef-end-date").value.trim();
+  const circa = document.getElementById("aef-circa").checked;
+  const place = document.getElementById("aef-place").value.trim();
+  const errorEl = document.getElementById("aef-error");
+
+  if (!desc) {
+    errorEl.textContent = "Enter a description.";
+    errorEl.classList.remove("hidden");
+    return;
+  }
+
+  try {
+    const body = { person_id: personId, event_type: eventType, description: desc };
+    if (date) body.date = date;
+    if (endDate) body.end_date = endDate;
+    if (circa) body.date_circa = true;
+    if (place) body.place = place;
+
+    const res = await fetch("/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      errorEl.textContent = data.error || "Failed to add event.";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+  } catch {
+    errorEl.textContent = "Network error. Please try again.";
+    errorEl.classList.remove("hidden");
+    return;
+  }
+
+  await loadData();
+  autoComputeLanes(S.CENTER_ID_A, S.CENTER_ID_B);
+  refreshAllViews();
+  showPersonPanel(personId);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Edit / Delete Event
+// ═══════════════════════════════════════════════════════════════
+
+export function openEditEventForm(eventId, personId) {
+  const event = (S.DATA.events || []).find(e => e.id === eventId);
+  if (!event) return;
+
+  const panel = document.getElementById("panel-content");
+  if (!panel) return;
+
+  let container = document.getElementById("edit-event-overlay");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "edit-event-overlay";
+    container.className = "edit-event-overlay";
+    panel.appendChild(container);
+  }
+
+  const esc = escapeHtml;
+  container.innerHTML = `
+    <div class="add-relative-form-inner">
+      <h3 style="margin:0 0 10px">Edit Event</h3>
+      <div class="add-relative-row">
+        <select id="eef-type" class="add-relative-input">
+          ${Object.entries(_EVENT_TYPE_LABELS).filter(([k]) => k !== "birth" && k !== "death" && k !== "marriage" && k !== "divorce").map(([k, v]) =>
+            `<option value="${k}" ${event.event_type === k ? "selected" : ""}>${v}</option>`
+          ).join("")}
+        </select>
+      </div>
+      <div class="add-relative-row">
+        <input id="eef-place" type="text" placeholder="Place" class="add-relative-input" value="${esc(event.place || "")}" />
+      </div>
+      <div class="add-relative-row">
+        <input id="eef-date" type="text" placeholder="Start date" class="add-relative-input" value="${esc(event.date || "")}" />
+        <input id="eef-end-date" type="text" placeholder="End date" class="add-relative-input" value="${esc(event.end_date || "")}" />
+      </div>
+      <div class="add-relative-row">
+        <label class="apf-circa-label"><input id="eef-circa" type="checkbox" ${event.date_circa ? "checked" : ""} /> Approximate date</label>
+      </div>
+      <div class="add-relative-row">
+        <input id="eef-desc" type="text" placeholder="Description" class="add-relative-input" value="${esc(event.description || "")}" />
+      </div>
+      <div class="add-relative-actions">
+        <button class="add-relative-submit" onclick="submitEditEvent(${eventId}, '${personId}')">Save</button>
+        <button class="add-relative-cancel" onclick="document.getElementById('edit-event-overlay')?.remove()">Cancel</button>
+      </div>
+      <div id="eef-error" class="add-relative-error hidden"></div>
+    </div>
+  `;
+  container.classList.remove("hidden");
+  document.getElementById("eef-place")?.focus();
+}
+
+export async function submitEditEvent(eventId, personId) {
+  const eventType = document.getElementById("eef-type").value;
+  const place = document.getElementById("eef-place").value.trim();
+  const date = document.getElementById("eef-date").value.trim();
+  const endDate = document.getElementById("eef-end-date").value.trim();
+  const circa = document.getElementById("eef-circa").checked;
+  const desc = document.getElementById("eef-desc").value.trim();
+  const errorEl = document.getElementById("eef-error");
+
+  try {
+    const body = {
+      event_type: eventType,
+      place: place || null,
+      date: date || null,
+      end_date: endDate || null,
+      date_circa: circa,
+      description: desc || null,
+    };
+
+    const res = await fetch(`/api/events/${eventId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      errorEl.textContent = data.error || "Failed to save.";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+  } catch {
+    errorEl.textContent = "Network error.";
+    errorEl.classList.remove("hidden");
+    return;
+  }
+
+  await loadData();
+  autoComputeLanes(S.CENTER_ID_A, S.CENTER_ID_B);
+  refreshAllViews();
+  showPersonPanel(personId);
+}
+
+export async function deleteEvent(eventId, personId) {
+  if (!confirm("Delete this event?")) return;
+
+  try {
+    const res = await fetch(`/api/events/${eventId}`, { method: "DELETE" });
+    if (!res.ok) return;
+  } catch {
+    return;
+  }
+
+  await loadData();
+  autoComputeLanes(S.CENTER_ID_A, S.CENTER_ID_B);
+  refreshAllViews();
+  showPersonPanel(personId);
 }
 
 // ═══════════════════════════════════════════════════════════════
