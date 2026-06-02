@@ -20,7 +20,7 @@ import web_server
 from database.repository import TreeRepository
 from models.event import EventType, LifeEvent
 from models.person import Gender, Person
-from models.relationship import Relationship, RelationshipType, Union
+from models.relationship import Relationship, RelationshipType, Union, Visibility
 
 undo_bp = Blueprint("undo", __name__)
 
@@ -96,6 +96,7 @@ def _restore_person(repo: TreeRepository, payload: dict) -> dict:
             parent_id=r["parent_id"],
             child_id=r["child_id"],
             rel_type=RelationshipType(r.get("rel_type", "biological")),
+            visibility=Visibility(r.get("visibility", "everyone")),
         )
         repo.save_relationship(rel)
 

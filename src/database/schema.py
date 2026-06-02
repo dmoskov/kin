@@ -5,7 +5,7 @@ The schema mirrors the domain models in models/ and is designed for
 efficient querying.
 """
 
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 
 # ═══════════════════════════════════════════════════════════════════════
 # SQLite schema (local dev / tests)
@@ -41,6 +41,8 @@ CREATE TABLE IF NOT EXISTS relationships (
     child_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
     rel_type TEXT NOT NULL DEFAULT 'biological'
         CHECK (rel_type IN ('biological', 'adoptive', 'step', 'foster')),
+    visibility TEXT NOT NULL DEFAULT 'everyone'
+        CHECK (visibility IN ('everyone', 'self_and_children', 'private')),
     UNIQUE(parent_id, child_id)
 );
 
@@ -270,6 +272,11 @@ CREATE TABLE IF NOT EXISTS undo_log (
 );
 """
 
+SCHEMA_V14 = """
+ALTER TABLE relationships ADD COLUMN visibility TEXT NOT NULL DEFAULT 'everyone'
+    CHECK (visibility IN ('everyone', 'self_and_children', 'private'));
+"""
+
 SCHEMA_SQL = (
     SCHEMA_V1
     + SCHEMA_V2
@@ -299,6 +306,7 @@ MIGRATIONS = {
     11: SCHEMA_V11,
     12: SCHEMA_V12,
     13: SCHEMA_V13,
+    14: SCHEMA_V14,
 }
 
 
@@ -336,6 +344,8 @@ CREATE TABLE IF NOT EXISTS relationships (
     child_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
     rel_type TEXT NOT NULL DEFAULT 'biological'
         CHECK (rel_type IN ('biological', 'adoptive', 'step', 'foster')),
+    visibility TEXT NOT NULL DEFAULT 'everyone'
+        CHECK (visibility IN ('everyone', 'self_and_children', 'private')),
     UNIQUE(parent_id, child_id)
 );
 
@@ -549,6 +559,11 @@ CREATE TABLE IF NOT EXISTS undo_log (
 );
 """
 
+PG_SCHEMA_V14 = """
+ALTER TABLE relationships ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'everyone'
+    CHECK (visibility IN ('everyone', 'self_and_children', 'private'));
+"""
+
 PG_SCHEMA_SQL = (
     PG_SCHEMA_V1
     + PG_SCHEMA_V2
@@ -578,4 +593,5 @@ PG_MIGRATIONS = {
     11: PG_SCHEMA_V11,
     12: PG_SCHEMA_V12,
     13: PG_SCHEMA_V13,
+    14: PG_SCHEMA_V14,
 }

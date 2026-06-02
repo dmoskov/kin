@@ -16,8 +16,8 @@ class RelationshipsRepoMixin:
         _upsert(
             conn,
             "relationships",
-            ["parent_id", "child_id", "rel_type"],
-            (rel.parent_id, rel.child_id, rel.rel_type.value),
+            ["parent_id", "child_id", "rel_type", "visibility"],
+            (rel.parent_id, rel.child_id, rel.rel_type.value, rel.visibility.value),
             ["parent_id", "child_id"],
             update=False,
         )

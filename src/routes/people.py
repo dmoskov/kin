@@ -208,7 +208,7 @@ def _snapshot_person(repo: TreeRepository, person_id: str) -> dict:
         person_row = _fetchone(conn, f"SELECT * FROM people WHERE id = {p}", (person_id,))
         relationships = _fetchall(
             conn,
-            f"SELECT parent_id, child_id, rel_type FROM relationships WHERE parent_id = {p} OR child_id = {p}",
+            f"SELECT parent_id, child_id, rel_type, visibility FROM relationships WHERE parent_id = {p} OR child_id = {p}",
             (person_id, person_id),
         )
         unions = _fetchall(
@@ -294,7 +294,7 @@ def api_create_relationship():
     Returns 201 on success, 400 for missing fields, 404 if either person
     doesn't exist.
     """
-    from models.relationship import Relationship, RelationshipType
+    from models.relationship import Relationship, RelationshipType, Visibility
 
     body = request.get_json(silent=True) or {}
     parent_id = (body.get("parent_id") or "").strip()
@@ -310,7 +310,21 @@ def api_create_relationship():
     if repo.get_person(child_id) is None:
         return jsonify({"error": f"person not found: {child_id}", "code": "not_found"}), 404
 
-    rel = Relationship(parent_id=parent_id, child_id=child_id, rel_type=RelationshipType.BIOLOGICAL)
+    try:
+        rel_type = RelationshipType(body.get("rel_type", "biological"))
+    except ValueError:
+        rel_type = RelationshipType.BIOLOGICAL
+    try:
+        visibility = Visibility(body.get("visibility", "everyone"))
+    except ValueError:
+        visibility = Visibility.EVERYONE
+
+    rel = Relationship(
+        parent_id=parent_id,
+        child_id=child_id,
+        rel_type=rel_type,
+        visibility=visibility,
+    )
     repo.save_relationship(rel)
     repo.auto_link_siblings()
     return jsonify({"parent_id": parent_id, "child_id": child_id}), 201

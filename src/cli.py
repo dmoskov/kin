@@ -28,7 +28,7 @@ from import_export.json_io import load_tree, save_tree
 from models.citation import Citation, Confidence, EntityType
 from models.event import EventType, LifeEvent
 from models.person import Gender, Person
-from models.relationship import Relationship, RelationshipType, Union
+from models.relationship import Relationship, RelationshipType, Union, Visibility
 from models.source import Source, SourceType
 from traversal.relationship_calculator import describe_relationship
 from traversal.timeline import family_timeline, format_timeline, person_timeline
@@ -59,10 +59,15 @@ def cmd_add_person(args: argparse.Namespace) -> None:
 
 def cmd_add_parent(args: argparse.Namespace) -> None:
     rel_type = RelationshipType(args.type) if args.type else RelationshipType.BIOLOGICAL
-    rel = Relationship(parent_id=args.parent, child_id=args.child, rel_type=rel_type)
+    visibility = Visibility(args.visibility) if args.visibility else Visibility.EVERYONE
+    rel = Relationship(
+        parent_id=args.parent, child_id=args.child, rel_type=rel_type, visibility=visibility
+    )
     repo = TreeRepository()
     repo.save_relationship(rel)
-    print(f"Added relationship: {args.parent} -> {args.child} ({rel_type.value})")
+    print(
+        f"Added relationship: {args.parent} -> {args.child} ({rel_type.value}, {visibility.value})"
+    )
 
 
 def cmd_add_union(args: argparse.Namespace) -> None:
@@ -536,6 +541,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap2.add_argument("--parent", required=True, help="Parent person ID")
     ap2.add_argument("--child", required=True, help="Child person ID")
     ap2.add_argument("--type", choices=["biological", "adoptive", "step", "foster"])
+    ap2.add_argument("--visibility", choices=["everyone", "self_and_children", "private"])
 
     # add-union
     ap3 = sub.add_parser("add-union", help="Add a marriage/partnership")

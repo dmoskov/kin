@@ -722,7 +722,7 @@ def api_apply_document(doc_id):
     # Apply relationships
     from collections import defaultdict
 
-    from models.relationship import Relationship, RelationshipType
+    from models.relationship import Relationship, RelationshipType, Visibility
 
     applied["skipped_relationships"] = []
     parents_of: dict = defaultdict(set)
@@ -742,7 +742,13 @@ def api_apply_document(doc_id):
             rel_type = RelationshipType(r_data.get("rel_type", "biological"))
         except ValueError:
             rel_type = RelationshipType.BIOLOGICAL
-        rel = Relationship(parent_id=parent_id, child_id=child_id, rel_type=rel_type)
+        try:
+            visibility = Visibility(r_data.get("visibility", "everyone"))
+        except ValueError:
+            visibility = Visibility.EVERYONE
+        rel = Relationship(
+            parent_id=parent_id, child_id=child_id, rel_type=rel_type, visibility=visibility
+        )
         try:
             repo.save_relationship(rel)
             parents_of[child_id].add(parent_id)

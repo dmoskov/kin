@@ -3,7 +3,7 @@
 from .article import NewsArticle
 from .event import EventType, LifeEvent
 from .person import Gender, Person
-from .relationship import Relationship, RelationshipType, Union
+from .relationship import Relationship, RelationshipType, Union, Visibility
 from .tree import FamilyTree
 
 __all__ = [
@@ -12,6 +12,7 @@ __all__ = [
     "Relationship",
     "RelationshipType",
     "Union",
+    "Visibility",
     "LifeEvent",
     "EventType",
     "NewsArticle",

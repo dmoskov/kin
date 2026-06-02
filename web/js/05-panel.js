@@ -38,13 +38,11 @@ export function showPersonPanel(personId) {
   const panel = document.getElementById("person-panel");
   const content = document.getElementById("panel-content");
 
-  // Find family connections
-  const parents = S.DATA.relationships
-    .filter((r) => r.child_id === personId)
-    .map((r) => r.parent_id);
-  const children = S.DATA.relationships
-    .filter((r) => r.parent_id === personId)
-    .map((r) => r.child_id);
+  // Find family connections (with relationship metadata)
+  const parentRels = S.DATA.relationships.filter((r) => r.child_id === personId);
+  const parents = parentRels.map((r) => r.parent_id);
+  const childRels = S.DATA.relationships.filter((r) => r.parent_id === personId);
+  const children = childRels.map((r) => r.child_id);
   const partners = S.DATA.unions
     .filter((u) => u.partner1_id === personId || u.partner2_id === personId)
     .map((u) => (u.partner1_id === personId ? u.partner2_id : u.partner1_id));
@@ -132,11 +130,34 @@ export function showPersonPanel(personId) {
   }
   const siblings = [...siblingIds];
 
+  // Separate birth family (biological parents when adoptive parents exist)
+  const hasAdoptiveParent = parentRels.some((r) => (r.rel_type || "biological") === "adoptive");
+  const birthParentRels = hasAdoptiveParent
+    ? parentRels.filter((r) => (r.rel_type || "biological") === "biological")
+    : [];
+  const familyParentRels = hasAdoptiveParent
+    ? parentRels.filter((r) => (r.rel_type || "biological") !== "biological")
+    : parentRels;
+
+  function _relTypePill(rel) {
+    const t = rel.rel_type || "biological";
+    if (t === "biological" && !hasAdoptiveParent) return `<span class="panel-rel-pill panel-rel-parent">parent</span>`;
+    const label = t === "biological" ? "birth parent" : t + " parent";
+    return `<span class="panel-rel-pill panel-rel-parent">${label}</span>`;
+  }
+
+  function _visibilityBadge(rel) {
+    const v = rel.visibility;
+    if (!v || v === "everyone") return "";
+    const label = v === "private" ? "private" : "family only";
+    return `<span class="panel-visibility-badge">${label}</span>`;
+  }
+
   // Family
-  if (parents.length || children.length || partners.length || siblings.length) {
+  if (familyParentRels.length || children.length || partners.length || siblings.length) {
     html += `<div class="panel-section"><h3>Family</h3><ul class="panel-family-list">`;
-    for (const pid of parents) {
-      html += `<li><a class="person-link" data-person-id="${pid}" href="javascript:void(0)">${personThumb(pid, 28)} ${personName(pid)}</a> <span class="panel-rel-pill panel-rel-parent">parent</span></li>`;
+    for (const rel of familyParentRels) {
+      html += `<li><a class="person-link" data-person-id="${rel.parent_id}" href="javascript:void(0)">${personThumb(rel.parent_id, 28)} ${personName(rel.parent_id)}</a> ${_relTypePill(rel)}${_visibilityBadge(rel)}</li>`;
     }
     for (const pid of siblings) {
       html += `<li><a class="person-link" data-person-id="${pid}" href="javascript:void(0)">${personThumb(pid, 28)} ${personName(pid)}</a> <span class="panel-rel-pill panel-rel-sibling">sibling</span></li>`;
@@ -146,6 +167,15 @@ export function showPersonPanel(personId) {
     }
     for (const cid of children) {
       html += `<li><a class="person-link" data-person-id="${cid}" href="javascript:void(0)">${personThumb(cid, 28)} ${personName(cid)}</a> <span class="panel-rel-pill panel-rel-child">child</span></li>`;
+    }
+    html += `</ul></div>`;
+  }
+
+  // Birth Family (shown separately when person has both biological and adoptive parents)
+  if (birthParentRels.length) {
+    html += `<div class="panel-section panel-birth-family"><h3>Birth Family</h3><ul class="panel-family-list">`;
+    for (const rel of birthParentRels) {
+      html += `<li><a class="person-link" data-person-id="${rel.parent_id}" href="javascript:void(0)">${personThumb(rel.parent_id, 28)} ${personName(rel.parent_id)}</a> <span class="panel-rel-pill panel-rel-birth">birth parent</span>${_visibilityBadge(rel)}</li>`;
     }
     html += `</ul></div>`;
   }
@@ -262,6 +292,20 @@ export function openAddRelativeForm(personId, relationship) {
         <div class="add-relative-row">
           <input id="arf-death" type="text" placeholder="Death year (optional)" class="add-relative-input" />
         </div>
+        ${relationship === "parent" || relationship === "child" ? `
+        <div class="add-relative-row">
+          <select id="arf-rel-type" class="add-relative-input">
+            <option value="biological">Biological</option>
+            <option value="adoptive">Adoptive</option>
+            <option value="step">Step</option>
+            <option value="foster">Foster</option>
+          </select>
+          <select id="arf-visibility" class="add-relative-input">
+            <option value="everyone">Visible to everyone</option>
+            <option value="self_and_children">Family only</option>
+            <option value="private">Private</option>
+          </select>
+        </div>` : ""}
         <div class="add-relative-actions">
           <button class="add-relative-submit" onclick="submitAddRelative('${personId}', '${relationship}')">Add ${label}</button>
           <button class="add-relative-cancel" onclick="document.getElementById('add-relative-form').classList.add('hidden')">Cancel</button>
@@ -275,6 +319,20 @@ export function openAddRelativeForm(personId, relationship) {
           </div>
         </div>
         <div id="arf-selected-person" class="arf-selected-person hidden"></div>
+        ${relationship === "parent" || relationship === "child" ? `
+        <div class="add-relative-row">
+          <select id="arf-link-rel-type" class="add-relative-input">
+            <option value="biological">Biological</option>
+            <option value="adoptive">Adoptive</option>
+            <option value="step">Step</option>
+            <option value="foster">Foster</option>
+          </select>
+          <select id="arf-link-visibility" class="add-relative-input">
+            <option value="everyone">Visible to everyone</option>
+            <option value="self_and_children">Family only</option>
+            <option value="private">Private</option>
+          </select>
+        </div>` : ""}
         <div class="add-relative-actions">
           <button id="arf-link-submit" class="add-relative-submit" disabled onclick="submitLinkExisting('${personId}', '${relationship}')">Link as ${label}</button>
           <button class="add-relative-cancel" onclick="document.getElementById('add-relative-form').classList.add('hidden')">Cancel</button>
@@ -415,7 +473,10 @@ export function _siblingParentIds(personId) {
 // Create the union/relationship(s) linking relativeId to personId, then reload
 // and refresh. Shared by submitLinkExisting and submitAddRelative. Returns true
 // on success, false after showing an error.
-export async function linkRelative(personId, relationship, relativeId, errorEl) {
+export async function linkRelative(personId, relationship, relativeId, errorEl, opts = {}) {
+  const relType = opts.rel_type || "biological";
+  const visibility = opts.visibility || "everyone";
+
   if (relationship === "partner") {
     try {
       const res = await fetch("/api/unions", {
@@ -435,9 +496,9 @@ export async function linkRelative(personId, relationship, relativeId, errorEl) 
   } else {
     const relPairs = [];
     if (relationship === "parent") {
-      relPairs.push({ parent_id: relativeId, child_id: personId });
+      relPairs.push({ parent_id: relativeId, child_id: personId, rel_type: relType, visibility });
     } else if (relationship === "child") {
-      relPairs.push({ parent_id: personId, child_id: relativeId });
+      relPairs.push({ parent_id: personId, child_id: relativeId, rel_type: relType, visibility });
     } else if (relationship === "sibling") {
       const parents = _siblingParentIds(personId);
       for (const pid of parents) {
@@ -481,7 +542,12 @@ export async function submitLinkExisting(personId, relationship) {
     _arfShowError(errorEl, "Select a person first.");
     return;
   }
-  await linkRelative(personId, relationship, _arfSelectedPersonId, errorEl);
+  const opts = {};
+  const rtEl = document.getElementById("arf-link-rel-type");
+  const visEl = document.getElementById("arf-link-visibility");
+  if (rtEl) opts.rel_type = rtEl.value;
+  if (visEl) opts.visibility = visEl.value;
+  await linkRelative(personId, relationship, _arfSelectedPersonId, errorEl, opts);
 }
 
 export async function submitAddRelative(personId, relationship) {
@@ -527,7 +593,12 @@ export async function submitAddRelative(personId, relationship) {
     return;
   }
 
-  await linkRelative(personId, relationship, newPersonId, errorEl);
+  const opts = {};
+  const rtEl = document.getElementById("arf-rel-type");
+  const visEl = document.getElementById("arf-visibility");
+  if (rtEl) opts.rel_type = rtEl.value;
+  if (visEl) opts.visibility = visEl.value;
+  await linkRelative(personId, relationship, newPersonId, errorEl, opts);
 }
 
 // ═══════════════════════════════════════════════════════════════

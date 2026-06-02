@@ -13,7 +13,7 @@ from models.article import NewsArticle
 from models.citation import Citation, Confidence, EntityType
 from models.event import EventType, LifeEvent
 from models.person import Gender, Person
-from models.relationship import Relationship, RelationshipType, Union
+from models.relationship import Relationship, RelationshipType, Union, Visibility
 from models.source import Source, SourceType
 from models.tree import FamilyTree
 
@@ -50,6 +50,7 @@ def load_tree(path: str) -> FamilyTree:
             parent_id=r["parent_id"],
             child_id=r["child_id"],
             rel_type=RelationshipType(r.get("rel_type", "biological")),
+            visibility=Visibility(r.get("visibility", "everyone")),
         )
         tree.add_relationship(rel)
 
@@ -155,6 +156,8 @@ def _rel_to_dict(r: Relationship) -> dict[str, str]:
     }
     if r.rel_type != RelationshipType.BIOLOGICAL:
         d["rel_type"] = r.rel_type.value
+    if r.visibility != Visibility.EVERYONE:
+        d["visibility"] = r.visibility.value
     return d
 
 

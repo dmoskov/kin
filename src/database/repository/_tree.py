@@ -3,7 +3,7 @@
 from typing import Any
 
 from models.event import EventType, LifeEvent
-from models.relationship import Relationship, RelationshipType, Union
+from models.relationship import Relationship, RelationshipType, Union, Visibility
 from models.tree import FamilyTree
 
 from ._sql import _fetchall, _is_pg, _scalar, _upsert
@@ -102,6 +102,7 @@ class TreeRepoMixin:
                         parent_id=row["parent_id"],
                         child_id=row["child_id"],
                         rel_type=RelationshipType(row["rel_type"]),
+                        visibility=Visibility(row.get("visibility", "everyone")),
                     )
                 )
 

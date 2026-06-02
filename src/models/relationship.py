@@ -18,17 +18,25 @@ class RelationshipType(Enum):
     FOSTER = "foster"  # foster parent-child
 
 
+class Visibility(Enum):
+    EVERYONE = "everyone"
+    SELF_AND_CHILDREN = "self_and_children"
+    PRIVATE = "private"
+
+
 @dataclass
 class Relationship:
     """A parent-child relationship edge.
 
     Directed: parent_id → child_id.
     Type distinguishes biological from adoptive/step/foster.
+    Visibility controls who can see birth-family connections.
     """
 
     parent_id: str
     child_id: str
     rel_type: RelationshipType = RelationshipType.BIOLOGICAL
+    visibility: Visibility = Visibility.EVERYONE
 
     def involves(self, person_id: str) -> bool:
         return person_id in (self.parent_id, self.child_id)

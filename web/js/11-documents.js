@@ -849,7 +849,8 @@ export function openReviewModal(proposed, filename, alreadyApplied) {
       const pName = _nameForId(r.parent_id);
       const cName = _nameForId(r.child_id);
       html += `<div class="review-card" data-review-index="${i}" data-review-type="relationships">`;
-      html += `<div class="review-card-header"><input type="checkbox" class="review-toggle" checked data-path="relationships.${i}._include" />${_escAttr(pName)} &rarr; ${_escAttr(cName)} <span class="label">(${r.rel_type || "biological"})</span></div>`;
+      const visLabel = r.visibility && r.visibility !== "everyone" ? ` · ${r.visibility === "private" ? "private" : "family only"}` : "";
+      html += `<div class="review-card-header"><input type="checkbox" class="review-toggle" checked data-path="relationships.${i}._include" />${_escAttr(pName)} &rarr; ${_escAttr(cName)} <span class="label">(${r.rel_type || "biological"}${visLabel})</span></div>`;
       html += `</div>`;
     }
     html += `</div></div>`;

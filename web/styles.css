@@ -575,6 +575,24 @@ main {
 .panel-rel-child { background: rgba(106, 179, 122, 0.15); color: var(--event-birth); }
 .panel-rel-partner { background: rgba(212, 168, 67, 0.15); color: var(--union); }
 .panel-rel-sibling { background: rgba(168, 124, 196, 0.15); color: var(--event-custom); }
+.panel-rel-birth { background: rgba(196, 149, 106, 0.18); color: #c4956a; }
+
+.panel-birth-family h3 { color: #c4956a; }
+
+.panel-visibility-badge {
+  font-size: 8px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  line-height: 1.4;
+  background: rgba(180, 140, 60, 0.12);
+  color: var(--text-muted);
+  border: 1px solid rgba(180, 140, 60, 0.2);
+  margin-left: 4px;
+}
 
 /* ── Event Timeline ───────────────────────────────────────── */
 
