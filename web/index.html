@@ -286,10 +286,13 @@
         <h3 id="photo-picker-title">Manage Photos</h3>
         <button class="photo-picker-close" id="photo-picker-close">&times;</button>
       </div>
-      <div class="photo-upload-zone" id="photo-upload-zone">
+      <div class="photo-upload-zone" id="photo-upload-zone" tabindex="0">
         <div class="upload-zone-content">
           <span class="upload-icon">&#128247;</span>
-          <span>Drop or paste photos here, or <label for="photo-file-input" class="upload-browse-link">browse</label></span>
+          <span>Drop photos here, or <label for="photo-file-input" class="upload-browse-link">browse</label></span>
+        </div>
+        <div class="upload-paste-hint" id="upload-paste-hint">
+          <kbd class="paste-kbd">Ctrl+V</kbd> to paste from clipboard
         </div>
         <input type="file" id="photo-file-input" multiple accept="image/*" style="display:none" />
         <div class="upload-progress hidden" id="upload-progress">

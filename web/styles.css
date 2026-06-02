@@ -2419,6 +2419,36 @@ main {
   text-decoration: underline;
   font-weight: 500;
 }
+.photo-upload-zone:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: rgba(108, 124, 255, 0.04);
+  box-shadow: 0 0 0 3px rgba(108, 124, 255, 0.15);
+}
+.upload-paste-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+.photo-upload-zone:focus .upload-paste-hint {
+  opacity: 1;
+  color: var(--accent);
+}
+.paste-kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  font-size: 11px;
+  font-family: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  box-shadow: 0 1px 0 var(--border);
+}
+.photo-upload-zone:focus .paste-kbd {
+  border-color: var(--accent);
+}
 .upload-progress {
   margin-top: 8px;
   font-size: 12px;

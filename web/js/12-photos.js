@@ -800,7 +800,17 @@ export async function openPhotoPicker(personId) {
   // Show/hide Google Photos import button based on config
   _updateGooglePhotosBtn();
 
+  // Show platform-appropriate paste shortcut
+  const pasteHint = document.getElementById("upload-paste-hint");
+  if (pasteHint) {
+    const kbd = pasteHint.querySelector(".paste-kbd");
+    if (kbd) kbd.textContent = navigator.platform?.includes("Mac") ? "⌘V" : "Ctrl+V";
+  }
+
   overlay.classList.remove("hidden");
+
+  // Auto-focus the upload zone so paste works immediately
+  newZone.focus();
 
   // Focus trap
   if (_photoPickerTrap) { _photoPickerTrap(); _photoPickerTrap = null; }
