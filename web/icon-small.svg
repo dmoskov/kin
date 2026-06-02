@@ -1,0 +1,26 @@
+<!-- Family Tree mark — SMALL variant for ≤32px (favicon, tab bar).
+     Two-mark system: drops the roots and the deepest-green detail (they mush at favicon
+     size), keeps the bright canopy + seed, recentered and scaled up ~12% to reclaim reach. -->
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="plate" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#211c15"/>
+      <stop offset="1" stop-color="#130f0a"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="96" fill="url(#plate)"/>
+
+  <!-- Origin pushed down so the canopy-only cluster centers in the plate. -->
+  <g transform="translate(256,346)">
+    <!-- Outer canopy: deeper green, behind. -->
+    <g transform="rotate(-48) scale(1.05)"><path d="M0,-30 C-46,-62 -52,-136 0,-180 C52,-136 46,-62 0,-30Z" fill="#4a8a5b"/></g>
+    <g transform="rotate(48)  scale(1.05)"><path d="M0,-30 C-46,-62 -52,-136 0,-180 C52,-136 46,-62 0,-30Z" fill="#4a8a5b"/></g>
+    <!-- Focal canopy: bright leaf-green, on top. -->
+    <g transform="rotate(-25) scale(1.12)"><path d="M0,-30 C-46,-62 -52,-136 0,-180 C52,-136 46,-62 0,-30Z" fill="#6db37a"/></g>
+    <g transform="rotate(25)  scale(1.12)"><path d="M0,-30 C-46,-62 -52,-136 0,-180 C52,-136 46,-62 0,-30Z" fill="#6db37a"/></g>
+    <g transform="rotate(0)   scale(1.12)"><path d="M0,-30 C-46,-62 -52,-136 0,-180 C52,-136 46,-62 0,-30Z" fill="#7cc488"/></g>
+    <!-- Seed: the family origin, sized up so it survives downscaling. -->
+    <circle cx="0" cy="0" r="30" fill="#e8c98a"/>
+  </g>
+</svg>

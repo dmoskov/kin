@@ -93,6 +93,13 @@ header {
   gap: 12px;
 }
 
+.header-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  flex-shrink: 0;
+}
+
 h1 {
   font-family: var(--header-font);
   font-size: 22px;

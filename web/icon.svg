@@ -1,0 +1,38 @@
+<!-- Family Tree mark — the Asphodel method (one leaf primitive, composed by rotation).
+     One shape plays two roles: pointing UP it is a canopy leaf (descendants);
+     mirrored DOWN it is a root (ancestors). They converge on a bright seed at the
+     center — the family origin. SVG has no z-index: source order = stacking order. -->
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Subtle, close-hue plate gradient: flat at a glance, premium up close. -->
+    <linearGradient id="plate" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#211c15"/>
+      <stop offset="1" stop-color="#130f0a"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Squircle plate. rx = 512 / 5.3 ≈ 96 gives the iOS app-icon feel. -->
+  <rect width="512" height="512" rx="96" fill="url(#plate)"/>
+
+  <!-- One parent sets the shared center. Upright (no tilt): a tree should feel rooted. -->
+  <g transform="translate(256,256)">
+
+    <!-- ROOTS (ancestors): same leaf, pointing DOWN, scaled smaller, muted gold-brown.
+         Drawn first so they sit behind and ground the mark. -->
+    <g transform="rotate(180) scale(0.80)"><path d="M0,-30 C-46,-62 -52,-136 0,-180 C52,-136 46,-62 0,-30Z" fill="#8a6238"/></g>
+    <g transform="rotate(142) scale(0.78)"><path d="M0,-30 C-46,-62 -52,-136 0,-180 C52,-136 46,-62 0,-30Z" fill="#9c7340"/></g>
+    <g transform="rotate(218) scale(0.78)"><path d="M0,-30 C-46,-62 -52,-136 0,-180 C52,-136 46,-62 0,-30Z" fill="#9c7340"/></g>
+
+    <!-- OUTER CANOPY (midground): scaled 0.92, deeper green, peeks from behind the focal pair. -->
+    <g transform="rotate(-46) scale(0.92)"><path d="M0,-30 C-46,-62 -52,-136 0,-180 C52,-136 46,-62 0,-30Z" fill="#3f7e50"/></g>
+    <g transform="rotate(46)  scale(0.92)"><path d="M0,-30 C-46,-62 -52,-136 0,-180 C52,-136 46,-62 0,-30Z" fill="#3f7e50"/></g>
+
+    <!-- FOCAL CANOPY: full size, bright leaf-green, drawn last → where the eye lands. -->
+    <g transform="rotate(-24)"><path d="M0,-30 C-46,-62 -52,-136 0,-180 C52,-136 46,-62 0,-30Z" fill="#6db37a"/></g>
+    <g transform="rotate(24)"><path d="M0,-30 C-46,-62 -52,-136 0,-180 C52,-136 46,-62 0,-30Z" fill="#6db37a"/></g>
+    <g transform="rotate(0)"><path d="M0,-30 C-46,-62 -52,-136 0,-180 C52,-136 46,-62 0,-30Z" fill="#7cc488"/></g>
+
+    <!-- SEED: the family origin where roots meet branches. Brightest, smallest, last. -->
+    <circle cx="0" cy="0" r="20" fill="#e8c98a"/>
+  </g>
+</svg>
