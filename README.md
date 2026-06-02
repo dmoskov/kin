@@ -304,7 +304,7 @@ private/             # YOUR family data (gitignored)
 
 ### Production (EC2)
 
-The app runs on an EC2 instance at `YOUR_EC2_HOST` (`your.domain.com`) with nginx + gunicorn.
+The app runs on an EC2 instance with nginx + gunicorn. Before deploying, fill in your instance details in `deploy/deploy.sh` and your domain in `deploy/nginx.conf`.
 
 **Deploy code changes:**
 
@@ -320,7 +320,7 @@ This script:
 
 **Requirements:**
 - AWS CLI with `ec2-instance-connect` permissions
-- SSH key pair at `~/.ssh/familytree-ec2` (`.pem`) and `~/.ssh/familytree-ec2.pub`
+- SSH key pair configured in `deploy/deploy.sh`
 - `rsync` installed locally
 
 **Important notes:**
@@ -357,7 +357,8 @@ docker run -p 8000:8000 -v $(pwd)/private:/app/private family-tree
 | `GOOGLE_CLIENT_ID` | Enables Google Sign-In on the dashboard.               | _(sign-in disabled)_ |
 | `EDITORS`          | Comma-separated Gmail addresses with edit access. Anyone not listed can view but not edit. Editors may sign in even without a person record in the tree. Example: `alice@gmail.com,bob@gmail.com` | _(unset — editing unrestricted)_ |
 | `ANTHROPIC_API_KEY`| Enables **Parse with AI** for uploaded documents.      | _(parsing disabled)_ |
+| `ADMIN_PERSON_ID`  | Person ID that can assign emails to tree members.      | _(feature disabled)_ |
 
 ## License
 
-Private project. The application code is shareable; family data is not.
+MIT. Family data stored in `private/` is yours and never touches version control.

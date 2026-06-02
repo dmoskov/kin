@@ -164,13 +164,34 @@ export function showPersonPanel(personId) {
     </div>`;
   }
 
-  // Life events
-  if (events.length) {
+  // Life events + dated photos merged into one timeline
+  const personPhotos = (S.DATA.photos || []).filter((p) =>
+    p.date && (p.tagged_people || []).some((tp) => tp.person_id === personId)
+  );
+  const timelineItems = [
+    ...events.map((e) => ({ kind: "event", date: e.date || "", sortDate: e.date || "9999", ...e })),
+    ...personPhotos.map((p) => {
+      const tag = (p.tagged_people || []).find((tp) => tp.person_id === personId);
+      return {
+        kind: "photo",
+        date: p.date,
+        sortDate: p.date,
+        description: tag?.caption || `Photo — ${p.date}`,
+        place: p.place,
+        photoPath: p.file_path,
+      };
+    }),
+  ].sort((a, b) => (a.sortDate || "").localeCompare(b.sortDate || ""));
+
+  if (timelineItems.length) {
     html += `<div class="panel-section"><h3>Life Events</h3><div class="panel-events-timeline">`;
-    for (const e of events) {
+    for (const e of timelineItems) {
       const date = e.date ? e.date.substring(0, 7) : "?";
-      const icon = _eventIcon(e.event_type);
-      const colorVar = _eventColorVar(e.event_type);
+      const icon = e.kind === "photo" ? "📷" : _eventIcon(e.event_type);
+      const colorVar = e.kind === "photo" ? "--event-custom" : _eventColorVar(e.event_type);
+      const photoThumb = e.kind === "photo" && e.photoPath
+        ? `<img class="panel-event-photo" src="/${e.photoPath}" alt="" loading="lazy" onclick="openLightbox('/${e.photoPath}', '${(e.description || "").replace(/'/g, "\\'")}', '${e.photoPath}')" />`
+        : "";
       html += `
         <div class="panel-event">
           <div class="panel-event-marker" style="--marker-color:var(${colorVar})">
@@ -179,7 +200,8 @@ export function showPersonPanel(personId) {
           </div>
           <div class="panel-event-body">
             <span class="panel-event-date">${date}</span>
-            <span class="panel-event-desc">${escapeHtml(e.description || e.event_type)}${e.place ? " · <span class='panel-event-place'>" + escapeHtml(e.place) + "</span>" : ""}</span>
+            <span class="panel-event-desc">${escapeHtml(e.description || e.event_type)}${e.place ? " · <span class='panel-event-place'>" + escapeHtml(e.place) + "</span>" : ""}${e.source && e.source.startsWith("http") ? ` · <a class="panel-event-source" href="${escapeHtml(e.source)}" target="_blank" rel="noopener">source</a>` : ""}</span>
+            ${photoThumb}
           </div>
         </div>`;
     }

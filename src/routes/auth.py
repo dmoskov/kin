@@ -148,12 +148,12 @@ def api_auth_logout():
 def api_set_email(person_id):
     """Set the email for a person. Body: {"email": "user@example.com"}
 
-    Only the admin (admin) can set emails for other people.
+    Only the admin (configured via ADMIN_PERSON_ID env var) can set emails for other people.
     Any logged-in user can clear their own email.
     """
-    # Simple admin check — only Dustin can assign emails
+    admin_person_id = os.environ.get("ADMIN_PERSON_ID", "")
     admin_id = session.get("person_id")
-    if admin_id != "dustin":
+    if not admin_person_id or admin_id != admin_person_id:
         return jsonify({"error": "admin only"}), 403
 
     body = request.get_json(force=True) or {}

@@ -520,7 +520,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # add-person
     ap = sub.add_parser("add-person", help="Add a person")
-    ap.add_argument("--id", required=True, help="Unique ID (e.g., 'dustin')")
+    ap.add_argument("--id", required=True, help="Unique ID (e.g., 'grandma-alice')")
     ap.add_argument("--given", required=True, help="Given/first name")
     ap.add_argument("--surname", required=True, help="Surname")
     ap.add_argument("--gender", choices=["male", "female", "other", "unknown"])

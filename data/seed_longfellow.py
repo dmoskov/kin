@@ -6,7 +6,6 @@ Source:
   - 10 generations, ~62 individuals
 
 Run from project root:
-    cd /Users/moskov/Code/family-tree
     python3 data/seed_longfellow.py
 """
 

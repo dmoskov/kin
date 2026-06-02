@@ -11,6 +11,13 @@ node_modules/
 # All personal data lives in private/ — see README.md
 private/
 
+# Personal data seed scripts (keep these in private/data/ instead)
+data/add_hughes_family.py
+data/*_family.py
+
+# Letta/AI agent working files
+.letta/
+
 # Runtime data files
 data/*.json
 data/*.gedcom
