@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { S } from "../../web/js/00-state.js";
 import { rankPeople, searchPeopleLocal } from "../../web/js/03-data-nav.js";
-import { computeFogDistance } from "../../web/js/04-tree.js";
+import { computeFogDistance, buildButterflyLayout } from "../../web/js/04-tree.js";
 import { calculateRelationship } from "../../web/js/07-relationship.js";
 import { autoComputeLanes, assignLane, buildLaneCache } from "../../web/js/02-lanes.js";
 
@@ -483,5 +483,76 @@ describe("lane assignment", () => {
   it("autoComputeLanes with a parentless, partnerless center does not crash", () => {
     autoComputeLanes("PatGF", null); // PatGF has no parents and no partner here
     expect(() => buildLaneCache()).not.toThrow();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Butterfly layout — center couple's siblings render at gen 0, flanking center
+// ═══════════════════════════════════════════════════════════════════════════
+describe("buildButterflyLayout sibling placement", () => {
+  const mkP = (id, gender) => makePerson(id, id, "X", { gender });
+  // Me + Spouse are the center couple. Me has siblings Bro/Sis (share my
+  // parents); Spouse has sibling InLaw (shares Spouse's parents).
+  const people = [
+    mkP("Me", "male"), mkP("Spouse", "female"),
+    mkP("Bro", "male"), mkP("Sis", "female"),
+    mkP("InLaw", "male"),
+    mkP("Dad", "male"), mkP("Mom", "female"),
+    mkP("SpDad", "male"), mkP("SpMom", "female"),
+  ];
+  const data = {
+    people,
+    relationships: [
+      { parent_id: "Dad", child_id: "Me" }, { parent_id: "Mom", child_id: "Me" },
+      { parent_id: "Dad", child_id: "Bro" }, { parent_id: "Mom", child_id: "Bro" },
+      { parent_id: "Dad", child_id: "Sis" }, { parent_id: "Mom", child_id: "Sis" },
+      { parent_id: "SpDad", child_id: "Spouse" }, { parent_id: "SpMom", child_id: "Spouse" },
+      { parent_id: "SpDad", child_id: "InLaw" }, { parent_id: "SpMom", child_id: "InLaw" },
+    ],
+    unions: [
+      { partner1_id: "Me", partner2_id: "Spouse" },
+      { partner1_id: "Dad", partner2_id: "Mom" },
+      { partner1_id: "SpDad", partner2_id: "SpMom" },
+    ],
+    events: [],
+  };
+
+  beforeEach(() => {
+    const pm = {};
+    for (const p of people) pm[p.id] = p;
+    S.PEOPLE_MAP = pm;
+    S.DATA = data;
+    S.ORIGINAL_DATA = data;
+    S.CENTER_ID_A = "Me";
+    S.CENTER_ID_B = "Spouse";
+    S.LANES = [];
+    S.CONFIG = { familyName: "Test" };
+  });
+
+  const byId = (nodes) => Object.fromEntries(nodes.map((n) => [n.id, n]));
+
+  it("places both partners' siblings at gen 0 (same row as the center)", () => {
+    const { nodes } = buildButterflyLayout();
+    const n = byId(nodes);
+    for (const id of ["Me", "Spouse", "Bro", "Sis", "InLaw"]) {
+      expect(n[id], `${id} should be rendered`).toBeTruthy();
+      expect(n[id].gen, `${id} at gen 0`).toBe(0);
+    }
+  });
+
+  it("flanks the center: partner A's siblings left, partner B's right", () => {
+    const { nodes } = buildButterflyLayout();
+    const n = byId(nodes);
+    // Me's siblings sit left of Me; Spouse's sibling sits right of Spouse.
+    expect(Math.max(n.Bro.cx, n.Sis.cx)).toBeLessThan(n.Me.cx);
+    expect(n.InLaw.cx).toBeGreaterThan(n.Spouse.cx);
+  });
+
+  it("keeps siblings near the center, not exiled to the far ancestor edge", () => {
+    const { nodes } = buildButterflyLayout();
+    const n = byId(nodes);
+    // Siblings should be closer to the center than the grandparents-row spread.
+    const rowSpan = Math.max(n.Me.cx, n.Spouse.cx) - Math.min(n.Bro.cx, n.Sis.cx, n.InLaw.cx);
+    expect(rowSpan).toBeLessThan(1000); // a handful of node-widths, not a sprawl
   });
 });

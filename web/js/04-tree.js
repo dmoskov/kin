@@ -2,6 +2,7 @@
 // Shared mutable state lives in S (00-state.js); functions/consts are
 // bridged onto window by 99-main.js so inline onclick handlers resolve.
 import { S } from "./00-state.js";
+import { _resolveCenterIds } from "./02-lanes.js";
 
 
 // Layout constants
@@ -265,7 +266,6 @@ export function buildButterflyLayout() {
   const couples = [];
   const personCoupleIdx = {};
   const placed = new Set();
-  const coupleChildren = {};  // coupleIdx → [child coupleIdx, ...]
 
   function addCouple(primaryId, partnerId, gen, side, treePar) {
     const idx = couples.length;
@@ -275,10 +275,6 @@ export function buildButterflyLayout() {
     if (partnerId) {
       placed.add(partnerId);
       personCoupleIdx[partnerId] = idx;
-    }
-    if (treePar !== undefined && treePar >= 0) {
-      if (!coupleChildren[treePar]) coupleChildren[treePar] = [];
-      coupleChildren[treePar].push(idx);
     }
     return idx;
   }
@@ -296,6 +292,29 @@ export function buildButterflyLayout() {
       addCouple(cid, partner, 1, "center", centerIdx);
     }
   }
+
+  // Gen 0: the center couple's siblings — rendered prominently beside the
+  // center couple instead of being buried under the parents' subtree. We do
+  // BOTH partners: partner A's siblings AND partner B's (the siblings-in-law).
+  // order < 0 sits left of center, order > 0 sits right, so each partner's
+  // siblings cluster on that partner's side.
+  function addCenterSiblings(centerPersonId, orderSign) {
+    if (!centerPersonId) return;
+    const sibs = new Set();
+    for (const par of parentsOf[centerPersonId] || []) {
+      for (const kid of childrenOf[par] || new Set()) {
+        if (kid !== centerPersonId) sibs.add(kid);
+      }
+    }
+    for (const sid of sibs) {
+      if (placed.has(sid)) continue;
+      const partner = (unionPartner[sid] || []).find((p) => !placed.has(p)) || null;
+      const idx = addCouple(sid, partner, 0, "center");
+      couples[idx].order = orderSign;
+    }
+  }
+  addCenterSiblings(S.CENTER_ID_A, -2);
+  addCenterSiblings(S.CENTER_ID_B, 2);
 
   // Walk UP from a person to place their ancestors.
   // Ancestors are stored as tree-children of their descendant (butterfly/inverted direction).
@@ -505,8 +524,11 @@ export function buildButterflyLayout() {
       for (const idx of group) couplePositions.get(idx).cx -= drift;
     }
 
-    // Initial placement: roots packed compactly, centered at x=0
+    // Initial placement: roots packed compactly, centered at x=0.
+    // Honor an explicit `order` hint (used to flank the center couple with
+    // partner A's siblings on the left and partner B's on the right).
     const rootGroup = byGen[gens[0]];
+    rootGroup.sort((a, b) => (couples[a].order || 0) - (couples[b].order || 0));
     let rx = 0;
     for (const idx of rootGroup) {
       const w = coupleWidth(couples[idx]);
@@ -594,35 +616,68 @@ export function buildButterflyLayout() {
     else if (couples[i].side === "left") leftLine.push(i);
   }
 
-  // ── Position center couple + descendants at x=0 ──
-  const descKids = {};
-  function collectDescKids(idx) {
-    const kids = (coupleChildren[idx] || []).filter(k => couples[k].gen > couples[idx].gen);
-    if (kids.length > 0) descKids[idx] = kids;
-    for (const k of kids) collectDescKids(k);
+  // ── Position the center "family of origin" block at x=0 ──
+  // This block holds the center couple, BOTH partners' siblings (rendered at
+  // gen 0 flanking the couple), and all of their descendants. Siblings are
+  // first-class here instead of being buried under the parents' subtree.
+  const centerLine = [];
+  for (let i = 0; i < couples.length; i++) {
+    if (couples[i].side === "center") centerLine.push(i);
   }
-  collectDescKids(centerIdx);
-  const descAll = collectAll([centerIdx], descKids);
-  positionLayered(descAll, descKids);
+  const centerTree = buildNaturalTree(centerLine);
+  const descAll = collectAll(centerTree.roots, centerTree.natKids);
+  positionLayered(descAll, centerTree.natKids);
 
-  // ── Position partner A's family to the LEFT ──
+  // Align an ancestor line so the center person's parents sit centered over
+  // their children (the center person + that person's siblings), rather than
+  // shoved entirely off to one side.
+  function alignLineOverChildren(lineIndices, centerPersonId, onThisSide) {
+    if (lineIndices.length === 0 || !centerPersonId) return;
+    let anchorIdx;
+    for (const pid of parentsOf[centerPersonId] || []) {
+      if (personCoupleIdx[pid] !== undefined) { anchorIdx = personCoupleIdx[pid]; break; }
+    }
+    if (anchorIdx === undefined || !couplePositions.has(anchorIdx)) return;
+    const group = [centerIdx];
+    for (let i = 0; i < couples.length; i++) {
+      if (couples[i].side === "center" && onThisSide(couples[i])) group.push(i);
+    }
+    let sum = 0, n = 0;
+    for (const g of group) {
+      const p = couplePositions.get(g);
+      if (p) { sum += p.cx; n++; }
+    }
+    if (n === 0) return;
+    shiftAll(lineIndices, sum / n - couplePositions.get(anchorIdx).cx);
+  }
+
+  // ── Position partner A's ancestry (LEFT) centered over A + A's siblings ──
+  let allR = [];
   if (rightLine.length > 0) {
     const { natKids, roots } = buildNaturalTree(rightLine);
-    const allR = collectAll(roots, natKids);
+    allR = collectAll(roots, natKids);
     positionLayered(allR, natKids);
-    const ext = getExtent(allR);
-    const centerExt = getExtent(descAll);
-    shiftAll(allR, (centerExt.min || 0) - ext.max - H_SPACING * 2);
+    alignLineOverChildren(allR, S.CENTER_ID_A, (c) => (c.order || 0) < 0);
   }
 
-  // ── Position partner B's family to the RIGHT ──
+  // ── Position partner B's ancestry (RIGHT) centered over B + B's siblings ──
+  let allL = [];
   if (leftLine.length > 0) {
     const { natKids, roots } = buildNaturalTree(leftLine);
-    const allL = collectAll(roots, natKids);
+    allL = collectAll(roots, natKids);
     positionLayered(allL, natKids);
-    const ext = getExtent(allL);
-    const centerExt = getExtent(descAll);
-    shiftAll(allL, (centerExt.max || 0) - ext.min + H_SPACING * 2);
+    alignLineOverChildren(allL, S.CENTER_ID_B, (c) => (c.order || 0) > 0);
+  }
+
+  // Keep the two ancestor blocks from colliding after alignment.
+  if (allR.length > 0 && allL.length > 0) {
+    const rExt = getExtent(allR);
+    const lExt = getExtent(allL);
+    const overlap = rExt.max + H_SPACING * 2 - lExt.min;
+    if (overlap > 0) {
+      shiftAll(allR, -overlap / 2);
+      shiftAll(allL, overlap / 2);
+    }
   }
 
   // ── Position any orphan couples not yet positioned ──
