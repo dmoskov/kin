@@ -26,41 +26,86 @@ export function showToast(message, type = "success") {
 // Build the inner HTML of the panel's photos section (the photo grid plus the
 // "+ Manage Photos" button). Shared by showPersonPanel (full render) and
 // _renderPanelPhotos (picker-refresh render) so the markup stays in sync.
+function _buildPhotoSlide(src, personId, person, captions, index) {
+  const capText = captions[src] || person.fullName;
+  const isProfile = person._profilePhotoPath === src;
+  const photoInfo = S.PHOTOS_MAP[src];
+  let html = `<div class="carousel-slide${index === 0 ? " active" : ""}" data-index="${index}">`;
+  html += `<div class="carousel-img-wrap">`;
+  if (isProfile) html += `<span class="photo-profile-badge" title="Profile photo">&#9733;</span>`;
+  html += `<img class="carousel-photo" src="/${src}" alt="${escapeHtml(capText)}" loading="lazy" data-photo-path="${src}" data-person-id="${personId}" />`;
+  html += `</div>`;
+  html += `<div class="carousel-info">`;
+  if (captions[src]) {
+    html += `<div class="panel-photo-caption">${escapeHtml(captions[src])}</div>`;
+  }
+  if (photoInfo) {
+    const others = (photoInfo.tagged_people || []).filter(tp => tp.person_id !== personId);
+    if (others.length > 0) {
+      html += `<div class="panel-photo-also">Also: ${others.map(tp => personLink(tp.person_id, [tp.given_name, tp.surname].filter(Boolean).join(" "))).join(", ")}</div>`;
+    }
+  }
+  if (photoInfo && (photoInfo.date || photoInfo.place)) {
+    const dateStr = photoInfo.date_circa ? `c. ${photoInfo.date}` : photoInfo.date;
+    html += `<div class="panel-photo-meta">`;
+    if (photoInfo.date) html += `<span>${escapeHtml(dateStr)}</span>`;
+    if (photoInfo.date && photoInfo.place) html += ` &middot; `;
+    if (photoInfo.place) html += `<span>${escapeHtml(photoInfo.place)}</span>`;
+    html += `</div>`;
+  }
+  html += `</div>`;
+  html += `</div>`;
+  return html;
+}
+
 export function buildPanelPhotosInnerHtml(personId) {
   const person = S.PEOPLE_MAP[personId];
   if (!person) return "";
   const photos = person.photo_paths || [];
   const captions = person.photo_captions || {};
   let html = "";
-  if (photos.length > 0) {
-    html += `<div class="panel-photos">`;
-    for (const src of photos) {
-      const capText = captions[src] || person.fullName;
-      const safeCaption = capText.replace(/'/g, "\\'");
-      const isProfile = person._profilePhotoPath === src;
-      html += `<div class="panel-photo-wrap">`;
-      if (isProfile) html += `<span class="photo-profile-badge" title="Profile photo">&#9733;</span>`;
-      html += `<img class="panel-photo" src="/${src}" alt="${escapeHtml(capText)}" loading="lazy" onclick="openLightbox('/${src}', '${safeCaption}', '${src}')" />`;
-      if (captions[src]) {
-        html += `<div class="panel-photo-caption">${escapeHtml(captions[src])}</div>`;
+  if (photos.length === 1) {
+    const src = photos[0];
+    const capText = captions[src] || person.fullName;
+    const isProfile = person._profilePhotoPath === src;
+    const photoInfo = S.PHOTOS_MAP[src];
+    html += `<div class="panel-photos panel-photos-single">`;
+    html += `<div class="panel-photo-wrap">`;
+    if (isProfile) html += `<span class="photo-profile-badge" title="Profile photo">&#9733;</span>`;
+    html += `<img class="panel-photo" src="/${src}" alt="${escapeHtml(capText)}" loading="lazy" data-photo-path="${src}" data-person-id="${personId}" />`;
+    if (captions[src]) {
+      html += `<div class="panel-photo-caption">${escapeHtml(capText)}</div>`;
+    }
+    if (photoInfo) {
+      const others = (photoInfo.tagged_people || []).filter(tp => tp.person_id !== personId);
+      if (others.length > 0) {
+        html += `<div class="panel-photo-also">Also: ${others.map(tp => personLink(tp.person_id, [tp.given_name, tp.surname].filter(Boolean).join(" "))).join(", ")}</div>`;
       }
-      const photoInfo = S.PHOTOS_MAP[src];
-      if (photoInfo) {
-        const others = (photoInfo.tagged_people || []).filter(tp => tp.person_id !== personId);
-        if (others.length > 0) {
-          html += `<div class="panel-photo-also">Also: ${others.map(tp => personLink(tp.person_id, [tp.given_name, tp.surname].filter(Boolean).join(" "))).join(", ")}</div>`;
-        }
-      }
-      if (photoInfo && (photoInfo.date || photoInfo.place)) {
-        const dateStr = photoInfo.date_circa ? `c. ${photoInfo.date}` : photoInfo.date;
-        html += `<div class="panel-photo-meta">`;
-        if (photoInfo.date) html += `<span>${escapeHtml(dateStr)}</span>`;
-        if (photoInfo.date && photoInfo.place) html += ` &middot; `;
-        if (photoInfo.place) html += `<span>${escapeHtml(photoInfo.place)}</span>`;
-        html += `</div>`;
-      }
+    }
+    if (photoInfo && (photoInfo.date || photoInfo.place)) {
+      const dateStr = photoInfo.date_circa ? `c. ${photoInfo.date}` : photoInfo.date;
+      html += `<div class="panel-photo-meta">`;
+      if (photoInfo.date) html += `<span>${escapeHtml(dateStr)}</span>`;
+      if (photoInfo.date && photoInfo.place) html += ` &middot; `;
+      if (photoInfo.place) html += `<span>${escapeHtml(photoInfo.place)}</span>`;
       html += `</div>`;
     }
+    html += `</div></div>`;
+  } else if (photos.length > 1) {
+    html += `<div class="photo-carousel" data-person-id="${personId}">`;
+    html += `<div class="carousel-track">`;
+    photos.forEach((src, i) => {
+      html += _buildPhotoSlide(src, personId, person, captions, i);
+    });
+    html += `</div>`;
+    html += `<button class="carousel-prev" aria-label="Previous photo">&#8249;</button>`;
+    html += `<button class="carousel-next" aria-label="Next photo">&#8250;</button>`;
+    html += `<div class="carousel-dots">`;
+    photos.forEach((_, i) => {
+      html += `<button class="carousel-dot${i === 0 ? " active" : ""}" data-index="${i}" aria-label="Go to photo ${i + 1}"></button>`;
+    });
+    html += `</div>`;
+    html += `<div class="carousel-counter"><span class="carousel-current">1</span> / ${photos.length}</div>`;
     html += `</div>`;
   }
   if (!S.CONFIG?.editorsEnabled || S.AUTH_USER?.is_editor) {
@@ -73,8 +118,67 @@ export function _renderPanelPhotos(personId) {
   const person = S.PEOPLE_MAP[personId];
   if (!person) return;
   const section = document.querySelector("#panel-content .panel-photos-section");
-  if (!section) return; // panel isn't currently showing this person
+  if (!section) return;
   section.innerHTML = buildPanelPhotosInnerHtml(personId);
+  _wireCarousel(section, personId);
+  _wirePanelPhotoClicks(section, personId);
+}
+
+export function _wireCarousel(container, personId) {
+  const carousel = container.querySelector(".photo-carousel");
+  if (!carousel) return;
+  const track = carousel.querySelector(".carousel-track");
+  const slides = track.querySelectorAll(".carousel-slide");
+  const dots = carousel.querySelectorAll(".carousel-dot");
+  const counter = carousel.querySelector(".carousel-current");
+  const total = slides.length;
+  let current = 0;
+
+  function goTo(idx) {
+    if (idx < 0) idx = total - 1;
+    if (idx >= total) idx = 0;
+    slides[current].classList.remove("active");
+    dots[current].classList.remove("active");
+    current = idx;
+    slides[current].classList.add("active");
+    dots[current].classList.add("active");
+    counter.textContent = current + 1;
+  }
+
+  carousel.querySelector(".carousel-prev").addEventListener("click", () => goTo(current - 1));
+  carousel.querySelector(".carousel-next").addEventListener("click", () => goTo(current + 1));
+  dots.forEach(dot => {
+    dot.addEventListener("click", () => goTo(parseInt(dot.dataset.index)));
+  });
+
+  let touchStartX = 0;
+  let touchDeltaX = 0;
+  carousel.addEventListener("touchstart", (e) => {
+    touchStartX = e.touches[0].clientX;
+    touchDeltaX = 0;
+  }, { passive: true });
+  carousel.addEventListener("touchmove", (e) => {
+    touchDeltaX = e.touches[0].clientX - touchStartX;
+  }, { passive: true });
+  carousel.addEventListener("touchend", () => {
+    if (Math.abs(touchDeltaX) > 40) {
+      goTo(touchDeltaX > 0 ? current - 1 : current + 1);
+    }
+  });
+}
+
+export function _wirePanelPhotoClicks(container, personId) {
+  const person = S.PEOPLE_MAP[personId];
+  if (!person) return;
+  const photos = person.photo_paths || [];
+  container.querySelectorAll("img[data-photo-path]").forEach((img) => {
+    img.addEventListener("click", () => {
+      const photoPath = img.dataset.photoPath;
+      const captions = person.photo_captions || {};
+      const capText = captions[photoPath] || person.fullName;
+      openLightbox("/" + photoPath, capText, photoPath, photos, personId);
+    });
+  });
 }
 
 // Wire up a caption <input> to save on blur/Enter without rebuilding

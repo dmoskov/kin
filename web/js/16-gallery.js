@@ -405,7 +405,15 @@ export function galleryPhotoClick(event, filePath, photoId) {
     showQuickYearPicker(photo, event.currentTarget);
     return;
   }
-  openLightbox("/" + filePath, "", filePath);
+  const filtered = getFilteredPhotos();
+  const sorted = [...filtered].sort((a, b) => {
+    if (!a.date && !b.date) return 0;
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return b.date.localeCompare(a.date);
+  });
+  const galleryPaths = sorted.map(p => p.file_path);
+  openLightbox("/" + filePath, "", filePath, galleryPaths);
   router.navigate(`/photos/view/${filePath}`);
 }
 

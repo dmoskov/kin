@@ -252,6 +252,11 @@ export function showPersonPanel(personId) {
   }
 
   content.innerHTML = html;
+  const photosSection = content.querySelector(".panel-photos-section");
+  if (photosSection) {
+    _wireCarousel(photosSection, personId);
+    _wirePanelPhotoClicks(photosSection, personId);
+  }
   panel.classList.remove("hidden");
   requestAnimationFrame(() => panel.classList.add("panel-open"));
   if (S.MAP) setTimeout(() => S.MAP.invalidateSize(), 250);

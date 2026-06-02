@@ -791,6 +791,151 @@ main {
   white-space: nowrap;
 }
 
+/* ── Photo Carousel (person panel, multi-photo) ──────────── */
+
+.photo-carousel {
+  position: relative;
+  width: 100%;
+  margin: 8px 0;
+  user-select: none;
+}
+.carousel-track {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+.carousel-slide {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  animation: carousel-fade-in 0.25s ease;
+}
+.carousel-slide.active {
+  display: flex;
+}
+@keyframes carousel-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.carousel-img-wrap {
+  position: relative;
+  width: 100%;
+  cursor: pointer;
+}
+.carousel-img-wrap .photo-profile-badge {
+  top: 6px;
+  left: 6px;
+  font-size: 18px;
+}
+.carousel-photo {
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  display: block;
+  background: var(--bg);
+}
+.carousel-info {
+  padding: 6px 4px 2px;
+  text-align: center;
+  width: 100%;
+}
+.carousel-info .panel-photo-caption {
+  max-width: 100%;
+  font-size: 12px;
+  white-space: normal;
+}
+.carousel-info .panel-photo-also {
+  max-width: 100%;
+  white-space: normal;
+}
+.carousel-info .panel-photo-meta {
+  max-width: 100%;
+}
+.carousel-prev,
+.carousel-next {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-100%);
+  z-index: 3;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+  opacity: 0.7;
+}
+.carousel-prev:hover,
+.carousel-next:hover {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+  opacity: 1;
+}
+.carousel-prev { left: 4px; }
+.carousel-next { right: 4px; }
+.carousel-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 0 4px;
+}
+.carousel-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+.carousel-dot:hover {
+  border-color: var(--accent);
+}
+.carousel-dot.active {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.carousel-counter {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  padding-bottom: 4px;
+}
+
+.panel-photos-single .panel-photo {
+  width: 100%;
+  max-height: 280px;
+  height: auto;
+  object-fit: contain;
+  cursor: pointer;
+  background: var(--bg);
+}
+.panel-photos-single .panel-photo-wrap {
+  width: 100%;
+}
+.panel-photos-single .panel-photo-caption {
+  max-width: 100%;
+  font-size: 12px;
+}
+.panel-photos-single .panel-photo-also {
+  max-width: 100%;
+}
+.panel-photos-single .panel-photo-meta {
+  max-width: 100%;
+}
+
 /* ── Lightbox ──────────────────────────────────────────────── */
 
 #lightbox {
@@ -846,6 +991,55 @@ main {
   transition: background 0.15s;
 }
 .lightbox-close:hover { background: var(--surface-hover); }
+
+.lightbox-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 90vw;
+  max-height: 90vh;
+}
+.lightbox-nav {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1002;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(30, 30, 30, 0.7);
+  color: #fff;
+  font-size: 32px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, transform 0.15s;
+  backdrop-filter: blur(4px);
+}
+.lightbox-nav:hover {
+  background: rgba(60, 60, 60, 0.9);
+  transform: translateY(-50%) scale(1.1);
+}
+.lightbox-prev { left: 16px; }
+.lightbox-next { right: 16px; }
+.lightbox-counter {
+  margin-top: 6px;
+  color: #999;
+  font-size: 13px;
+  letter-spacing: 1px;
+}
+@media (max-width: 768px) {
+  .lightbox-nav {
+    width: 36px;
+    height: 36px;
+    font-size: 24px;
+  }
+  .lightbox-prev { left: 4px; }
+  .lightbox-next { right: 4px; }
+}
 
 /* ── Timeline View ──────────────────────────────────────────── */
 
