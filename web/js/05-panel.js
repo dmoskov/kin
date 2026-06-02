@@ -91,6 +91,9 @@ export function showPersonPanel(personId) {
     <div id="edit-person-form" class="add-relative-form hidden"></div>
   `;
 
+  // AI-powered biographical summary
+  html += `<div id="panel-summary" class="panel-summary"><div class="panel-summary-loading"><span class="panel-summary-spinner"></span> Generating summary…</div></div>`;
+
   // Photos + Manage Photos button. The inner markup is shared with
   // _renderPanelPhotos (the picker-refresh path) via buildPanelPhotosInnerHtml.
   html += `<div class="panel-photos-section">`;
@@ -257,6 +260,29 @@ export function showPersonPanel(personId) {
   if (typeof activeViewName === "function" && activeViewName() === "tree") {
     ensureTreeNodeVisible(personId);
   }
+
+  _fetchPersonSummary(personId);
+}
+
+function _fetchPersonSummary(personId) {
+  const el = document.getElementById("panel-summary");
+  if (!el) return;
+
+  fetch(`/api/people/${encodeURIComponent(personId)}/summary`)
+    .then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    })
+    .then((data) => {
+      if (!data.summary) {
+        el.remove();
+        return;
+      }
+      el.innerHTML = `<div class="panel-summary-text">${escapeHtml(data.summary)}</div>`;
+    })
+    .catch(() => {
+      el.remove();
+    });
 }
 
 document.getElementById("close-panel").addEventListener("click", () => {

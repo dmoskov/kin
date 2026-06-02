@@ -1,5 +1,8 @@
 """Person CRUD and relationship/union creation endpoints."""
 
+import json
+import logging
+import os
 import re
 import uuid
 
@@ -7,8 +10,10 @@ from flask import Blueprint, jsonify, request
 
 import web_server
 from database.repository import TreeRepository, _fetchall, _fetchone, _ph
-from import_export.json_io import _person_to_dict
+from import_export.json_io import _event_to_dict, _person_to_dict
 from models.person import Gender, Person
+
+logger = logging.getLogger(__name__)
 
 people_bp = Blueprint("people", __name__)
 
@@ -282,6 +287,103 @@ def api_delete_person(person_id):
     if not ok:
         return jsonify({"error": "delete failed", "code": "server_error"}), 500
     return ("", 204)
+
+
+@people_bp.route("/api/people/<person_id>/summary", methods=["GET"])
+def api_person_summary(person_id):
+    """Generate an AI-powered biographical summary for a person.
+
+    Gathers the person's data, family connections, and life events, then
+    sends them to Claude Sonnet 4.6 to produce a concise narrative summary.
+
+    Returns 200 with ``{"summary": "..."}`` on success, 404 if the person
+    doesn't exist, 503 if the AI service is unavailable.
+    """
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return jsonify({"error": "AI service not configured", "code": "unavailable"}), 503
+
+    repo = TreeRepository()
+    tree = repo.load_tree()
+
+    person = tree.people.get(person_id)
+    if person is None:
+        return jsonify({"error": "person not found", "code": "not_found"}), 404
+
+    person_dict = _person_to_dict(person)
+
+    parent_rels = [r for r in tree.relationships if r.child_id == person_id]
+    child_rels = [r for r in tree.relationships if r.parent_id == person_id]
+    unions = [u for u in tree.unions if u.partner1_id == person_id or u.partner2_id == person_id]
+    events = sorted(
+        [e for e in tree.events if e.person_id == person_id],
+        key=lambda e: e.date or "",
+    )
+
+    def _name(pid):
+        p = tree.people.get(pid)
+        return p.full_name if p else pid
+
+    family = {}
+    if parent_rels:
+        family["parents"] = [
+            {"name": _name(r.parent_id), "rel_type": r.rel_type.value} for r in parent_rels
+        ]
+    if child_rels:
+        family["children"] = [_name(r.child_id) for r in child_rels]
+    if unions:
+        family["partners"] = []
+        for u in unions:
+            partner_id = u.partner2_id if u.partner1_id == person_id else u.partner1_id
+            entry = {"name": _name(partner_id)}
+            if u.union_date:
+                entry["married"] = u.union_date
+            if u.end_date:
+                entry["ended"] = u.end_date
+                if u.end_reason:
+                    entry["reason"] = u.end_reason
+            family["partners"].append(entry)
+
+    sibling_ids = set()
+    for r in parent_rels:
+        for cr in tree.relationships:
+            if cr.parent_id == r.parent_id and cr.child_id != person_id:
+                sibling_ids.add(cr.child_id)
+    if sibling_ids:
+        family["siblings"] = [_name(sid) for sid in sibling_ids]
+
+    context = {
+        "person": person_dict,
+        "family": family,
+        "life_events": [_event_to_dict(e) for e in events],
+    }
+
+    prompt = (
+        "You are writing a brief biographical summary for a family tree profile page. "
+        "Write 2-3 sentences that capture who this person is/was — their life dates, "
+        "where they lived, their family connections, and any notable life events. "
+        "Write in third person, in a warm but factual tone. "
+        "If information is sparse, work with what you have and keep it shorter. "
+        "Do NOT use bullet points or headers. Just flowing prose. "
+        "Do NOT mention that information is limited or sparse. "
+        "Return ONLY the summary text, no JSON or markup.\n\n"
+        f"Person data:\n{json.dumps(context, indent=2)}"
+    )
+
+    try:
+        import anthropic
+
+        client = anthropic.Anthropic(api_key=api_key)
+        message = client.messages.create(
+            model="claude-sonnet-4-6-20250514",
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        summary = message.content[0].text.strip()
+        return jsonify({"summary": summary})
+    except Exception:
+        logger.exception("Failed to generate person summary")
+        return jsonify({"error": "Failed to generate summary", "code": "ai_error"}), 500
 
 
 @people_bp.route("/api/relationships", methods=["POST"])
