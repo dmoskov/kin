@@ -157,7 +157,7 @@ export async function _fetchGeocodeAndPoll(places) {
     if (newResults && S.MAP) {
       // Clear existing markers and arcs before re-plotting
       for (const m of MAP_MARKERS) m.marker.remove();
-      for (const a of MAP_ARCS) { a.polyline.remove(); if (a.arrowHead) a.arrowHead.remove(); }
+      for (const a of MAP_ARCS) { a.polyline.remove(); if (a.hitArea) a.hitArea.remove(); if (a.arrowHead) a.arrowHead.remove(); }
       MAP_MARKERS = [];
       MAP_ARCS = [];
       buildMapEvents();
@@ -714,7 +714,7 @@ export function plotMigrationArcs(events) {
     for (const e of personEvents) {
       const key = e.latlng.join(",");
       if (waypoints.length === 0 || waypoints[waypoints.length - 1].key !== key) {
-        waypoints.push({ latlng: e.latlng, key, year: e.year, date: e.date });
+        waypoints.push({ latlng: e.latlng, key, year: e.year, date: e.date, place: e.place });
       }
     }
 
@@ -731,11 +731,22 @@ export function plotMigrationArcs(events) {
 
       // Draw a curved line with an arrowhead
       const latlngs = curvedPath(from.latlng, to.latlng);
+
+      // Invisible wider hit-area polyline for easier mouse interaction
+      const hitArea = L.polyline(latlngs, {
+        color: arcColor,
+        weight: Math.max(arcWeight * 4, 16),
+        opacity: 0,
+        interactive: true,
+        className: "arc-hit-area",
+      }).addTo(S.MAP);
+
       const polyline = L.polyline(latlngs, {
         color: arcColor,
         weight: arcWeight,
         opacity: arcOpacity,
         dashArray: "6,4",
+        interactive: false,
       }).addTo(S.MAP);
 
       // Arrow decorator at the end
@@ -747,21 +758,66 @@ export function plotMigrationArcs(events) {
         weight: 1,
       }).addTo(S.MAP);
 
-      // Tooltip on hover
-      polyline.bindTooltip(
-        `${personName(personId)}: ${from.year || "?"} → ${to.year || "?"}`,
+      // Tooltip on hover — bound to hit area for easier triggering
+      hitArea.bindTooltip(
+        `${personName(personId)}: ${escapeHtml(from.place || "?")} → ${escapeHtml(to.place || "?")} (${from.year || "?"} – ${to.year || "?"})`,
         { sticky: true, className: "arc-tooltip" }
       );
 
+      // Hover highlight: thicken and brighten the visible arc
+      hitArea.on("mouseover", () => {
+        polyline.setStyle({
+          weight: arcWeight + 3,
+          opacity: Math.min(arcOpacity + 0.3, 1),
+        });
+        arrowHead.setStyle({ radius: lerp(2, 4, ratio) + 2 });
+      });
+      hitArea.on("mouseout", () => {
+        polyline.setStyle({ weight: arcWeight, opacity: arcOpacity });
+        arrowHead.setStyle({ radius: lerp(2, 4, ratio) });
+      });
+
+      // Click: open popup with migration details for the person
+      const popupContent = buildArcPopup(personId, from, to);
+      hitArea.bindPopup(popupContent, { maxWidth: 280, className: "arc-popup" });
+
       MAP_ARCS.push({
         polyline,
+        hitArea,
         arrowHead,
         personId,
         fromYear: from.year,
         toYear: to.year,
+        _arcWeight: arcWeight,
+        _arcOpacity: arcOpacity,
       });
     }
   }
+}
+
+export function buildArcPopup(personId, from, to) {
+  const person = S.PEOPLE_MAP[personId];
+  const profileSrc = person?._profilePhotoPath;
+  let thumbHtml = "";
+  if (profileSrc) {
+    thumbHtml = croppedImg(profileSrc, person?.fullName || "", 28, person?._profileCrop, "map-popup-thumb arc-popup-thumb");
+  } else if (person) {
+    const initial = (person.given_name || "?")[0];
+    thumbHtml = `<span class="arc-popup-avatar" style="background:${person.gender === "female" ? "var(--node-female-bg)" : "var(--node-male-bg)"};border-color:${person.gender === "female" ? "var(--female)" : "var(--male)"}">${initial}</span>`;
+  }
+  const nameHtml = person ? personLink(personId) : escapeHtml(personId);
+  return `<div class="arc-popup-content">
+    <div class="arc-popup-header">${thumbHtml} <strong>${nameHtml}</strong></div>
+    <div class="arc-popup-route">
+      <span class="arc-popup-place">${escapeHtml(from.place || "Unknown")}</span>
+      <span class="arc-popup-year">${from.year || "?"}</span>
+    </div>
+    <div class="arc-popup-arrow">&#8595;</div>
+    <div class="arc-popup-route">
+      <span class="arc-popup-place">${escapeHtml(to.place || "Unknown")}</span>
+      <span class="arc-popup-year">${to.year || "?"}</span>
+    </div>
+  </div>`;
 }
 
 export function curvedPath(from, to) {
@@ -846,6 +902,9 @@ export function updateMapForYear(maxYear) {
       const color = brightenColor(baseColor, ratio);
 
       a.polyline.setStyle({ opacity, weight, color });
+      a._arcWeight = weight;
+      a._arcOpacity = opacity;
+      if (a.hitArea) a.hitArea.setStyle({ weight: Math.max(weight * 4, 16) });
       a.arrowHead.setStyle({
         fillColor: color,
         fillOpacity: lerp(BRIGHTNESS_FLOOR, 0.9, ratio),
@@ -854,6 +913,7 @@ export function updateMapForYear(maxYear) {
       });
     } else {
       a.polyline.setStyle({ opacity: 0.03, weight: WEIGHT_FLOOR });
+      if (a.hitArea) a.hitArea.setStyle({ weight: 0 });
       a.arrowHead.setStyle({ fillOpacity: 0.03, opacity: 0.03 });
     }
   }

@@ -1949,6 +1949,56 @@ main {
   to { stroke-dashoffset: -20; }
 }
 
+/* ── Migration arc hit area & tooltip & popup ─────────────── */
+
+.arc-hit-area {
+  stroke-opacity: 0 !important;
+  pointer-events: stroke !important;
+  cursor: pointer !important;
+}
+
+.arc-tooltip {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  padding: 5px 10px;
+  background: var(--panel-bg, #1a1a2e) !important;
+  color: var(--text, #eee) !important;
+  border: 1px solid var(--border, #333) !important;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+.arc-tooltip::before { border-top-color: var(--panel-bg, #1a1a2e) !important; }
+
+.arc-popup-content { line-height: 1.6; }
+.arc-popup-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+.arc-popup-header strong { font-weight: 600; }
+.arc-popup-thumb { width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0; }
+.arc-popup-avatar {
+  display: inline-flex;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid;
+  align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700;
+  color: var(--text);
+  flex-shrink: 0;
+}
+.arc-popup-route {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 2px 0;
+}
+.arc-popup-place { font-size: 13px; color: var(--text); }
+.arc-popup-year { font-size: 12px; color: var(--accent); font-weight: 500; margin-left: 12px; white-space: nowrap; }
+.arc-popup-arrow { text-align: center; color: var(--muted, #888); font-size: 14px; line-height: 1; padding: 2px 0; }
+
 /* ── Leaflet light mode ────────────────────────────────────── */
 
 [data-theme="light"] .leaflet-popup-content-wrapper {
