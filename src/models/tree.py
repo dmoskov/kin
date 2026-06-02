@@ -110,6 +110,13 @@ class FamilyTree:
                 partner_ids.append(u.other_partner(person_id))
         return [self.people[pid] for pid in partner_ids if pid in self.people]
 
+    def union_between(self, id_a: str, id_b: str) -> Union | None:
+        """Return the union between two people, or None."""
+        for u in self.unions:
+            if u.involves(id_a) and u.involves(id_b):
+                return u
+        return None
+
     def ancestors_of(self, person_id: str, max_depth: int = 20) -> list[Person]:
         """Get all ancestors (parents, grandparents, etc.) via BFS."""
         visited: set[str] = set()

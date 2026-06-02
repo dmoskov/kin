@@ -180,13 +180,16 @@ export function calculateRelationship(idA, idB) {
     parentsOf[r.child_id].push(r.parent_id);
   }
 
-  // Build spouses map
+  // Build spouses map and union lookup
   const spousesOf = {};
+  const unionLookup = {};
   for (const u of S.DATA.unions) {
     if (!spousesOf[u.partner1_id]) spousesOf[u.partner1_id] = [];
     if (!spousesOf[u.partner2_id]) spousesOf[u.partner2_id] = [];
     spousesOf[u.partner1_id].push(u.partner2_id);
     spousesOf[u.partner2_id].push(u.partner1_id);
+    const key = [u.partner1_id, u.partner2_id].sort().join("|");
+    unionLookup[key] = u;
   }
 
   function ancestorsWithDist(pid) {
@@ -237,8 +240,14 @@ export function calculateRelationship(idA, idB) {
   const spA = spousesOf[idA] || [];
   const spB = spousesOf[idB] || [];
 
-  // 2. Direct spouse
-  if (spA.includes(idB)) return gB === "male" ? "husband" : gB === "female" ? "wife" : "spouse";
+  // 2. Direct spouse / ex-spouse
+  if (spA.includes(idB)) {
+    const uKey = [idA, idB].sort().join("|");
+    const union = unionLookup[uKey];
+    const isEx = union && union.end_date;
+    if (isEx) return gB === "male" ? "ex-husband" : gB === "female" ? "ex-wife" : "ex-spouse";
+    return gB === "male" ? "husband" : gB === "female" ? "wife" : "spouse";
+  }
 
   // 3. B is A's spouse's blood relative → in-law
   for (const sA of spA) {

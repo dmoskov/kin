@@ -462,7 +462,63 @@ def api_create_union():
     if repo.get_person(p2) is None:
         return jsonify({"error": f"person not found: {p2}", "code": "not_found"}), 404
 
-    union = Union(partner1_id=p1, partner2_id=p2)
+    union_date = (body.get("union_date") or "").strip() or None
+    union_place = (body.get("union_place") or "").strip() or None
+    end_date = (body.get("end_date") or "").strip() or None
+    end_reason = (body.get("end_reason") or "").strip() or None
+    notes = (body.get("notes") or "").strip()
+
+    union = Union(
+        partner1_id=p1,
+        partner2_id=p2,
+        union_date=union_date,
+        union_place=union_place,
+        end_date=end_date,
+        end_reason=end_reason,
+        notes=notes,
+    )
     repo.save_union(union)
     repo.auto_link_siblings()
-    return jsonify({"partner1_id": p1, "partner2_id": p2}), 201
+    return jsonify({
+        "partner1_id": p1,
+        "partner2_id": p2,
+        "union_date": union_date,
+        "union_place": union_place,
+        "end_date": end_date,
+        "end_reason": end_reason,
+    }), 201
+
+
+@people_bp.route("/api/unions", methods=["PATCH"])
+@web_server.require_editor
+def api_update_union():
+    """Update an existing union (e.g. to mark it as ended/divorced).
+
+    Body: {"partner1_id": "...", "partner2_id": "...", ...fields to update...}
+    Updatable fields: end_date, end_reason, union_date, union_place, notes.
+
+    Returns 200 on success, 404 if the union doesn't exist.
+    """
+    body = request.get_json(silent=True) or {}
+    p1 = (body.get("partner1_id") or "").strip()
+    p2 = (body.get("partner2_id") or "").strip()
+    if not p1 or not p2:
+        return jsonify(
+            {"error": "partner1_id and partner2_id are required", "code": "bad_request"}
+        ), 400
+
+    repo = TreeRepository()
+    existing = repo.get_union(p1, p2)
+    if not existing:
+        return jsonify({"error": "union not found", "code": "not_found"}), 404
+
+    kwargs = {}
+    for field in ("end_date", "end_reason", "union_date", "union_place", "notes"):
+        if field in body:
+            val = body[field]
+            if isinstance(val, str):
+                val = val.strip() or None
+            kwargs[field] = val
+
+    repo.update_union(p1, p2, **kwargs)
+    return jsonify({"ok": True})

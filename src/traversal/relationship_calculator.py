@@ -270,8 +270,18 @@ def describe_relationship(tree: FamilyTree, id_a: str, id_b: str) -> str:
     spouses_a = [p.id for p in tree.partners_of(id_a)]
     spouses_b = [p.id for p in tree.partners_of(id_b)]
 
-    # 2. Direct spouse
+    # 2. Direct spouse / ex-spouse
     if id_b in spouses_a:
+        union = tree.union_between(id_a, id_b)
+        is_ex = union is not None and union.end_date is not None
+        if is_ex:
+            return (
+                "ex-husband"
+                if gender_b == "male"
+                else "ex-wife"
+                if gender_b == "female"
+                else "ex-spouse"
+            )
         return "husband" if gender_b == "male" else "wife" if gender_b == "female" else "spouse"
 
     # 3. B is A's spouse's blood relative → in-law

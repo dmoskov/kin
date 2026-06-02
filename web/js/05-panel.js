@@ -63,8 +63,13 @@ export function showPersonPanel(personId) {
   const parents = parentRels.map((r) => r.parent_id);
   const childRels = S.DATA.relationships.filter((r) => r.parent_id === personId);
   const children = childRels.map((r) => r.child_id);
-  const partners = S.DATA.unions
-    .filter((u) => u.partner1_id === personId || u.partner2_id === personId)
+  const personUnions = S.DATA.unions
+    .filter((u) => u.partner1_id === personId || u.partner2_id === personId);
+  const partners = personUnions
+    .filter((u) => !u.end_date)
+    .map((u) => (u.partner1_id === personId ? u.partner2_id : u.partner1_id));
+  const exPartners = personUnions
+    .filter((u) => !!u.end_date)
     .map((u) => (u.partner1_id === personId ? u.partner2_id : u.partner1_id));
   const events = S.DATA.events
     .filter((e) => e.person_id === personId)
@@ -177,7 +182,7 @@ export function showPersonPanel(personId) {
   }
 
   // Family
-  if (familyParentRels.length || children.length || partners.length || siblings.length) {
+  if (familyParentRels.length || children.length || partners.length || exPartners.length || siblings.length) {
     html += `<div class="panel-section"><h3>Family</h3><ul class="panel-family-list">`;
     for (const rel of familyParentRels) {
       html += `<li><a class="person-link" data-person-id="${rel.parent_id}" href="javascript:void(0)">${personThumb(rel.parent_id, 28)} ${personName(rel.parent_id)}</a> ${_relTypePill(rel)}${_visibilityBadge(rel)}</li>`;
@@ -187,6 +192,9 @@ export function showPersonPanel(personId) {
     }
     for (const pid of partners) {
       html += `<li><a class="person-link" data-person-id="${pid}" href="javascript:void(0)">${personThumb(pid, 28)} ${personName(pid)}</a> <span class="panel-rel-pill panel-rel-partner">partner</span></li>`;
+    }
+    for (const pid of exPartners) {
+      html += `<li><a class="person-link" data-person-id="${pid}" href="javascript:void(0)">${personThumb(pid, 28)} ${personName(pid)}</a> <span class="panel-rel-pill panel-rel-ex">ex</span></li>`;
     }
     for (const cid of children) {
       html += `<li><a class="person-link" data-person-id="${cid}" href="javascript:void(0)">${personThumb(cid, 28)} ${personName(cid)}</a> <span class="panel-rel-pill panel-rel-child">child</span></li>`;

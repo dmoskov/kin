@@ -4,7 +4,12 @@ from typing import Any
 
 from models.relationship import Relationship, RelationshipType, Union
 
-from ._sql import _execute, _fetchall, _ph, _upsert
+from ._sql import _execute, _fetchall, _fetchone, _ph, _upsert
+
+# Sentinel for update_union: distinguishes "argument not provided" from an
+# explicit None (which clears a field). Typed Any so it's assignable to the
+# str | None parameters.
+_UNSET: Any = object()
 
 
 class RelationshipsRepoMixin:
@@ -137,5 +142,71 @@ class RelationshipsRepoMixin:
         try:
             self._do_save_union(conn, union)
             conn.commit()
+        finally:
+            conn.close()
+
+    def get_union(self, partner1_id: str, partner2_id: str) -> dict | None:
+        """Look up a union row by either partner order."""
+        conn = self._conn()
+        try:
+            p = _ph()
+            row = _fetchone(
+                conn,
+                f"""
+                SELECT * FROM unions
+                WHERE (partner1_id = {p} AND partner2_id = {p})
+                   OR (partner1_id = {p} AND partner2_id = {p})
+                LIMIT 1
+                """,
+                (partner1_id, partner2_id, partner2_id, partner1_id),
+            )
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
+    def update_union(
+        self,
+        partner1_id: str,
+        partner2_id: str,
+        *,
+        end_date: str | None = _UNSET,
+        end_reason: str | None = _UNSET,
+        union_date: str | None = _UNSET,
+        union_place: str | None = _UNSET,
+        notes: str | None = _UNSET,
+    ) -> bool:
+        """Update fields on an existing union. Returns True if a row was updated."""
+        sets = []
+        params: list = []
+        sentinel = _UNSET
+        for col, val in [
+            ("end_date", end_date),
+            ("end_reason", end_reason),
+            ("union_date", union_date),
+            ("union_place", union_place),
+            ("notes", notes),
+        ]:
+            if val is not sentinel:
+                sets.append(f"{col} = {_ph()}")
+                params.append(val)
+
+        if not sets:
+            return False
+
+        p = _ph()
+        params.extend([partner1_id, partner2_id, partner2_id, partner1_id])
+        conn = self._conn()
+        try:
+            _execute(
+                conn,
+                f"""
+                UPDATE unions SET {", ".join(sets)}
+                WHERE (partner1_id = {p} AND partner2_id = {p})
+                   OR (partner1_id = {p} AND partner2_id = {p})
+                """,
+                tuple(params),
+            )
+            conn.commit()
+            return True
         finally:
             conn.close()
