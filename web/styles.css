@@ -1769,28 +1769,6 @@ main {
 
 /* ── Global Viewing-As Selector ───────────────────────────── */
 
-.viewing-as-section {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.viewing-as-label {
-  font-size: 12px;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-.viewing-as-global-select {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-family: inherit;
-  font-size: 12px;
-  padding: 4px 8px;
-  border-radius: var(--radius);
-  cursor: pointer;
-  max-width: 180px;
-}
-
 /* ── Auth Section ──────────────────────────────────────────── */
 
 .auth-section {
@@ -1935,6 +1913,71 @@ main {
 .user-menu-logout:hover {
   color: var(--text);
   background: var(--surface-hover);
+}
+
+/* ── Tools overflow menu (Import / Export / Upload / Undo) ──── */
+
+.tools-section {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.tools-btn {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.tools-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.tools-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  min-width: 200px;
+  z-index: 200;
+  padding: 6px 0;
+  animation: menuFadeIn 0.12s ease;
+}
+.tools-menu.hidden { display: none; }
+.tools-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  text-align: left;
+  transition: background 0.12s;
+}
+.tools-menu-item:hover { background: var(--surface-hover); }
+.tools-menu-icon {
+  font-size: 14px;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
 }
 
 #google-signin-btn {
@@ -5279,19 +5322,6 @@ select.ge-input { padding: 3px 4px; }
 
 @media (max-width: 600px) {
   h1 { font-size: 18px; }
-  /* Let the "Viewing as" control take a full row and shrink to fit. */
-  .header-actions .viewing-as-section {
-    flex: 1 1 100%;
-    min-width: 0;
-  }
-  .viewing-as-global-select {
-    flex: 1;
-    min-width: 0;
-  }
-  .doc-upload-btn {
-    font-size: 12px;
-    padding: 6px 10px;
-  }
 }
 
 

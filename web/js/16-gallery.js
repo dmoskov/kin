@@ -1137,6 +1137,32 @@ export function initUserPillMenu() {
   });
 }
 
+export function initToolsMenu() {
+  const btn = document.getElementById("tools-btn");
+  const menu = document.getElementById("tools-menu");
+  if (!btn || !menu) return;
+
+  const close = () => {
+    menu.classList.add("hidden");
+    btn.setAttribute("aria-expanded", "false");
+  };
+
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const opened = !menu.classList.toggle("hidden");
+    btn.setAttribute("aria-expanded", String(opened));
+  });
+
+  // Choosing an action closes the menu; so does clicking outside or Escape.
+  menu.addEventListener("click", close);
+  document.addEventListener("click", (e) => {
+    if (!menu.contains(e.target) && e.target !== btn) close();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") close();
+  });
+}
+
 export function populateViewingAsDropdown(selectId) {
   const sel = document.getElementById(selectId);
   if (!sel) return;
@@ -1208,6 +1234,9 @@ export function initViewingAs() {
 
   // Init user pill menu toggle
   initUserPillMenu();
+
+  // Init the data-tools overflow menu (Import / Export / Upload / Undo)
+  initToolsMenu();
 
   // Apply auth state to UI
   applyAuth();

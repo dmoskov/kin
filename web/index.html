@@ -49,9 +49,15 @@
         <button class="tab" data-view="photos" id="tab-photos" role="tab" aria-controls="view-photos" aria-selected="false">Photos</button>
         <button class="tab" data-view="relationships" id="tab-relationships" role="tab" aria-controls="view-relationships" aria-selected="false">Relationships</button>
       </nav>
-      <div class="viewing-as-section">
-        <label class="viewing-as-label" for="viewing-as-global">Viewing as</label>
-        <select id="viewing-as-global" class="viewing-as-global-select"></select>
+      <button class="theme-toggle" id="theme-toggle" title="Toggle light/dark mode" aria-label="Toggle light/dark mode">&#9790;</button>
+      <div class="tools-section">
+        <button class="tools-btn" id="tools-btn" title="Data tools" aria-label="Data tools" aria-haspopup="true" aria-expanded="false">&#8943;</button>
+        <div class="tools-menu hidden" id="tools-menu" role="menu" aria-label="Data tools">
+          <button class="tools-menu-item" id="undo-btn" role="menuitem" title="Undo last deletion (Ctrl/Cmd+Z)" style="display:none"><span class="tools-menu-icon">&#8630;</span> Undo</button>
+          <button class="tools-menu-item" id="gedcom-import-btn" role="menuitem" title="Import a GEDCOM file from genealogy software"><span class="tools-menu-icon">&#128229;</span> Import GEDCOM</button>
+          <button class="tools-menu-item" id="export-gedcom-btn" role="menuitem" title="Export the tree as a GEDCOM file"><span class="tools-menu-icon">&#11015;</span> Export GEDCOM</button>
+          <button class="tools-menu-item" id="doc-upload-btn" role="menuitem" title="Upload a document for AI parsing"><span class="tools-menu-icon">&#128196;</span> Upload Doc</button>
+        </div>
       </div>
       <div class="auth-section">
         <!-- Both start hidden and applyAuth() reveals whichever is correct
@@ -91,11 +97,6 @@
           </div>
         </div>
       </div>
-      <button class="doc-upload-btn" id="undo-btn" title="Undo last deletion (Ctrl/Cmd+Z)" style="display:none">&#8630; Undo</button>
-      <button class="doc-upload-btn" id="gedcom-import-btn" title="Import a GEDCOM file from genealogy software">&#128229; Import GEDCOM</button>
-      <button class="doc-upload-btn" id="export-gedcom-btn" title="Export the tree as a GEDCOM file">&#11015; Export GEDCOM</button>
-      <button class="doc-upload-btn" id="doc-upload-btn" title="Upload a document for AI parsing">&#128196; Upload Doc</button>
-      <button class="theme-toggle" id="theme-toggle" title="Toggle light/dark mode" aria-label="Toggle light/dark mode">&#9790;</button>
     </div>
   </header>
 
