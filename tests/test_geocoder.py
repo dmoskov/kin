@@ -4,15 +4,15 @@ All external calls (database, Nominatim) are mocked.
 """
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 import geocoder as geocoder_mod
 
-_RECENT = "2099-01-01 00:00:00"   # far-future = always fresh
-_STALE  = "2000-01-01 00:00:00"   # old enough to always be stale
+_RECENT = "2099-01-01 00:00:00"  # far-future = always fresh
+_STALE = "2000-01-01 00:00:00"  # old enough to always be stale
 
 
 # ── Helpers ───────────────────────────────────────────────────────────
@@ -34,7 +34,10 @@ class TestExpandStateAbbrevs:
         assert geocoder_mod._expand_state_abbrevs("Boston, MA") == "Boston, Massachusetts"
 
     def test_expands_dc(self):
-        assert geocoder_mod._expand_state_abbrevs("Washington, DC") == "Washington, District of Columbia"
+        assert (
+            geocoder_mod._expand_state_abbrevs("Washington, DC")
+            == "Washington, District of Columbia"
+        )
 
     def test_expands_mid_string(self):
         result = geocoder_mod._expand_state_abbrevs("Albany, NY, USA")
@@ -93,9 +96,9 @@ class TestIsStaleNull:
         assert geocoder_mod._is_stale_null(_RECENT) is False
 
     def test_datetime_object(self):
-        recent = datetime.now(timezone.utc) - timedelta(days=1)
+        recent = datetime.now(UTC) - timedelta(days=1)
         assert geocoder_mod._is_stale_null(recent) is False
-        old = datetime.now(timezone.utc) - timedelta(days=60)
+        old = datetime.now(UTC) - timedelta(days=60)
         assert geocoder_mod._is_stale_null(old) is True
 
 

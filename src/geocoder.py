@@ -17,7 +17,7 @@ import threading
 import time
 import urllib.parse
 import urllib.request
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from database.connection import _use_postgres as _is_pg
 from database.connection import get_connection
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 _USER_AGENT = "family-tree-app/1.0 (https://github.com/dmoskov/family-tree)"
 _NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-_RATE_LIMIT = 1.1          # seconds between requests (Nominatim policy: max 1/sec)
+_RATE_LIMIT = 1.1  # seconds between requests (Nominatim policy: max 1/sec)
 _RETRY_NULL_AFTER_DAYS = 30  # retry cached failures after this many days
 
 _last_request_time: float = 0.0
@@ -37,28 +37,70 @@ _pending_lock = threading.Lock()
 
 # US state and territory abbreviation → full name
 _STATE_ABBREVS: dict[str, str] = {
-    "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas",
-    "CA": "California", "CO": "Colorado", "CT": "Connecticut", "DE": "Delaware",
-    "DC": "District of Columbia", "FL": "Florida", "GA": "Georgia", "HI": "Hawaii",
-    "ID": "Idaho", "IL": "Illinois", "IN": "Indiana", "IA": "Iowa",
-    "KS": "Kansas", "KY": "Kentucky", "LA": "Louisiana", "ME": "Maine",
-    "MD": "Maryland", "MA": "Massachusetts", "MI": "Michigan", "MN": "Minnesota",
-    "MS": "Mississippi", "MO": "Missouri", "MT": "Montana", "NE": "Nebraska",
-    "NV": "Nevada", "NH": "New Hampshire", "NJ": "New Jersey", "NM": "New Mexico",
-    "NY": "New York", "NC": "North Carolina", "ND": "North Dakota", "OH": "Ohio",
-    "OK": "Oklahoma", "OR": "Oregon", "PA": "Pennsylvania", "RI": "Rhode Island",
-    "SC": "South Carolina", "SD": "South Dakota", "TN": "Tennessee", "TX": "Texas",
-    "UT": "Utah", "VT": "Vermont", "VA": "Virginia", "WA": "Washington",
-    "WV": "West Virginia", "WI": "Wisconsin", "WY": "Wyoming",
-    "PR": "Puerto Rico", "GU": "Guam", "VI": "US Virgin Islands",
+    "AL": "Alabama",
+    "AK": "Alaska",
+    "AZ": "Arizona",
+    "AR": "Arkansas",
+    "CA": "California",
+    "CO": "Colorado",
+    "CT": "Connecticut",
+    "DE": "Delaware",
+    "DC": "District of Columbia",
+    "FL": "Florida",
+    "GA": "Georgia",
+    "HI": "Hawaii",
+    "ID": "Idaho",
+    "IL": "Illinois",
+    "IN": "Indiana",
+    "IA": "Iowa",
+    "KS": "Kansas",
+    "KY": "Kentucky",
+    "LA": "Louisiana",
+    "ME": "Maine",
+    "MD": "Maryland",
+    "MA": "Massachusetts",
+    "MI": "Michigan",
+    "MN": "Minnesota",
+    "MS": "Mississippi",
+    "MO": "Missouri",
+    "MT": "Montana",
+    "NE": "Nebraska",
+    "NV": "Nevada",
+    "NH": "New Hampshire",
+    "NJ": "New Jersey",
+    "NM": "New Mexico",
+    "NY": "New York",
+    "NC": "North Carolina",
+    "ND": "North Dakota",
+    "OH": "Ohio",
+    "OK": "Oklahoma",
+    "OR": "Oregon",
+    "PA": "Pennsylvania",
+    "RI": "Rhode Island",
+    "SC": "South Carolina",
+    "SD": "South Dakota",
+    "TN": "Tennessee",
+    "TX": "Texas",
+    "UT": "Utah",
+    "VT": "Vermont",
+    "VA": "Virginia",
+    "WA": "Washington",
+    "WV": "West Virginia",
+    "WI": "Wisconsin",
+    "WY": "Wyoming",
+    "PR": "Puerto Rico",
+    "GU": "Guam",
+    "VI": "US Virgin Islands",
 }
 
 
 def _expand_state_abbrevs(s: str) -> str:
     """Expand US state abbreviations after commas: 'Boston, MA' → 'Boston, Massachusetts'."""
+
     def _replace(m: re.Match) -> str:
         abbr = m.group(1)
         return f", {_STATE_ABBREVS[abbr]}" if abbr in _STATE_ABBREVS else m.group(0)
+
     return re.sub(r",\s*([A-Z]{2})(?=\s*(?:,|$))", _replace, s)
 
 
@@ -103,7 +145,7 @@ def _simplify_place(place: str) -> list[str]:
 
 def _is_stale_null(fetched_at: object) -> bool:
     """Return True if a cached NULL is old enough to be worth retrying."""
-    cutoff = datetime.now(timezone.utc) - timedelta(days=_RETRY_NULL_AFTER_DAYS)
+    cutoff = datetime.now(UTC) - timedelta(days=_RETRY_NULL_AFTER_DAYS)
     if fetched_at is None:
         return True
     if isinstance(fetched_at, datetime):
@@ -244,11 +286,7 @@ def _nominatim_query(query: str) -> tuple[float, float] | None:
             time.sleep(_RATE_LIMIT - elapsed)
         _last_request_time = time.time()
 
-    url = (
-        _NOMINATIM_URL
-        + "?"
-        + urllib.parse.urlencode({"q": query, "format": "json", "limit": 1})
-    )
+    url = _NOMINATIM_URL + "?" + urllib.parse.urlencode({"q": query, "format": "json", "limit": 1})
     req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
     try:
         with urllib.request.urlopen(req, timeout=8) as resp:
