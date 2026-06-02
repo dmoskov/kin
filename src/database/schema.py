@@ -5,7 +5,7 @@ The schema mirrors the domain models in models/ and is designed for
 efficient querying.
 """
 
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 
 # ═══════════════════════════════════════════════════════════════════════
 # SQLite schema (local dev / tests)
@@ -281,6 +281,17 @@ SCHEMA_V15 = """
 ALTER TABLE events ADD COLUMN date_circa INTEGER DEFAULT 0;
 """
 
+SCHEMA_V16 = """
+CREATE TABLE IF NOT EXISTS tree_editors (
+    email TEXT PRIMARY KEY,
+    role TEXT NOT NULL DEFAULT 'editor'
+        CHECK (role IN ('owner', 'editor', 'assistant', 'researcher')),
+    name TEXT DEFAULT '',
+    invited_by TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+"""
+
 SCHEMA_SQL = (
     SCHEMA_V1
     + SCHEMA_V2
@@ -296,6 +307,7 @@ SCHEMA_SQL = (
     + SCHEMA_V12
     + SCHEMA_V13
     + SCHEMA_V15
+    + SCHEMA_V16
 )
 
 MIGRATIONS = {
@@ -313,6 +325,7 @@ MIGRATIONS = {
     13: SCHEMA_V13,
     14: SCHEMA_V14,
     15: SCHEMA_V15,
+    16: SCHEMA_V16,
 }
 
 
@@ -574,6 +587,17 @@ PG_SCHEMA_V15 = """
 ALTER TABLE events ADD COLUMN IF NOT EXISTS date_circa BOOLEAN DEFAULT FALSE;
 """
 
+PG_SCHEMA_V16 = """
+CREATE TABLE IF NOT EXISTS tree_editors (
+    email TEXT PRIMARY KEY,
+    role TEXT NOT NULL DEFAULT 'editor'
+        CHECK (role IN ('owner', 'editor', 'assistant', 'researcher')),
+    name TEXT DEFAULT '',
+    invited_by TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+"""
+
 PG_SCHEMA_SQL = (
     PG_SCHEMA_V1
     + PG_SCHEMA_V2
@@ -589,6 +613,7 @@ PG_SCHEMA_SQL = (
     + PG_SCHEMA_V12
     + PG_SCHEMA_V13
     + PG_SCHEMA_V15
+    + PG_SCHEMA_V16
 )
 
 PG_MIGRATIONS = {
@@ -606,4 +631,5 @@ PG_MIGRATIONS = {
     13: PG_SCHEMA_V13,
     14: PG_SCHEMA_V14,
     15: PG_SCHEMA_V15,
+    16: PG_SCHEMA_V16,
 }
