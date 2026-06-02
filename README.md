@@ -34,6 +34,7 @@ That's it — the app starts with an empty tree and walks you through adding you
 ```bash
 git clone https://github.com/dmoskov/family-tree.git
 cd family-tree
+git config core.hooksPath .githooks   # enable pre-commit PII guard
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 pip install -e .
