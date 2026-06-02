@@ -1,112 +1,134 @@
 #!/usr/bin/env bash
-# Deploy web/ and src/ to production EC2 instance.
+# Deploy web/ and src/ to a Linux server running the family tree app.
 #
-# Usage:  ./deploy/deploy.sh
+# Usage:  bash deploy/deploy.sh
 #
-# Requires:
-#   - AWS CLI with ec2-instance-connect permissions
-#   - SSH key at ~/.ssh/<YOUR_KEY> (+ .pub)
-#   - rsync installed locally
+# ── Quick setup ───────────────────────────────────────────────────────────
+#
+#  1. Copy this file somewhere private and fill in the configuration below:
+#       cp deploy/deploy.sh private/deploy.sh
+#
+#  2. Fill in the five variables in the Configuration block.
+#
+#  3. Run:  bash private/deploy.sh
+#
+# ── AWS EC2 users ─────────────────────────────────────────────────────────
+#
+#  Set USE_INSTANCE_CONNECT=true and fill in INSTANCE_ID / AZ / REGION.
+#  This pushes your SSH key automatically via EC2 Instance Connect so you
+#  never need to manage authorized_keys on the server.
+#
+#  Find your values in the AWS Console → EC2 → Instances, or:
+#    aws ec2 describe-instances --query 'Reservations[].Instances[].[InstanceId,Placement.AvailabilityZone,PublicIpAddress]' --output table
+#
+# ── Plain VPS / non-AWS users ─────────────────────────────────────────────
+#
+#  Set USE_INSTANCE_CONNECT=false. Make sure your SSH public key is already
+#  in ~/.ssh/authorized_keys on the server. INSTANCE_ID / AZ / REGION are
+#  ignored.
 
 set -euo pipefail
 
-# ── Configuration ──────────────────────────────────────────────────────
-EC2_HOST="<YOUR_EC2_HOST>"
-EC2_USER="ec2-user"
-INSTANCE_ID="<YOUR_INSTANCE_ID>"
-AZ="<YOUR_AZ>"
-REGION="<YOUR_REGION>"
-SSH_KEY="$HOME/.ssh/<YOUR_KEY>"
-REMOTE_DIR="/home/ec2-user/family-tree"
+# ── Configuration ─────────────────────────────────────────────────────────
+# Copy this file to private/deploy.sh and fill these in.
 
-SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-WEB_DIR="$SCRIPT_DIR/web"
-SRC_DIR="$SCRIPT_DIR/src"
-PRIVATE_DIR="$SCRIPT_DIR/private"
+SERVER_HOST=""                      # e.g. myserver.example.com or an IP address
+SERVER_USER="ec2-user"              # ec2-user (Amazon Linux), ubuntu (Ubuntu), etc.
+SSH_KEY="$HOME/.ssh/my-key"         # path to your private key (without .pub)
+REMOTE_DIR="/home/ec2-user/family-tree"   # where the app lives on the server
 
-# ── Preflight checks ──────────────────────────────────────────────────
+USE_INSTANCE_CONNECT=false          # true = AWS EC2 Instance Connect; false = plain SSH
+INSTANCE_ID=""                      # AWS only: i-0abc1234... (ignored if USE_INSTANCE_CONNECT=false)
+AZ=""                               # AWS only: us-east-1a   (ignored if USE_INSTANCE_CONNECT=false)
+REGION=""                           # AWS only: us-east-1    (ignored if USE_INSTANCE_CONNECT=false)
+
+# ── Preflight ─────────────────────────────────────────────────────────────
+
+if [[ -z "$SERVER_HOST" ]]; then
+  echo "Error: SERVER_HOST is not set." >&2
+  echo "  Copy this file to private/deploy.sh and fill in the Configuration block." >&2
+  exit 1
+fi
+
 if [[ ! -f "$SSH_KEY" ]]; then
   echo "Error: SSH key not found at $SSH_KEY" >&2
   exit 1
 fi
 
-if ! command -v aws &>/dev/null; then
-  echo "Error: aws CLI not found" >&2
+if $USE_INSTANCE_CONNECT && ! command -v aws &>/dev/null; then
+  echo "Error: USE_INSTANCE_CONNECT=true but aws CLI not found." >&2
   exit 1
 fi
 
-echo "=== Deploying to $EC2_USER@$EC2_HOST ==="
-
-# ── Step 1: Push public key via EC2 Instance Connect ──────────────────
-echo "Pushing SSH key via EC2 Instance Connect..."
-aws ec2-instance-connect send-ssh-public-key \
-  --region "$REGION" \
-  --instance-id "$INSTANCE_ID" \
-  --instance-os-user "$EC2_USER" \
-  --ssh-public-key "file://${SSH_KEY}.pub" \
-  --availability-zone "$AZ" \
-  --no-cli-pager
-
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SSH_CMD="ssh -i $SSH_KEY -o StrictHostKeyChecking=no"
 
-# ── Step 2: Ensure remote directories exist ───────────────────────────
-echo "Creating remote directories..."
-$SSH_CMD "$EC2_USER@$EC2_HOST" \
+# ── Step 1: Auth ──────────────────────────────────────────────────────────
+
+if $USE_INSTANCE_CONNECT; then
+  echo "Pushing SSH key via EC2 Instance Connect..."
+  aws ec2-instance-connect send-ssh-public-key \
+    --region "$REGION" \
+    --instance-id "$INSTANCE_ID" \
+    --instance-os-user "$SERVER_USER" \
+    --ssh-public-key "file://${SSH_KEY}.pub" \
+    --availability-zone "$AZ" \
+    --no-cli-pager
+fi
+
+echo "=== Deploying to $SERVER_USER@$SERVER_HOST ==="
+
+# ── Step 2: Ensure remote directories exist ───────────────────────────────
+$SSH_CMD "$SERVER_USER@$SERVER_HOST" \
   "mkdir -p $REMOTE_DIR/private/config $REMOTE_DIR/private/photos"
 
-# ── Step 3: Build the production JS bundle, then rsync app code ────────
+# ── Step 3: Build the JS bundle, then rsync app code ──────────────────────
 echo "Building JS bundle..."
 bash "$SCRIPT_DIR/scripts/build_js.sh"
 
-echo "Syncing web/ directory..."
+echo "Syncing web/..."
 rsync -avz --delete \
   -e "$SSH_CMD" \
-  "$WEB_DIR/" \
-  "$EC2_USER@$EC2_HOST:$REMOTE_DIR/web/"
+  "$SCRIPT_DIR/web/" \
+  "$SERVER_USER@$SERVER_HOST:$REMOTE_DIR/web/"
 
-echo "Syncing src/ directory..."
+echo "Syncing src/..."
 rsync -avz --delete --exclude='__pycache__' --exclude='*.egg-info' \
   -e "$SSH_CMD" \
-  "$SRC_DIR/" \
-  "$EC2_USER@$EC2_HOST:$REMOTE_DIR/src/"
+  "$SCRIPT_DIR/src/" \
+  "$SERVER_USER@$SERVER_HOST:$REMOTE_DIR/src/"
 
-# ── Step 4: rsync private content (config + photos) ──────────────────
-if [[ -d "$PRIVATE_DIR" ]]; then
-  if [[ -f "$PRIVATE_DIR/config/family-config.json" ]]; then
-    echo "Syncing private config..."
-    rsync -avz \
-      -e "$SSH_CMD" \
-      "$PRIVATE_DIR/config/family-config.json" \
-      "$EC2_USER@$EC2_HOST:$REMOTE_DIR/private/config/"
-  fi
-
-  if [[ -d "$PRIVATE_DIR/photos" ]] && ls "$PRIVATE_DIR/photos/"* &>/dev/null; then
-    echo "Syncing private photos..."
-    # NOTE: No --delete here! Photos uploaded via the web UI live only on the
-    # server; wiping them on deploy would lose user-uploaded content.
-    rsync -avz \
-      -e "$SSH_CMD" \
-      "$PRIVATE_DIR/photos/" \
-      "$EC2_USER@$EC2_HOST:$REMOTE_DIR/private/photos/"
-  fi
-else
-  echo "  (no private/ directory — skipping config & photos)"
+# ── Step 4: Sync private config + photos (if present locally) ────────────
+PRIVATE_DIR="$SCRIPT_DIR/private"
+if [[ -f "$PRIVATE_DIR/config/family-config.json" ]]; then
+  echo "Syncing private/config/family-config.json..."
+  rsync -avz \
+    -e "$SSH_CMD" \
+    "$PRIVATE_DIR/config/family-config.json" \
+    "$SERVER_USER@$SERVER_HOST:$REMOTE_DIR/private/config/"
 fi
 
-# ── Step 5: Sync requirements.txt + install Python dependencies ───────
-echo "Syncing requirements.txt..."
+if [[ -d "$PRIVATE_DIR/photos" ]] && compgen -G "$PRIVATE_DIR/photos/*" &>/dev/null; then
+  echo "Syncing private/photos/ (additive — no --delete)..."
+  rsync -avz \
+    -e "$SSH_CMD" \
+    "$PRIVATE_DIR/photos/" \
+    "$SERVER_USER@$SERVER_HOST:$REMOTE_DIR/private/photos/"
+fi
+
+# ── Step 5: Install Python dependencies ──────────────────────────────────
+echo "Syncing requirements.txt and installing dependencies..."
 rsync -avz \
   -e "$SSH_CMD" \
   "$SCRIPT_DIR/requirements.txt" \
-  "$EC2_USER@$EC2_HOST:$REMOTE_DIR/requirements.txt"
+  "$SERVER_USER@$SERVER_HOST:$REMOTE_DIR/requirements.txt"
 
-echo "Installing Python dependencies..."
-$SSH_CMD "$EC2_USER@$EC2_HOST" \
+$SSH_CMD "$SERVER_USER@$SERVER_HOST" \
   "cd $REMOTE_DIR && ./venv/bin/pip install -q -r requirements.txt"
 
-# ── Step 6: Restart gunicorn ──────────────────────────────────────────
+# ── Step 6: Restart the app ───────────────────────────────────────────────
 echo "Restarting familytree service..."
-$SSH_CMD "$EC2_USER@$EC2_HOST" \
+$SSH_CMD "$SERVER_USER@$SERVER_HOST" \
   "sudo systemctl restart familytree"
 
 echo ""
