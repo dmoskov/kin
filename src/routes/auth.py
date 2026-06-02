@@ -11,7 +11,7 @@ from flask import Blueprint, jsonify, request, session
 
 import web_server
 from database.connection import get_connection
-from database.repository import TreeRepository, _execute, _ph
+from database.repository import TreeRepository, _execute, _fetchone, _ph
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +19,32 @@ auth_bp = Blueprint("auth", __name__)
 
 
 GOOGLE_TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo"
+
+
+def _get_tree_editor(email: str) -> dict | None:
+    conn = get_connection()
+    try:
+        row = _fetchone(
+            conn,
+            f"SELECT email, role, name FROM tree_editors WHERE email = {_ph()}",
+            (email,),
+        )
+        return dict(row) if row else None
+    except Exception:
+        return None
+    finally:
+        conn.close()
+
+
+def _has_any_tree_editors() -> bool:
+    conn = get_connection()
+    try:
+        row = _fetchone(conn, "SELECT 1 FROM tree_editors LIMIT 1")
+        return row is not None
+    except Exception:
+        return False
+    finally:
+        conn.close()
 
 
 def _get_google_client_id() -> str | None:
@@ -84,14 +110,27 @@ def api_auth_google():
             logger.warning("Token aud %s does not match expected client_id", aud)
             return jsonify({"error": "Token audience mismatch"}), 401
 
-    # When no EDITORS list is configured everyone is treated as an editor
-    # (preserves the original open-access behaviour).
-    is_editor = (not web_server.EDITORS) or (email in web_server.EDITORS)
-
-    # Editors can sign in even without a person record in the tree.
-    # Non-editors must have a matching person record (existing behaviour).
+    # Determine editor status and role from three sources:
+    # 1. tree_editors table (DB-backed, has explicit role)
+    # 2. EDITORS env var (legacy, all treated as role="editor")
+    # 3. If neither is configured, everyone is an editor (open access)
     repo = TreeRepository()
     person = repo.get_person_by_email(email)
+
+    editor_record = _get_tree_editor(email)
+    role = None
+    if editor_record:
+        is_editor = True
+        role = editor_record["role"]
+    elif web_server.EDITORS and email in web_server.EDITORS:
+        is_editor = True
+        role = "editor"
+    elif not web_server.EDITORS and not _has_any_tree_editors():
+        is_editor = True
+        role = "editor"
+    else:
+        is_editor = False
+
     if not person and not is_editor:
         return jsonify(
             {
@@ -103,12 +142,12 @@ def api_auth_google():
     person_id = person.id if person else f"editor:{email}"
     full_name = person.full_name if person else payload.get("name", email)
 
-    # Set session
     session["person_id"] = person_id
     session["email"] = email
     session["name"] = full_name
     session["picture"] = payload.get("picture", "")
     session["is_editor"] = is_editor
+    session["role"] = role
 
     return jsonify(
         {
@@ -117,6 +156,7 @@ def api_auth_google():
             "email": email,
             "picture": payload.get("picture", ""),
             "is_editor": is_editor,
+            "role": role,
         }
     )
 
@@ -133,6 +173,7 @@ def api_auth_me():
             "email": session.get("email", ""),
             "picture": session.get("picture", ""),
             "is_editor": session.get("is_editor", False),
+            "role": session.get("role"),
         }
     )
 
@@ -168,5 +209,149 @@ def api_set_email(person_id):
         )
         conn.commit()
         return jsonify({"email": email, "person_id": person_id})
+    finally:
+        conn.close()
+
+
+# ── Editor management ─────────────────────────────────────────────────
+
+
+def _require_admin():
+    """Check that the current user is an admin (ADMIN_PERSON_ID or owner role)."""
+    admin_person_id = os.environ.get("ADMIN_PERSON_ID", "")
+    caller_id = session.get("person_id")
+    caller_role = session.get("role")
+    if caller_role == "owner":
+        return None
+    if admin_person_id and caller_id == admin_person_id:
+        return None
+    return jsonify({"error": "admin only"}), 403
+
+
+VALID_ROLES = {"owner", "editor", "assistant", "researcher"}
+
+
+@auth_bp.route("/api/editors")
+def api_list_editors():
+    """List all non-family editors from the tree_editors table."""
+    err = _require_admin()
+    if err:
+        return err
+    conn = get_connection()
+    try:
+        from database.repository import _fetchall
+
+        rows = _fetchall(conn, "SELECT * FROM tree_editors ORDER BY created_at")
+        return jsonify(
+            [
+                {
+                    "email": r["email"],
+                    "role": r["role"],
+                    "name": r["name"] or "",
+                    "invited_by": r["invited_by"],
+                    "created_at": str(r["created_at"]) if r["created_at"] else None,
+                }
+                for r in rows
+            ]
+        )
+    except Exception:
+        return jsonify([])
+    finally:
+        conn.close()
+
+
+@auth_bp.route("/api/editors", methods=["POST"])
+def api_add_editor():
+    """Add a non-family editor. Body: {"email": "...", "role": "assistant", "name": "..."}"""
+    err = _require_admin()
+    if err:
+        return err
+
+    body = request.get_json(force=True) or {}
+    email = (body.get("email") or "").strip().lower()
+    role = body.get("role", "editor").strip().lower()
+    name = (body.get("name") or "").strip()
+
+    if not email or "@" not in email:
+        return jsonify({"error": "valid email required"}), 400
+    if role not in VALID_ROLES:
+        return jsonify({"error": f"role must be one of: {', '.join(sorted(VALID_ROLES))}"}), 400
+
+    invited_by = session.get("email", "")
+
+    conn = get_connection()
+    try:
+        _execute(
+            conn,
+            f"INSERT INTO tree_editors (email, role, name, invited_by) VALUES ({_ph()}, {_ph()}, {_ph()}, {_ph()})",
+            (email, role, name, invited_by),
+        )
+        conn.commit()
+        return jsonify({"email": email, "role": role, "name": name}), 201
+    except Exception as e:
+        err_str = str(e).lower()
+        if "unique" in err_str or "duplicate" in err_str:
+            return jsonify({"error": "Editor with this email already exists"}), 409
+        raise
+    finally:
+        conn.close()
+
+
+@auth_bp.route("/api/editors/<path:email>", methods=["PATCH"])
+def api_update_editor(email):
+    """Update an editor's role or name. Body: {"role": "researcher", "name": "..."}"""
+    err = _require_admin()
+    if err:
+        return err
+
+    body = request.get_json(force=True) or {}
+    updates = {}
+    if "role" in body:
+        role = body["role"].strip().lower()
+        if role not in VALID_ROLES:
+            return jsonify({"error": f"role must be one of: {', '.join(sorted(VALID_ROLES))}"}), 400
+        updates["role"] = role
+    if "name" in body:
+        updates["name"] = (body["name"] or "").strip()
+
+    if not updates:
+        return jsonify({"error": "nothing to update"}), 400
+
+    set_clauses = ", ".join(f"{k} = {_ph()}" for k in updates)
+    values = list(updates.values()) + [email.lower()]
+
+    conn = get_connection()
+    try:
+        cur = _execute(
+            conn,
+            f"UPDATE tree_editors SET {set_clauses} WHERE email = {_ph()}",
+            tuple(values),
+        )
+        if cur.rowcount == 0:
+            return jsonify({"error": "editor not found"}), 404
+        conn.commit()
+        return jsonify({"email": email.lower(), **updates})
+    finally:
+        conn.close()
+
+
+@auth_bp.route("/api/editors/<path:email>", methods=["DELETE"])
+def api_remove_editor(email):
+    """Remove a non-family editor."""
+    err = _require_admin()
+    if err:
+        return err
+
+    conn = get_connection()
+    try:
+        cur = _execute(
+            conn,
+            f"DELETE FROM tree_editors WHERE email = {_ph()}",
+            (email.lower(),),
+        )
+        if cur.rowcount == 0:
+            return jsonify({"error": "editor not found"}), 404
+        conn.commit()
+        return "", 204
     finally:
         conn.close()

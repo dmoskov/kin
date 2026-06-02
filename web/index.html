@@ -78,11 +78,13 @@
                 <div class="user-menu-email" id="user-menu-email"></div>
               </div>
             </div>
+            <div id="user-menu-role-badge" class="user-menu-role-badge" style="display:none"></div>
             <div class="user-menu-divider"></div>
             <div class="user-menu-item">
               <label for="viewing-as-select">Viewing tree as:</label>
               <select id="viewing-as-select"></select>
             </div>
+            <button class="user-menu-item" id="manage-editors-btn" style="display:none" onclick="openEditorsPanel()">Manage Editors</button>
             <div class="user-menu-divider"></div>
             <button class="user-menu-item user-menu-logout" id="auth-logout-btn">Sign out</button>
           </div>
@@ -505,6 +507,32 @@
       <div class="onboarding-alt-actions">
         <button class="btn-secondary" id="onboard-import-gedcom">&#128229; Import a GEDCOM file</button>
         <button class="btn-secondary" id="onboard-skip-all">Start with an empty tree</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Editors management overlay -->
+  <div id="editors-overlay" class="editors-overlay hidden">
+    <div class="editors-panel">
+      <div class="editors-panel-header">
+        <h2>Manage Editors</h2>
+        <button class="editors-panel-close" onclick="closeEditorsPanel()">&times;</button>
+      </div>
+      <p class="editors-panel-desc">Non-family members who can edit the tree (assistants, researchers).</p>
+      <div id="editors-list" class="editors-list"></div>
+      <div class="editors-add-section">
+        <h3>Invite Editor</h3>
+        <div class="editors-add-form">
+          <input id="editor-invite-email" type="email" placeholder="Email address" class="add-relative-input" />
+          <input id="editor-invite-name" type="text" placeholder="Name (optional)" class="add-relative-input" />
+          <select id="editor-invite-role" class="add-relative-input">
+            <option value="assistant">Assistant</option>
+            <option value="researcher">Researcher</option>
+            <option value="editor">Editor</option>
+          </select>
+          <button class="add-relative-submit" onclick="submitInviteEditor()">Add</button>
+        </div>
+        <div id="editor-invite-error" class="add-relative-error hidden"></div>
       </div>
     </div>
   </div>

@@ -1033,6 +1033,27 @@ export function applyAuth() {
 
     menuName.textContent = S.AUTH_USER.name || "";
     menuEmail.textContent = S.AUTH_USER.email || "";
+
+    // Role badge for non-family editors
+    const roleBadge = document.getElementById("user-menu-role-badge");
+    if (roleBadge) {
+      const role = S.AUTH_USER.role;
+      if (role && role !== "editor" && S.AUTH_USER.person_id?.startsWith("editor:")) {
+        roleBadge.textContent = role.charAt(0).toUpperCase() + role.slice(1);
+        roleBadge.className = `user-menu-role-badge role-${role}`;
+        roleBadge.style.display = "";
+      } else {
+        roleBadge.style.display = "none";
+      }
+    }
+
+    // Show "Manage Editors" for admins
+    const manageBtn = document.getElementById("manage-editors-btn");
+    if (manageBtn) {
+      const isAdmin = S.AUTH_USER.role === "owner" ||
+        S.AUTH_USER.person_id === S.CONFIG?.adminPersonId;
+      manageBtn.style.display = (S.AUTH_USER.is_editor && isAdmin) ? "" : "none";
+    }
   } else {
     loggedIn.style.display = "none";
     loggedOut.style.display = "";
@@ -1243,4 +1264,128 @@ export function initViewingAs() {
 
   // Init Google Sign-In button (if client ID is configured)
   initGoogleSignIn();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Editors Management Panel
+// ═══════════════════════════════════════════════════════════════
+
+const _ROLE_LABELS = {
+  owner: "Owner",
+  editor: "Editor",
+  assistant: "Assistant",
+  researcher: "Researcher",
+};
+
+export async function openEditorsPanel() {
+  const overlay = document.getElementById("editors-overlay");
+  if (!overlay) return;
+  overlay.classList.remove("hidden");
+  document.getElementById("user-menu")?.classList.add("hidden");
+  await refreshEditorsList();
+}
+
+export function closeEditorsPanel() {
+  const overlay = document.getElementById("editors-overlay");
+  if (overlay) overlay.classList.add("hidden");
+}
+
+async function refreshEditorsList() {
+  const listEl = document.getElementById("editors-list");
+  if (!listEl) return;
+
+  listEl.innerHTML = `<div class="editors-loading">Loading...</div>`;
+
+  try {
+    const resp = await fetch("/api/editors");
+    if (!resp.ok) {
+      listEl.innerHTML = `<div class="editors-empty">Could not load editors.</div>`;
+      return;
+    }
+    const editors = await resp.json();
+    if (editors.length === 0) {
+      listEl.innerHTML = `<div class="editors-empty">No non-family editors yet. Invite one below.</div>`;
+      return;
+    }
+
+    listEl.innerHTML = editors.map(e => `
+      <div class="editor-row" data-email="${escapeHtml(e.email)}">
+        <div class="editor-info">
+          <span class="editor-name">${escapeHtml(e.name || e.email)}</span>
+          ${e.name ? `<span class="editor-email-sub">${escapeHtml(e.email)}</span>` : ""}
+        </div>
+        <select class="editor-role-select add-relative-input" onchange="updateEditorRole('${escapeHtml(e.email)}', this.value)">
+          ${Object.entries(_ROLE_LABELS).map(([k, v]) =>
+            `<option value="${k}" ${e.role === k ? "selected" : ""}>${v}</option>`
+          ).join("")}
+        </select>
+        <button class="editor-remove-btn" onclick="removeEditor('${escapeHtml(e.email)}')" title="Remove">&times;</button>
+      </div>
+    `).join("");
+  } catch {
+    listEl.innerHTML = `<div class="editors-empty">Network error.</div>`;
+  }
+}
+
+export async function submitInviteEditor() {
+  const emailEl = document.getElementById("editor-invite-email");
+  const nameEl = document.getElementById("editor-invite-name");
+  const roleEl = document.getElementById("editor-invite-role");
+  const errorEl = document.getElementById("editor-invite-error");
+  if (!emailEl || !roleEl) return;
+
+  const email = emailEl.value.trim().toLowerCase();
+  const name = nameEl?.value.trim() || "";
+  const role = roleEl.value;
+
+  if (!email || !email.includes("@")) {
+    errorEl.textContent = "Enter a valid email address.";
+    errorEl.classList.remove("hidden");
+    return;
+  }
+  errorEl.classList.add("hidden");
+
+  try {
+    const resp = await fetch("/api/editors", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, name, role }),
+    });
+    if (!resp.ok) {
+      const data = await resp.json();
+      errorEl.textContent = data.error || "Failed to add editor.";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+  } catch {
+    errorEl.textContent = "Network error.";
+    errorEl.classList.remove("hidden");
+    return;
+  }
+
+  emailEl.value = "";
+  if (nameEl) nameEl.value = "";
+  await refreshEditorsList();
+}
+
+export async function updateEditorRole(email, role) {
+  try {
+    await fetch(`/api/editors/${encodeURIComponent(email)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role }),
+    });
+  } catch {
+    // Silently fail — the dropdown will reflect the old value on next refresh
+  }
+}
+
+export async function removeEditor(email) {
+  if (!confirm(`Remove ${email} as an editor?`)) return;
+  try {
+    await fetch(`/api/editors/${encodeURIComponent(email)}`, { method: "DELETE" });
+  } catch {
+    return;
+  }
+  await refreshEditorsList();
 }

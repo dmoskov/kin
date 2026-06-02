@@ -88,16 +88,34 @@ def _ensure_db():
 # ── Auth helpers ───────────────────────────────────────────────────────
 
 
-def require_editor(f):
-    """Reject non-editors when an EDITORS list is configured.
+def _editors_configured() -> bool:
+    """Return True if any editor access control is configured (env or DB)."""
+    if EDITORS:
+        return True
+    try:
+        from database.connection import get_connection
+        from database.repository import _fetchone
 
-    If EDITORS is not set, the original open-access behaviour is preserved
+        conn = get_connection()
+        try:
+            row = _fetchone(conn, "SELECT 1 FROM tree_editors LIMIT 1")
+            return row is not None
+        finally:
+            conn.close()
+    except Exception:
+        return False
+
+
+def require_editor(f):
+    """Reject non-editors when an EDITORS list or tree_editors are configured.
+
+    If neither is set, the original open-access behaviour is preserved
     so existing deployments are not broken.
     """
 
     @wraps(f)
     def wrapper(*args, **kwargs):
-        if EDITORS and not session.get("is_editor"):
+        if _editors_configured() and not session.get("is_editor"):
             return jsonify({"error": "editor access required", "code": "forbidden"}), 403
         return f(*args, **kwargs)
 
@@ -254,8 +272,9 @@ def api_config():
       2. web/family-config.json             (legacy / dev override)
       3. Built-in defaults
     """
-    editors_enabled = bool(EDITORS)
+    editors_enabled = _editors_configured()
     editors_misconfigured = editors_enabled and not _get_google_client_id()
+    admin_person_id = os.environ.get("ADMIN_PERSON_ID", "")
 
     for candidate in [
         PRIVATE_DIR / "config" / "family-config.json",
@@ -265,6 +284,8 @@ def api_config():
             config = json.loads(candidate.read_text())
             config["editorsEnabled"] = editors_enabled
             config["editorsMisconfigured"] = editors_misconfigured
+            if admin_person_id:
+                config["adminPersonId"] = admin_person_id
             return jsonify(config)
     # Sensible defaults when no config file exists
     return jsonify(
@@ -279,6 +300,7 @@ def api_config():
             "heritageLabels": False,
             "editorsEnabled": editors_enabled,
             "editorsMisconfigured": editors_misconfigured,
+            **({"adminPersonId": admin_person_id} if admin_person_id else {}),
         }
     )
 

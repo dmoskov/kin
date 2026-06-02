@@ -377,7 +377,7 @@ docker run -p 8000:8000 -v $(pwd)/private:/app/private family-tree
 | `GOOGLE_CLIENT_ID` | Enables Google Sign-In on the dashboard.               | _(sign-in disabled)_ |
 | `EDITORS`          | Comma-separated Gmail addresses with edit access. Anyone not listed can view but not edit. Editors may sign in even without a person record in the tree. Example: `alice@gmail.com,bob@gmail.com` | _(unset — editing unrestricted)_ |
 | `ANTHROPIC_API_KEY`| Enables **Parse with AI** for uploaded documents.      | _(parsing disabled)_ |
-| `ADMIN_PERSON_ID`  | Person ID that can assign emails to tree members.      | _(feature disabled)_ |
+| `ADMIN_PERSON_ID`  | Person ID that can assign emails to tree members and manage non-family editors (assistants, researchers) via the UI. | _(feature disabled)_ |
 
 ## License
 
