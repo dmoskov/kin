@@ -344,6 +344,16 @@ This script:
 sudo bash deploy/setup.sh
 ```
 
+### Continuous deployment (CI/CD)
+
+Pushes are validated and shipped automatically:
+
+- **`ci.yml`** runs lint (ruff + mypy), pytest, vitest, and a headless smoke test on every push to `main` and `task/**`, and on PRs to `main`.
+- **`auto-merge.yml`** — when CI passes on a `task/**` branch, it's merged into `main` automatically (a merge commit, no PR) and deployed. Conflicting branches are left for a human.
+- **`deploy.yml` / `deploy-reusable.yml`** — when CI passes on `main` (or via manual `workflow_dispatch`), the bundle is built and `web/` + `src/` are rsynced to the server, deps reinstalled, and the service restarted and health-checked.
+
+Server identifiers are stored as repo secrets (`DEPLOY_HOST`, `DEPLOY_SSH_KEY`), never committed. `deploy/deploy.sh` remains available for manual/emergency deploys.
+
 ### Local (Docker)
 
 ```bash
