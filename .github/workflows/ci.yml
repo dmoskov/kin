@@ -71,6 +71,8 @@ jobs:
       - name: Seed a database
         run: FAMILY_TREE_DB="$PWD/data/ci.db" python data/seed_longfellow.py
       - name: Smoke test (headless browser)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           PYTHONPATH="$PWD/src" FAMILY_TREE_DB="$PWD/data/ci.db" \
             python -c "import web_server; web_server.init_db(); web_server.app.run(host='127.0.0.1', port=8137, debug=False, use_reloader=False)" &

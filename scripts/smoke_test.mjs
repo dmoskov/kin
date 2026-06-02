@@ -20,7 +20,6 @@ const BENIGN = [
   /photospicker\.googleapis/,
   /tile\.openstreetmap/,
   /basemaps\.cartocdn/,
-  /api\/people\/.*\/summary/, // optional AI summary — 503s without ANTHROPIC_API_KEY
   /Failed to load resource/, // URL-less mirror; covered by the response listener
 ];
 const isBenign = (s) => BENIGN.some((re) => re.test(s));
