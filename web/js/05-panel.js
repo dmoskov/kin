@@ -180,6 +180,11 @@ export function showPersonPanel(personId) {
     html += `</ul></div>`;
   }
 
+  // Invite section (editors only)
+  if (!S.CONFIG?.editorsEnabled || S.AUTH_USER?.is_editor) {
+    html += _buildInviteSection(personId, person);
+  }
+
   // Add relative buttons (editors only)
   if (!S.CONFIG?.editorsEnabled || S.AUTH_USER?.is_editor) {
     html += `<div class="panel-section panel-add-relative-section">
@@ -635,6 +640,9 @@ export function openEditPersonForm(personId) {
         <input id="epf-death" type="text" placeholder="Death date (optional)" class="add-relative-input" value="${esc(person.death_date)}" />
         <input id="epf-death-place" type="text" placeholder="Death place (optional)" class="add-relative-input" value="${esc(person.death_place)}" />
       </div>
+      <div class="add-relative-row">
+        <input id="epf-email" type="email" placeholder="Email (optional)" class="add-relative-input" value="${esc(person.email)}" />
+      </div>
       <div class="add-relative-actions">
         <button class="add-relative-submit" onclick="submitEditPerson('${personId}')">Save</button>
         <button class="add-relative-cancel" onclick="document.getElementById('edit-person-form').classList.add('hidden')">Cancel</button>
@@ -654,6 +662,7 @@ export async function submitEditPerson(personId) {
   const birthPlace = document.getElementById("epf-birth-place").value.trim();
   const deathDate = document.getElementById("epf-death").value.trim();
   const deathPlace = document.getElementById("epf-death-place").value.trim();
+  const emailVal = document.getElementById("epf-email").value.trim();
   const errorEl = document.getElementById("epf-error");
 
   if (!givenName && !surname) {
@@ -674,6 +683,7 @@ export async function submitEditPerson(personId) {
         birth_place: birthPlace || null,
         death_date: deathDate || null,
         death_place: deathPlace || null,
+        email: emailVal || null,
       }),
     });
     if (!res.ok) {
@@ -692,6 +702,112 @@ export async function submitEditPerson(personId) {
   autoComputeLanes(S.CENTER_ID_A, S.CENTER_ID_B);
   refreshAllViews();
   showPersonPanel(personId);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Invite by Email
+// ═══════════════════════════════════════════════════════════════
+
+function _buildInviteSection(personId, person) {
+  const esc = escapeHtml;
+  let inner = "";
+
+  if (person.email) {
+    const siteUrl = window.location.origin;
+    const firstName = person.given_name || person.surname || "there";
+    const inviteMsg = `Hey ${firstName}, I’ve added you to our family tree! Sign in with your Google account (${person.email}) to explore it: ${siteUrl}`;
+    inner = `
+      <div class="invite-has-email">
+        <div class="invite-email-badge">${esc(person.email)}</div>
+        <div class="invite-msg-box">
+          <div class="invite-msg-text" id="invite-msg-text">${esc(inviteMsg)}</div>
+          <button class="invite-copy-btn" onclick="copyInviteMessage('${personId}')">Copy invite message</button>
+        </div>
+        <div id="invite-copied" class="invite-copied hidden">Copied!</div>
+      </div>`;
+  } else {
+    inner = `
+      <div class="invite-no-email">
+        <p class="invite-hint">Add a Gmail address so ${esc(person.given_name || person.surname || "this person")} can sign in and explore the family tree.</p>
+        <div id="invite-email-form" class="invite-email-form">
+          <div class="add-relative-row">
+            <input id="invite-email-input" type="email" placeholder="user@gmail.com" class="add-relative-input" />
+          </div>
+          <div class="add-relative-actions">
+            <button class="add-relative-submit" onclick="submitInviteEmail('${personId}')">Set email &amp; get invite link</button>
+          </div>
+          <div id="invite-error" class="add-relative-error hidden"></div>
+        </div>
+      </div>`;
+  }
+
+  return `<div class="panel-section panel-invite-section"><h3>Invite</h3>${inner}</div>`;
+}
+
+export async function submitInviteEmail(personId) {
+  const input = document.getElementById("invite-email-input");
+  const errorEl = document.getElementById("invite-error");
+  if (!input || !errorEl) return;
+
+  const email = input.value.trim().toLowerCase();
+  if (!email) {
+    errorEl.textContent = "Enter an email address.";
+    errorEl.classList.remove("hidden");
+    return;
+  }
+  if (!email.includes("@") || !email.includes(".")) {
+    errorEl.textContent = "Enter a valid email address.";
+    errorEl.classList.remove("hidden");
+    return;
+  }
+
+  errorEl.classList.add("hidden");
+
+  try {
+    const res = await fetch(`/api/people/${personId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      errorEl.textContent = data.error || "Failed to set email.";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+  } catch {
+    errorEl.textContent = "Network error. Please try again.";
+    errorEl.classList.remove("hidden");
+    return;
+  }
+
+  await loadData();
+  autoComputeLanes(S.CENTER_ID_A, S.CENTER_ID_B);
+  refreshAllViews();
+  showPersonPanel(personId);
+}
+
+export async function copyInviteMessage(personId) {
+  const msgEl = document.getElementById("invite-msg-text");
+  const copiedEl = document.getElementById("invite-copied");
+  if (!msgEl) return;
+
+  try {
+    await navigator.clipboard.writeText(msgEl.textContent);
+  } catch {
+    const range = document.createRange();
+    range.selectNodeContents(msgEl);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    document.execCommand("copy");
+    sel.removeAllRanges();
+  }
+
+  if (copiedEl) {
+    copiedEl.classList.remove("hidden");
+    setTimeout(() => copiedEl.classList.add("hidden"), 2000);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
