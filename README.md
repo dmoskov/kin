@@ -1,3 +1,10 @@
+# ⚠️ This repository has moved
+
+This project is now maintained at **[dmoskov/kin](https://github.com/dmoskov/kin)**.
+Please update your bookmarks, forks, and clone URLs.
+
+---
+
 # Family Tree
 
 An interactive genealogy app — model your family history, visualize relationships, and explore a timeline of life events.
