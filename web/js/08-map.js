@@ -453,6 +453,9 @@ export async function renderMap() {
     .addAttribution('&copy; <a href="https://carto.com/">CARTO</a>')
     .addTo(S.MAP);
 
+  S.MAP.on("zoomend", _updatePhotoZoomScale);
+  _updatePhotoZoomScale();
+
   buildMapEvents();
   const mapDepthEvents = _filterEventsByDepth(MAP_ALL_EVENTS);
   plotMapMarkers(mapDepthEvents);
@@ -618,6 +621,12 @@ export function buildPlacePopup(place, events) {
   return html;
 }
 
+function _updatePhotoZoomScale() {
+  const zoom = S.MAP.getZoom();
+  const scale = Math.max(1, Math.min(2.5, 1 + (zoom - 5) * 0.15));
+  document.getElementById("map")?.style.setProperty("--photo-zoom-scale", scale);
+}
+
 // Photo thumbnail markers on map
 let MAP_PHOTO_MARKERS = [];
 
@@ -647,8 +656,8 @@ export function plotPhotoMarkers(events) {
       const icon = L.divIcon({
         className: "",
         html: `<div class="map-photo-marker"><img src="/${firstPhoto.photoPath}" alt="" /></div>`,
-        iconSize: [40, 40],
-        iconAnchor: [20, 20],
+        iconSize: [48, 48],
+        iconAnchor: [24, 24],
       });
       const marker = L.marker(cluster.latlng, { icon }).addTo(S.MAP);
       marker.on("click", () => {
@@ -660,8 +669,8 @@ export function plotPhotoMarkers(events) {
       const icon = L.divIcon({
         className: "",
         html: `<div class="map-photo-marker" style="position:relative"><img src="/${firstPhoto.photoPath}" alt="" /><span class="map-photo-count">${count}</span></div>`,
-        iconSize: [40, 40],
-        iconAnchor: [20, 20],
+        iconSize: [48, 48],
+        iconAnchor: [24, 24],
       });
       const marker = L.marker(cluster.latlng, { icon }).addTo(S.MAP);
 

@@ -4542,17 +4542,18 @@ select.ge-input { padding: 3px 4px; }
    ═══════════════════════════════════════════════════════════════ */
 
 .map-photo-marker {
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   border: 3px solid #d4a843;
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0,0,0,0.3);
   cursor: pointer;
   transition: transform 0.15s;
+  transform: scale(var(--photo-zoom-scale, 1));
 }
 .map-photo-marker:hover {
-  transform: scale(1.15);
+  transform: scale(calc(var(--photo-zoom-scale, 1) * 1.15));
   z-index: 1000 !important;
 }
 .map-photo-marker img {
