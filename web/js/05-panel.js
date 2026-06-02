@@ -104,7 +104,7 @@ export function showPersonPanel(personId) {
   }
 
   // Vital stats
-  if (person.birth_date || person.birth_place || person.maiden_name) {
+  if (person.birth_date || person.birth_place || person.maiden_name || person.has_email) {
     html += `<div class="panel-section"><h3>Details</h3><div class="panel-details-grid">`;
     if (person.birth_date) {
       html += `<div class="panel-detail-item"><span class="panel-detail-icon">&#9679;</span><div class="panel-detail-body"><span class="panel-detail-label">Born</span><span class="panel-detail-value">${escapeHtml(person.birth_date)}${person.birth_place ? " · " + escapeHtml(person.birth_place) : ""}</span></div></div>`;
@@ -115,8 +115,8 @@ export function showPersonPanel(personId) {
     if (person.maiden_name) {
       html += `<div class="panel-detail-item"><span class="panel-detail-icon" style="color:var(--text-muted)">&#9679;</span><div class="panel-detail-body"><span class="panel-detail-label">Maiden name</span><span class="panel-detail-value">${escapeHtml(person.maiden_name)}</span></div></div>`;
     }
-    if (person.email) {
-      html += `<div class="panel-detail-item"><span class="panel-detail-icon" style="color:var(--text-muted)">&#9679;</span><div class="panel-detail-body"><span class="panel-detail-label">Email</span><span class="panel-detail-value">${escapeHtml(person.email)}</span></div></div>`;
+    if (person.has_email) {
+      html += `<div class="panel-detail-item"><span class="panel-detail-icon" style="color:var(--accent)">&#10003;</span><div class="panel-detail-body"><span class="panel-detail-label">App access</span><span class="panel-detail-value">Can sign in</span></div></div>`;
     }
     html += `</div></div>`;
   }

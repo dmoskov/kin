@@ -119,7 +119,7 @@ def load_tree(path: str) -> FamilyTree:
     return tree
 
 
-def _person_to_dict(p: Person) -> dict[str, Any]:
+def _person_to_dict(p: Person, *, include_email: bool = False) -> dict[str, Any]:
     d: dict[str, Any] = {
         "id": p.id,
         "given_name": p.given_name,
@@ -144,8 +144,11 @@ def _person_to_dict(p: Person) -> dict[str, Any]:
         d["photo_paths"] = p.photo_paths
     if p.photo_captions:
         d["photo_captions"] = p.photo_captions
-    if p.email:
-        d["email"] = p.email
+    if include_email:
+        if p.email:
+            d["email"] = p.email
+    else:
+        d["has_email"] = bool(p.email)
     return d
 
 
@@ -245,7 +248,7 @@ def save_tree(tree: FamilyTree, path: str, photos: list[dict] | None = None) -> 
             article_person_map.setdefault(aid, []).append(pid)
 
     data = {
-        "people": [_person_to_dict(p) for p in tree.people.values()],
+        "people": [_person_to_dict(p, include_email=True) for p in tree.people.values()],
         "relationships": [_rel_to_dict(r) for r in tree.relationships],
         "unions": [_union_to_dict(u) for u in tree.unions],
         "events": [_event_to_dict(e) for e in tree.events],
