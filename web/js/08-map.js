@@ -160,7 +160,7 @@ export async function _fetchGeocodeAndPoll(places) {
     if (newResults && S.MAP) {
       // Clear existing markers and arcs before re-plotting
       for (const m of MAP_MARKERS) m.marker.remove();
-      for (const a of MAP_ARCS) { a.polyline.remove(); if (a.hitArea) a.hitArea.remove(); if (a.arrowHead) a.arrowHead.remove(); }
+      for (const a of MAP_ARCS) { a.polyline.remove(); if (a.hitArea) a.hitArea.remove(); if (a.arrowHead) a.arrowHead.remove(); if (a.boat) a.boat.remove(); }
       MAP_MARKERS = [];
       MAP_ARCS = [];
       buildMapEvents();
@@ -703,6 +703,19 @@ export function getPersonColor(personId) {
   return PERSON_COLORS[personId];
 }
 
+// Known immigrant seaports / arrival stations — arcs ending at one of these
+// get a little boat to mark the sea passage. Matched as a substring of the
+// destination place name, so it only triggers when the port is named explicitly.
+const SEAPORT_KEYWORDS = [
+  "ellis island", "castle garden", "castle clinton", "angel island",
+  "galveston", "seaport", "port of ", "immigration station", "immigration depot",
+];
+export function isSeaportPlace(place) {
+  if (!place) return false;
+  const p = place.toLowerCase();
+  return SEAPORT_KEYWORDS.some((k) => p.includes(k));
+}
+
 export function plotMigrationArcs(events) {
   // Group events by person, sorted chronologically
   const byPerson = {};
@@ -784,10 +797,29 @@ export function plotMigrationArcs(events) {
       const popupContent = buildArcPopup(personId, from, to);
       hitArea.bindPopup(popupContent, { maxWidth: 280, className: "arc-popup" });
 
+      // Boat on sea crossings ending at a known immigrant seaport. Placed ~70%
+      // along the curve so it reads as approaching port.
+      let boat = null;
+      if (isSeaportPlace(to.place)) {
+        const mid = latlngs[Math.floor(latlngs.length * 0.7)] || to.latlng;
+        boat = L.marker(mid, {
+          icon: L.divIcon({
+            className: "",
+            html: `<div class="map-boat-marker" title="Sea passage to ${escapeHtml(to.place || "port")}">&#128674;</div>`,
+            iconSize: [24, 24],
+            iconAnchor: [12, 12],
+          }),
+          interactive: false,
+          keyboard: false,
+        }).addTo(S.MAP);
+        boat.setOpacity(lerp(0.4, 1, ratio));
+      }
+
       MAP_ARCS.push({
         polyline,
         hitArea,
         arrowHead,
+        boat,
         personId,
         fromYear: from.year,
         toYear: to.year,
@@ -914,10 +946,12 @@ export function updateMapForYear(maxYear) {
         opacity: lerp(0.2, 1, ratio),
         radius: lerp(2, 4, ratio),
       });
+      a.boat?.setOpacity(lerp(0.4, 1, ratio));
     } else {
       a.polyline.setStyle({ opacity: 0.03, weight: WEIGHT_FLOOR });
       if (a.hitArea) a.hitArea.setStyle({ weight: 0 });
       a.arrowHead.setStyle({ fillOpacity: 0.03, opacity: 0.03 });
+      a.boat?.setOpacity(0.05);
     }
   }
 
