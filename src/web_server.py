@@ -106,6 +106,22 @@ def _editors_configured() -> bool:
         return False
 
 
+def require_login(f):
+    """Reject unauthenticated users when Google Sign-In is configured.
+
+    If GOOGLE_CLIENT_ID is not set, the original open-access behaviour is
+    preserved so existing deployments are not broken.
+    """
+
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if os.environ.get("GOOGLE_CLIENT_ID") and "person_id" not in session:
+            return jsonify({"error": "login required", "code": "unauthorized"}), 401
+        return f(*args, **kwargs)
+
+    return wrapper
+
+
 def require_editor(f):
     """Reject non-editors when an EDITORS list or tree_editors are configured.
 
@@ -230,6 +246,37 @@ def _get_google_client_id() -> str | None:
 
 
 # ── Core routes ────────────────────────────────────────────────────────
+
+
+@app.before_request
+def _enforce_login():
+    """Require login for data endpoints when Google Sign-In is configured."""
+    if not os.environ.get("GOOGLE_CLIENT_ID"):
+        return  # No auth configured — open access
+    path = request.path
+    # Always allow: auth endpoints, config, static assets, and the index page
+    if (
+        path.startswith("/api/auth/")
+        or path == "/api/config"
+        or path in ("/", "")
+        or path.startswith("/js/")
+        or path.startswith("/dist/")
+        or path.startswith("/icons/")
+        or path.endswith(".css")
+        or path.endswith(".svg")
+        or path.endswith(".png")
+        or path.endswith(".ico")
+        or path.endswith(".js")
+        or path.endswith(".woff2")
+    ):
+        return  # Allow through
+    # Protect API, photos, and documents
+    if (
+        path.startswith("/api/")
+        or path.startswith("/photos/")
+        or path.startswith("/documents/")
+    ) and "person_id" not in session:
+        return jsonify({"error": "login required", "code": "unauthorized"}), 401
 
 
 @app.route("/")

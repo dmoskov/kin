@@ -26,6 +26,11 @@ export async function handleGoogleSignIn(response) {
     });
     const data = await resp.json();
     if (resp.ok) {
+      // If we're on the login gate, reload the page to do a full init
+      if (document.getElementById("login-gate")) {
+        location.reload();
+        return;
+      }
       S.AUTH_USER = data;
       applyAuth();
       // Re-center on the authenticated person (only if they have a real person record)
