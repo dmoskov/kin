@@ -557,6 +557,8 @@ export async function renderMap() {
       updateMapForYear(maxYear);
     });
     document.getElementById("map-play").addEventListener("click", toggleMapAnimation);
+    document.getElementById("map-tour")?.addEventListener("click", startMapTour);
+    document.getElementById("map-tour-stop")?.addEventListener("click", stopMapTour);
     document.getElementById("map-depth-select")?.addEventListener("change", (e) => {
       S.MAP_DEPTH = parseInt(e.target.value, 10);
       localStorage.setItem("ft-map-depth", String(S.MAP_DEPTH));
@@ -1448,6 +1450,7 @@ export function toggleMapAnimation() {
   }
 
   // Start from earliest year
+  stopMapTour();  // don't run the guided tour and the year-lapse together
   MAP_ANIMATING = true;
   slider.value = MIN_YEAR;
   yearEndLabel.textContent = MIN_YEAR;
@@ -1479,6 +1482,87 @@ export function toggleMapAnimation() {
     yearEndLabel.textContent = year;
     updateMapForYear(year);
   }, 40);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Guided migration tour — fly leg-by-leg through the family's journeys
+// ═══════════════════════════════════════════════════════════════
+
+let _tourTimer = null;
+let _tourStories = [];
+let _tourIdx = 0;
+const _TOUR_MS = 5200;
+
+// One story per person who actually migrated (>=2 distinct stops), earliest first.
+function buildStories() {
+  const byPerson = {};
+  for (const e of MAP_ALL_EVENTS) {
+    if (!e.latlng) continue;
+    (byPerson[e.personId] || (byPerson[e.personId] = [])).push(e);
+  }
+  const stories = [];
+  for (const pid in byPerson) {
+    const evs = byPerson[pid].slice().sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+    const stops = [];
+    const seen = new Set();
+    let ship = "";
+    for (const e of evs) {
+      const k = e.latlng.join(",");
+      if (e.ship) ship = e.ship;
+      if (!seen.has(k)) { seen.add(k); stops.push(e); }
+    }
+    if (stops.length < 2) continue;
+    const years = stops.map((s) => s.year).filter(Boolean);
+    stories.push({
+      personId: pid,
+      name: personName(pid),
+      stops,
+      ship,
+      firstYear: years.length ? Math.min(...years) : null,
+      lastYear: years.length ? Math.max(...years) : null,
+      bounds: L.latLngBounds(stops.map((s) => s.latlng)),
+    });
+  }
+  stories.sort((a, b) => (a.firstYear || 9999) - (b.firstYear || 9999));
+  return stories;
+}
+
+export function startMapTour() {
+  if (!S.MAP) return;
+  if (_tourTimer || _tourIdx) { stopMapTour(); return; }  // toggle off if running
+  if (mapAnimTimer) toggleMapAnimation();                 // don't run alongside the year-lapse
+  _tourStories = buildStories();
+  if (!_tourStories.length) return;
+  const btn = document.getElementById("map-tour");
+  if (btn) { btn.classList.add("playing"); btn.innerHTML = "&#9646;&#9646; Story"; }
+  _tourIdx = 0;
+  _tourStep();
+}
+
+function _tourStep() {
+  const card = document.getElementById("map-tour-card");
+  if (_tourIdx >= _tourStories.length) { stopMapTour(); return; }
+  const s = _tourStories[_tourIdx];
+  setSpotlight(s.personId);
+  S.MAP.flyToBounds(s.bounds, { padding: [70, 70], maxZoom: 6, duration: 1.5 });
+  if (card) {
+    const route = s.stops.map((st) => `${placeFlag(st.place) ? placeFlag(st.place) + " " : ""}${escapeHtml(st.place || "?")}`).join(" → ");
+    const span = s.firstYear ? `${s.firstYear}${s.lastYear && s.lastYear !== s.firstYear ? "–" + s.lastYear : ""}` : "";
+    card.querySelector(".map-tour-text").innerHTML =
+      `<strong>${escapeHtml(s.name)}</strong>${span ? ` · ${span}` : ""}<div class="map-tour-route">${route}${s.ship ? ` · 🚢 ${escapeHtml(s.ship)}` : ""}</div>`;
+    card.querySelector(".map-tour-progress").textContent = `${_tourIdx + 1} / ${_tourStories.length}`;
+    card.classList.remove("hidden");
+  }
+  _tourTimer = setTimeout(() => { _tourIdx++; _tourStep(); }, _TOUR_MS);
+}
+
+export function stopMapTour() {
+  if (_tourTimer) { clearTimeout(_tourTimer); _tourTimer = null; }
+  _tourIdx = 0;
+  setSpotlight(null);
+  document.getElementById("map-tour-card")?.classList.add("hidden");
+  const btn = document.getElementById("map-tour");
+  if (btn) { btn.classList.remove("playing"); btn.innerHTML = "&#9654; Story"; }
 }
 
 // ═══════════════════════════════════════════════════════════════

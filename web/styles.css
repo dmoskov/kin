@@ -5658,6 +5658,63 @@ select.ge-input { padding: 3px 4px; }
   pointer-events: none;
 }
 
+/* ── Guided migration tour ───────────────────────────────────── */
+.map-tour-btn {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.map-tour-btn:hover { background: var(--surface-hover); }
+.map-tour-btn.playing { background: var(--accent); color: #fff; border-color: var(--accent); }
+.map-tour-card {
+  position: absolute;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  z-index: 800;
+  max-width: 460px;
+  width: max-content;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+  padding: 12px 16px;
+  pointer-events: auto;
+  animation: tourCardIn 0.3s ease;
+}
+@keyframes tourCardIn {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+.map-tour-text strong { font-size: 15px; }
+.map-tour-route { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+.map-tour-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+}
+.map-tour-progress { font-size: 11px; color: var(--text-muted); font-weight: 600; }
+.map-tour-stop {
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+}
+.map-tour-stop:hover { background: var(--surface-hover); }
+
 /* ── Seaport gateway markers (anchor) ────────────────────────── */
 .map-gateway-marker {
   position: relative;
