@@ -272,9 +272,7 @@ def _enforce_login():
         return  # Allow through
     # Protect API, photos, and documents
     if (
-        path.startswith("/api/")
-        or path.startswith("/photos/")
-        or path.startswith("/documents/")
+        path.startswith("/api/") or path.startswith("/photos/") or path.startswith("/documents/")
     ) and "person_id" not in session:
         return jsonify({"error": "login required", "code": "unauthorized"}), 401
 
