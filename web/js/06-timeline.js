@@ -19,14 +19,30 @@ const STREAM_TREATMENTS = {
 // Historical-context inserts woven into the stream. Only eras overlapping the
 // family's own span are shown; `war` eras additionally list family members with
 // military service in that window. Add rows to extend coverage for any family.
+// `places`, when present, region-gates an era to families that actually have
+// events in that geography — so an Irish family won't see Russian pogroms and a
+// family with no Eastern-European roots won't see the Holocaust insert. Eras
+// without `places` are universal (world wars, pandemics).
 const HISTORICAL_ERAS = [
-  { label: "American Revolution", start: 1775, end: 1783, icon: "🇺🇸", war: true },
-  { label: "American Civil War", start: 1861, end: 1865, icon: "⚔️", war: true },
+  { label: "American Revolution", start: 1775, end: 1783, icon: "🇺🇸", war: true,
+    places: ["maine", "massachusetts", "newbury", "boston", "virginia", "new york", "connecticut"] },
+  { label: "American Civil War", start: 1861, end: 1865, icon: "⚔️", war: true,
+    places: ["massachusetts", "maine", "boston", "new york", "virginia"] },
+  { label: "Anti-Jewish pogroms in the Russian Empire", start: 1881, end: 1884, icon: "✡️",
+    places: ["odessa", "russia", "ukraine", "kishinev", "kamenets", "brody", "poland"] },
+  { label: "Romanian Jews denied citizenship", start: 1878, end: 1910, icon: "✡️",
+    places: ["romania", "kostence", "constanța", "constanta"] },
   { label: "The Great Wave of immigration (Ellis Island era)", start: 1892, end: 1924, icon: "🚢" },
   { label: "World War I", start: 1914, end: 1918, icon: "🎖️", war: true },
   { label: "The 1918 influenza pandemic", start: 1918, end: 1920, icon: "🦠" },
+  { label: "Russian Revolution & Civil War", start: 1917, end: 1922, icon: "🏛️",
+    places: ["odessa", "russia", "ukraine"] },
+  { label: "Founding of the Republic of Turkey", start: 1923, end: 1938, icon: "🇹🇷",
+    places: ["turkey", "istanbul", "constantinople"] },
   { label: "The Great Depression", start: 1929, end: 1939, icon: "📉" },
   { label: "World War II", start: 1939, end: 1945, icon: "🌍", war: true },
+  { label: "The Holocaust", start: 1941, end: 1945, icon: "✡️",
+    places: ["odessa", "russia", "poland", "romania", "ukraine", "germany", "hungary", "austria", "kamenets", "brody"] },
   { label: "Korean War", start: 1950, end: 1953, icon: "🎖️", war: true },
   { label: "Vietnam War", start: 1955, end: 1975, icon: "🎖️", war: true },
   { label: "COVID-19 pandemic", start: 2020, end: 2022, icon: "🦠" },
@@ -35,9 +51,10 @@ function eraMidDecade(e) { return Math.floor(((e.start + e.end) / 2) / 10) * 10;
 
 // Era bands for one decade (anchored by the era's midpoint decade), gated to the
 // family's year span. War eras list members who served during the window.
-function buildEraInserts(decade, minYear, maxYear, military) {
+function buildEraInserts(decade, minYear, maxYear, military, placesText) {
   const eras = HISTORICAL_ERAS.filter(
-    (e) => eraMidDecade(e) === decade && e.end >= minYear && e.start <= maxYear
+    (e) => eraMidDecade(e) === decade && e.end >= minYear && e.start <= maxYear &&
+      (!e.places || e.places.some((k) => placesText.includes(k)))
   );
   if (!eras.length) return "";
   return eras.map((e) => {
@@ -345,6 +362,12 @@ function renderStreamFeed(container, entries, showNow) {
   const military = (S.DATA.events || [])
     .filter((e) => e.event_type === "military" && e.date)
     .map((e) => ({ pid: e.person_id, year: parseInt(e.date.substring(0, 4)) }));
+  // All place strings across the family, for region-gating historical eras.
+  const placesText = [
+    ...S.DATA.people.flatMap((p) => [p.birth_place, p.death_place]),
+    ...(S.DATA.events || []).map((e) => e.place),
+    ...(S.DATA.unions || []).map((u) => u.union_place),
+  ].filter(Boolean).join(" | ").toLowerCase();
 
   // Group by decade, OMIT empty decades (no continuous backfill here)
   const byDecade = {};
@@ -368,7 +391,7 @@ function renderStreamFeed(container, entries, showNow) {
   for (const decade of decades) {
     html += `<section class="tstream-decade-group" id="tl-decade-${decade}" data-decade="${decade}">`;
     html += `<div class="tstream-decade">${decade}s</div>`;
-    html += buildEraInserts(decade, minY, maxY, military);
+    html += buildEraInserts(decade, minY, maxY, military, placesText);
     html += buildStreamCellHtml(byDecade[decade], laneMeta);
     html += `</section>`;
   }
