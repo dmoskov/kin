@@ -254,27 +254,20 @@ def _enforce_login():
     if not os.environ.get("GOOGLE_CLIENT_ID"):
         return  # No auth configured — open access
     path = request.path
-    # Always allow: health check, auth endpoints, config, static assets, index
-    if (
-        path == "/healthz"
-        or path.startswith("/api/auth/")
-        or path == "/api/config"
-        or path in ("/", "")
-        or path.startswith("/js/")
-        or path.startswith("/dist/")
-        or path.startswith("/icons/")
-        or path.endswith(".css")
-        or path.endswith(".svg")
-        or path.endswith(".png")
-        or path.endswith(".ico")
-        or path.endswith(".js")
-        or path.endswith(".woff2")
-    ):
-        return  # Allow through
-    # Protect API, photos, and documents
-    if (
-        path.startswith("/api/") or path.startswith("/photos/") or path.startswith("/documents/")
-    ) and "person_id" not in session:
+    # Gate the data + uploaded files (photos, documents) regardless of file
+    # extension — a path ending in .png/.jpg must not bypass auth just because
+    # it looks like a static asset. Everything else (index shell, /js, /dist,
+    # /icons, css/fonts, /healthz) is the public SPA shell and falls through.
+    #   - /photos/view/ is a client-side route (serves index.html), not a file.
+    #   - /api/auth/ and /api/config are the endpoints needed to log in.
+    protected = (
+        path.startswith("/documents/")
+        or (path.startswith("/photos/") and not path.startswith("/photos/view/"))
+        or (
+            path.startswith("/api/") and not path.startswith("/api/auth/") and path != "/api/config"
+        )
+    )
+    if protected and "person_id" not in session:
         return jsonify({"error": "login required", "code": "unauthorized"}), 401
 
 
