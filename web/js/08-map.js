@@ -20,6 +20,13 @@ export const GEOCODE = {
   "Morocco":                                      [31.79, -7.09],
   "Istanbul, Turkey":                             [41.01, 28.98],
   "Turkey":                                       [39.29, 35.23],
+  // ── Migration-route waypoints (mid-journey ports & towns) ──
+  "Hamburg":                                      [53.55, 9.99],
+  "Bremen":                                       [53.08, 8.81],
+  "Piraeus, Greece":                              [37.94, 23.65],
+  "Londonderry":                                  [55.00, -7.31],
+  "Kamenets-Podolsky":                            [48.68, 26.58],
+  "Brody":                                        [50.08, 25.15],
   // ── Iceland ──
   "Iceland":                                      [64.96, -19.02],
   // ── England ──
