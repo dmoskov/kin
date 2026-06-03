@@ -25,5 +25,8 @@ for (const m of [m01, m02, m03, m04, m05, m06, m07, m08, m09, m10, m11, m12, m13
 // Expose shared state for debugging and the smoke test.
 window.S = S;
 
+// Enable JS-only image fade-in (no-JS degrades to fully visible images).
+document.documentElement.classList.add("js-fade");
+
 window.initTheme();
 window.init();

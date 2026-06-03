@@ -13,6 +13,7 @@
   --text-muted: #a09683;
   --accent: #c4956a;
   --accent-hover: #d4aa82;
+  --accent-rgb: 196,149,106;
   --male: #7ca8c4;
   --female: #c47c9a;
   --union: #d4a843;
@@ -23,6 +24,9 @@
   --event-marriage: #d47c8a;
   --event-residence: #6c9cbb;
   --radius: 10px;
+  /* Stream display typography (scoped to the timeline stream feed). */
+  --font-display-lg: 22px;
+  --font-display-sm: 17px;
   --panel-width: 380px;
   --node-text: #ece5d8;
   --node-text-dim: rgba(236,229,216,0.65);
@@ -44,6 +48,7 @@
   --text-muted: #7a6e5e;
   --accent: #8b6340;
   --accent-hover: #704f30;
+  --accent-rgb: 139,99,64;
   --male: #4a7a9c;
   --female: #9c4a70;
   --union: #a0832e;
@@ -242,8 +247,10 @@ main {
   filter: brightness(1.3) drop-shadow(0 0 8px rgba(108, 124, 255, 0.4));
 }
 .node-rect.center-node {
+  rx: 11;
+  ry: 11;
   stroke-width: 3;
-  filter: drop-shadow(0 0 6px rgba(212, 168, 67, 0.5));
+  filter: drop-shadow(0 0 6px rgba(212, 168, 67, 0.5)) drop-shadow(0 4px 12px rgba(0, 0, 0, 0.30));
 }
 
 .node-name {
@@ -281,6 +288,24 @@ main {
 .node-monogram-text {
   font-family: 'Inter', sans-serif;
   font-size: 13px;
+  font-weight: 700;
+  fill: var(--surface);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Photo-count badge — small accent disc on multi-photo nodes. Hidden until
+   the tree is zoomed in (class toggled on the SVG) to avoid clutter. */
+.node-photo-badge { opacity: 0; transition: opacity 0.2s ease; }
+.tree-zoomed-in .node-photo-badge { opacity: 1; }
+.node-photo-badge circle {
+  fill: var(--accent);
+  stroke: var(--surface);
+  stroke-width: 1;
+}
+.node-photo-badge text {
+  font-family: 'Inter', sans-serif;
+  font-size: 8px;
   font-weight: 700;
   fill: var(--surface);
   pointer-events: none;
@@ -381,55 +406,113 @@ main {
 .close-btn {
   position: absolute;
   top: 12px;
-  right: 12px;
-  background: none;
-  border: none;
-  color: var(--text-muted);
+  left: 12px;
+  z-index: 3;
+  /* Semi-opaque chip so the X is readable over any hero photo, both themes. */
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #fff;
   font-size: 20px;
+  line-height: 1;
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 6px;
+  padding: 4px 9px;
+  border-radius: 8px;
+  backdrop-filter: blur(4px);
 }
-.close-btn:hover { background: var(--surface-hover); color: var(--text); }
+.close-btn:hover { background: rgba(0, 0, 0, 0.65); color: #fff; }
 
-/* ── Panel Hero Header ──────────────────────────────────────── */
+/* ── Panel Hero Header (full-bleed photo) ───────────────────── */
 
-.panel-hero {
+/* Bleed to the panel edges/top (panel padding is 24px). */
+.panel-hero-photo {
+  position: relative;
+  height: 260px;
+  overflow: hidden;
+  margin: -24px -24px 8px;
+  width: calc(100% + 48px);
+}
+.panel-hero-photo .panel-hero-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  display: block;
+  cursor: pointer;
+}
+.panel-hero-monogram {
+  width: 100%;
+  height: 100%;
   display: flex;
-  gap: 16px;
-  align-items: flex-start;
-  padding-bottom: 16px;
-  margin-bottom: 8px;
-  border-bottom: 1px solid var(--border);
+  align-items: center;
+  justify-content: center;
+  font-family: var(--header-font);
+  font-size: 96px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
-.panel-hero-avatar {
-  flex-shrink: 0;
+.panel-hero-monogram.male {
+  background: linear-gradient(135deg, var(--male), var(--node-male-bg));
 }
-.panel-hero-avatar .person-thumb,
-.panel-hero-avatar .cropped-thumb {
-  border-radius: 50%;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
-  border: 2px solid var(--border);
+.panel-hero-monogram.female {
+  background: linear-gradient(135deg, var(--female), var(--node-female-bg));
 }
-.panel-hero-avatar .person-thumb-placeholder {
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
-  border-width: 2px;
+.panel-hero-monogram.unknown {
+  background: linear-gradient(135deg, var(--accent), var(--surface));
 }
-.panel-hero-info {
-  flex: 1;
-  min-width: 0;
+.panel-hero-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 16px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+  color: #fff;
+}
+.panel-hero-overlay .panel-name {
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+.panel-hero-overlay .panel-rel-badge {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #fff;
+}
+.panel-hero-overlay .panel-lifespan {
+  color: rgba(255, 255, 255, 0.9);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 .panel-hero-meta {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 2px;
+  margin-top: 4px;
 }
 .panel-lifespan {
   font-size: 12px;
   color: var(--text-muted);
   margin-top: 6px;
   letter-spacing: 0.2px;
+}
+.panel-hero-edit-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #fff;
+  font-family: inherit;
+  font-size: 11px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  transition: background 0.15s, border-color 0.15s;
+}
+.panel-hero-edit-btn:hover {
+  background: rgba(0, 0, 0, 0.65);
+  border-color: #fff;
 }
 
 .panel-name {
@@ -1292,65 +1375,9 @@ main {
   color: var(--text);
 }
 
-/* ── Stream column in grid ─────────────────────────────────── */
-
-.timeline-grid.has-stream .timeline-row {
-  grid-template-columns: var(--stream-grid);
-}
-
-/* Alternating decade row tinting */
+/* Alternating decade row tinting (branches grid) */
 .timeline-row:nth-child(even) {
   background: color-mix(in srgb, var(--text) 2%, var(--bg));
-}
-
-.tstream-cell {
-  border-right: 3px solid var(--accent);
-  border-left: none;
-  background: color-mix(in srgb, var(--accent) 3%, transparent);
-  position: relative;
-  padding-top: 8px;
-  animation: streamFadeIn 0.3s ease-out;
-}
-@keyframes streamFadeIn {
-  from { opacity: 0; transform: translateX(-12px); }
-  to   { opacity: 1; transform: translateX(0); }
-}
-.tstream-col-header {
-  border-right: 3px solid var(--accent);
-  border-left: none;
-  background: color-mix(in srgb, var(--accent) 3%, var(--bg));
-}
-
-/* Vertical rail connecting dots */
-.tstream-cell::before {
-  content: "";
-  position: absolute;
-  left: 18px;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: var(--border);
-  pointer-events: none;
-}
-
-/* Photo cards in stream */
-.tstream-cell .tstream-entry {
-  margin-bottom: 8px;
-}
-.tstream-cell .tstream-photo-entry {
-  position: relative;
-}
-.tstream-cell .tstream-card {
-  border-radius: 8px;
-}
-.tstream-cell .tstream-card-body {
-  padding: 6px 10px;
-}
-.tstream-cell .tstream-rail {
-  width: 28px;
-}
-.tstream-cell .tstream-photo-frame .tstream-photo-img {
-  max-height: 180px;
 }
 
 /* Photo container — natural proportions, capped height */
@@ -1409,12 +1436,6 @@ main {
   font-size: 11px;
 }
 
-@media (max-width: 900px) {
-  .timeline-grid.has-stream .timeline-row {
-    grid-template-columns: repeat(var(--lane-count), 1fr);
-  }
-}
-
 /* ── Decade-row-first Grid ─────────────────────────────────── */
 
 .timeline-grid {
@@ -1459,6 +1480,8 @@ main {
   min-width: 0;
 }
 .timeline-cell:last-child { border-right: none; }
+/* Empty decade cells in the branches grid read faintly so populated cells lead. */
+.timeline-cell-empty { background: color-mix(in srgb, var(--text) 2%, transparent); }
 
 .lane-color-dot {
   width: 8px;
@@ -3872,10 +3895,8 @@ main {
 @media (max-width: 768px) {
   header { flex-direction: column; gap: 12px; }
   .panel { width: 100%; position: absolute; right: 0; top: 0; height: 100%; z-index: 5; transform: translateX(0); }
-  .panel-hero { gap: 12px; }
-  .panel-hero-avatar .person-thumb,
-  .panel-hero-avatar .cropped-thumb,
-  .panel-hero-avatar .person-thumb-placeholder { width: 60px !important; height: 60px !important; }
+  .panel-hero-photo { height: 220px; }
+  .panel-hero-monogram { font-size: 80px; }
   .rel-selectors { flex-direction: column; }
   .map-controls { flex-direction: column; gap: 10px; padding: 10px 16px; }
   .map-slider { max-width: 100%; width: 100%; }
@@ -4373,7 +4394,7 @@ main {
 .tstream-date { font-weight: 600; color: var(--text); }
 .tstream-place, .tstream-person { font-size: 12px; }
 .tstream-title {
-  font-size: 14px;
+  font-size: var(--font-display-sm);
   font-weight: 600;
   color: var(--text);
   margin-bottom: 2px;
@@ -4387,20 +4408,324 @@ main {
   color: var(--text-muted);
   margin-top: 4px;
 }
-.tstream-photo-card .tstream-photo-img {
-  width: 100%;
-  max-height: 360px;
-  object-fit: cover;
-  object-position: top center;
-  display: block;
-  cursor: pointer;
-  transition: opacity 0.15s;
+
+/* ── Milestone cards (birth / death / marriage) ──────────────────
+   NOTE for styles.css merge: classes added below are
+   .tstream-milestone(+--birth/--death/--marriage), .tstream-milestone-card,
+   .tstream-milestone-body, .tstream-milestone-thumb, .tstream-milestone-text,
+   .tstream-milestone-meta, .tstream-milestone-eyebrow, .tstream-marriage-thumbs,
+   and .tstream-marriage-glyph. color-mix blends against --surface so the soft
+   tint is automatically correct in both light & dark themes. */
+.tstream-milestone-card {
+  border-left: 3px solid var(--accent);
 }
-.tstream-photo-card .tstream-photo-img:hover { opacity: 0.9; }
+.tstream-milestone-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+}
+.tstream-milestone-thumb { flex-shrink: 0; }
+.tstream-milestone-text { min-width: 0; flex: 1; }
+.tstream-milestone-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+.tstream-milestone-eyebrow {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+/* Birth — soft accent-tinted card */
+.tstream-milestone--birth .tstream-milestone-card {
+  border-left-color: var(--event-birth);
+  background: color-mix(in srgb, var(--event-birth) 8%, var(--surface));
+}
+/* Death — restrained / muted, no glow */
+.tstream-milestone--death .tstream-milestone-card {
+  border-left-color: var(--text-muted);
+  background: color-mix(in srgb, var(--text-muted) 5%, var(--surface));
+}
+/* Marriage — accent on the union color */
+.tstream-milestone--marriage .tstream-milestone-card {
+  border-left-color: var(--event-marriage);
+  background: color-mix(in srgb, var(--event-marriage) 8%, var(--surface));
+}
+
+.tstream-marriage-thumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.tstream-marriage-thumbs .person-thumb,
+.tstream-marriage-thumbs .person-thumb-placeholder { flex-shrink: 0; }
+.tstream-marriage-glyph {
+  color: var(--event-marriage);
+  font-size: 16px;
+  line-height: 1;
+}
+/* ── Photo-first stream card (the photo IS the card) ──────────────
+   NOTE for styles.css merge: classes added below are
+   .tstream-photo-stage, .tstream-photo-blurfill, .tstream-photo-img(.is-cover),
+   .tstream-photo-scrim, .tstream-photo-overlay(+.tstream-photo-caption,
+   .tstream-photo-overlay-meta, .tstream-photo-date, .tstream-photo-place),
+   and cluster classes .tstream-photo-card--cluster, .tstream-cluster-strip,
+   .tstream-cluster-thumb, .tstream-cluster-more. Scrim + overlay are
+   theme-independent (fixed dark scrim, white text). This REPLACES the old
+   .tstream-photo-card .tstream-photo-img cover/top-center rule. */
+.tstream-photo-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 480px;
+}
+.tstream-photo-stage {
+  position: relative;
+  aspect-ratio: 4 / 5;
+  max-height: 70vh;
+  overflow: hidden;
+  cursor: pointer;
+  background: #000;
+}
+/* Blurred fill behind a contained photo so letterbox gaps never look empty. */
+.tstream-photo-blurfill {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  filter: blur(24px) saturate(1.1);
+  transform: scale(1.15);
+}
+/* Foreground photo. Default contain → never crops a face. .is-cover (added by
+   the runtime framing pass) crops with a face-aware object-position. */
+.tstream-photo-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  transition: transform 0.25s ease;
+}
+.tstream-photo-img.is-cover { object-fit: cover; }
+.tstream-photo-stage:hover .tstream-photo-img { transform: scale(1.03); }
+
+/* ── Image fade-in (P2) ──────────────────────────────────────────
+   JS adds .js-fade on <html> and flips .is-loaded per image once it's ready.
+   Scoped to stream + gallery imgs so it never fights the framing pass. No-JS
+   leaves images fully visible. */
+.js-fade .tstream-photo-img,
+.js-fade .photos-grid-img img {
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.js-fade img.is-loaded { opacity: 1; }
+
+/* Bottom gradient scrim so the white overlay text stays legible. */
+.tstream-photo-scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.78) 0%, rgba(0, 0, 0, 0.35) 28%, transparent 55%);
+}
+.tstream-photo-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 14px 16px;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+}
+.tstream-photo-caption {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  margin-bottom: 6px;
+}
+.tstream-photo-overlay-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+.tstream-photo-date { font-weight: 700; white-space: nowrap; }
+.tstream-photo-place { display: inline-flex; align-items: center; opacity: 0.9; }
+.tstream-photo-overlay .tstream-lane-chip { color: #fff; }
+
+/* Cluster card: hero stage + small filmstrip of additional members. */
+.tstream-photo-card--cluster .tstream-cluster-strip {
+  display: flex;
+  gap: 4px;
+  padding: 4px 0 0;
+}
+.tstream-cluster-thumb,
+.tstream-cluster-more {
+  flex: 1 1 0;
+  aspect-ratio: 1 / 1;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.tstream-cluster-thumb {
+  background-size: cover;
+  background-position: center;
+  background-color: var(--border);
+}
+.tstream-cluster-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--border);
+  color: var(--text);
+  font-weight: 700;
+  font-size: 14px;
+}
 
 @media (max-width: 600px) {
   .tstream { padding-left: 4px; }
   .tstream::before { left: 14px; }
+}
+
+/* ── Timeline Stream FEED (default full-width mode) ───────────── */
+/* .tstream-feed widens the centered feed and leaves room on the right for
+   the decade minimap. Decade entries live in .tstream-decade-group sections. */
+.tstream-feed {
+  max-width: 720px;
+  /* leave gutter for the right-edge decade minimap */
+  padding-right: 64px;
+}
+@media (max-width: 600px) {
+  .tstream-feed { padding-right: 0; }
+}
+
+.tstream-decade-group {
+  position: relative;
+}
+
+/* Sticky decade pill — pins to the top of the scroll container as you scroll
+   through a decade. The scroll context is .timeline-container (overflow-y:auto). */
+.tstream-feed .tstream-decade {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin-top: 8px;
+  font-size: var(--font-display-sm);
+}
+
+/* ── Lane accent chip (per entry) ────────────────────────────── */
+.tstream-lane-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+.tstream-lane-chip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Lane legend / filter bar (stream mode) ──────────────────── */
+.tstream-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.tstream-legend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.tstream-legend-chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.tstream-legend-chip.active {
+  color: var(--text);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
+.tstream-legend-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Dim non-focused entries when a branch is highlighted (fog-of-war aesthetic) */
+.tstream-feed.lane-focused .tstream-entry {
+  opacity: 0.28;
+  transition: opacity 0.2s;
+}
+.tstream-feed.lane-focused .tstream-entry.lane-match {
+  opacity: 1;
+}
+
+/* ── Right-edge decade minimap ───────────────────────────────── */
+.tstream-decade-nav {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 2;
+}
+.tstream-nav-btn {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-right: 2px solid transparent;
+  padding: 2px 8px 2px 6px;
+  cursor: pointer;
+  text-align: right;
+  transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.tstream-nav-btn:hover { color: var(--text); }
+.tstream-nav-btn.active {
+  color: var(--accent);
+  border-right-color: var(--accent);
+}
+/* Condense when there are many decades */
+.tstream-decade-nav-condensed .tstream-nav-btn {
+  font-size: 10px;
+  padding: 1px 6px;
+}
+@media (max-width: 600px) {
+  .tstream-decade-nav { display: none; }
 }
 
 /* ── Cropped Thumbnails ─────────────────────────────────────── */

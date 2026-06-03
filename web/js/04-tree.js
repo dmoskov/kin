@@ -911,8 +911,12 @@ export function renderTree() {
 
   // Zoom behavior
   const g = svg.append("g");
+  // Photo-count badges are only shown when zoomed in past this threshold,
+  // toggled as a pure CSS class on the SVG (no re-render).
+  const BADGE_ZOOM_THRESHOLD = 0.5;
   const zoom = d3.zoom().scaleExtent([0.15, 2.5]).on("zoom", (e) => {
     g.attr("transform", e.transform);
+    svg.classed("tree-zoomed-in", e.transform.k >= BADGE_ZOOM_THRESHOLD);
   });
   svg.call(zoom);
 
@@ -937,6 +941,9 @@ export function renderTree() {
     const fty = height / 2 - ((minY + maxY) / 2) * fitScale;
     svg.call(zoom.transform, d3.zoomIdentity.translate(ftx, fty).scale(fitScale));
   }
+
+  // Set the initial badge-visibility class to match the starting zoom level.
+  svg.classed("tree-zoomed-in", d3.zoomTransform(svg.node()).k >= BADGE_ZOOM_THRESHOLD);
 
   // Expose for external pan/zoom controls (buttons, keyboard, panel centering).
   _treeZoom = zoom;
@@ -1072,20 +1079,32 @@ export function renderTree() {
     .attr("role", "button")
     .attr("aria-label", (d) => d.person.fullName);
 
+  // Center nodes are drawn VISUALLY larger via a local overhang only — the
+  // NODE_W/NODE_H globals (link/union/bounds/minimap math) are never changed.
+  const CENTER_OVERHANG_X = 12;
+  const CENTER_OVERHANG_Y = 8;
+  const _isCenterId = (d) => d.id === S.CENTER_ID_A || d.id === S.CENTER_ID_B;
   nodeGroups
     .append("rect")
-    .attr("class", (d) => "node-rect" + ((d.id === S.CENTER_ID_A || d.id === S.CENTER_ID_B) ? " center-node" : ""))
-    .attr("width", NODE_W)
-    .attr("height", NODE_H)
+    .attr("class", (d) => "node-rect" + (_isCenterId(d) ? " center-node" : ""))
+    .attr("x", (d) => (_isCenterId(d) ? -CENTER_OVERHANG_X : 0))
+    .attr("y", (d) => (_isCenterId(d) ? -CENTER_OVERHANG_Y : 0))
+    .attr("width", (d) => NODE_W + (_isCenterId(d) ? CENTER_OVERHANG_X * 2 : 0))
+    .attr("height", (d) => NODE_H + (_isCenterId(d) ? CENTER_OVERHANG_Y * 2 : 0))
     .attr("fill", (d) => d.person.gender === "female" ? "var(--node-female-bg)" : "var(--node-male-bg)")
     .attr("stroke", (d) => d.person.gender === "female" ? "var(--female)" : "var(--male)");
 
   // Photo thumbnails (circular, clipped)
   const PHOTO_SIZE = 28;
   const PHOTO_PAD = 6;
+  // The focal couple gets a larger avatar to draw the eye. The larger image
+  // needs its own clipPath (the 28px circle would wrongly crop a 40px image).
+  const CENTER_PHOTO_SIZE = 40;
   const hasPhoto = (d) => !!d.person._profilePhotoPath;
+  const isCenter = (d) => d.id === S.CENTER_ID_A || d.id === S.CENTER_ID_B;
+  const photoSizeFor = (d) => (isCenter(d) ? CENTER_PHOTO_SIZE : PHOTO_SIZE);
 
-  // Clip path definition for circular photos
+  // Clip path definitions for circular photos (standard + larger center size).
   const defs = g.append("defs");
   defs.append("clipPath")
     .attr("id", "photo-clip")
@@ -1093,11 +1112,19 @@ export function renderTree() {
     .attr("cx", PHOTO_SIZE / 2)
     .attr("cy", PHOTO_SIZE / 2)
     .attr("r", PHOTO_SIZE / 2);
+  defs.append("clipPath")
+    .attr("id", "photo-clip-lg")
+    .append("circle")
+    .attr("cx", CENTER_PHOTO_SIZE / 2)
+    .attr("cy", CENTER_PHOTO_SIZE / 2)
+    .attr("r", CENTER_PHOTO_SIZE / 2);
 
   // For cropped photos, use a nested <svg> with viewBox; uncropped use standard behavior
   nodeGroups.filter(hasPhoto).each(function(d) {
     const g = d3.select(this);
     const crop = d.person._profileCrop;
+    const sz = photoSizeFor(d);
+    const clipId = isCenter(d) ? "photo-clip-lg" : "photo-clip";
     if (crop) {
       const vx = crop.x * 1000;
       const vy = crop.y * 1000;
@@ -1105,11 +1132,11 @@ export function renderTree() {
       const vh = crop.h * 1000;
       g.append("svg")
         .attr("x", PHOTO_PAD)
-        .attr("y", (NODE_H - PHOTO_SIZE) / 2)
-        .attr("width", PHOTO_SIZE)
-        .attr("height", PHOTO_SIZE)
+        .attr("y", (NODE_H - sz) / 2)
+        .attr("width", sz)
+        .attr("height", sz)
         .attr("viewBox", `${vx} ${vy} ${vw} ${vh}`)
-        .attr("clip-path", "url(#photo-clip)")
+        .attr("clip-path", `url(#${clipId})`)
         .append("image")
         .attr("class", "node-photo")
         .attr("width", 1000)
@@ -1120,10 +1147,10 @@ export function renderTree() {
       g.append("image")
         .attr("class", "node-photo")
         .attr("x", PHOTO_PAD)
-        .attr("y", (NODE_H - PHOTO_SIZE) / 2)
-        .attr("width", PHOTO_SIZE)
-        .attr("height", PHOTO_SIZE)
-        .attr("clip-path", "url(#photo-clip)")
+        .attr("y", (NODE_H - sz) / 2)
+        .attr("width", sz)
+        .attr("height", sz)
+        .attr("clip-path", `url(#${clipId})`)
         .attr("href", "/" + d.person._profilePhotoPath)
         .attr("preserveAspectRatio", "xMidYMid slice");
     }
@@ -1135,22 +1162,50 @@ export function renderTree() {
   monoGroups
     .append("circle")
     .attr("class", "node-monogram")
-    .attr("cx", PHOTO_PAD + PHOTO_SIZE / 2)
+    .attr("cx", (d) => PHOTO_PAD + photoSizeFor(d) / 2)
     .attr("cy", NODE_H / 2)
-    .attr("r", PHOTO_SIZE / 2)
+    .attr("r", (d) => photoSizeFor(d) / 2)
     .attr("fill", (d) => d.person.gender === "female" ? "var(--female)" : "var(--male)");
   monoGroups
     .append("text")
     .attr("class", "node-monogram-text")
-    .attr("x", PHOTO_PAD + PHOTO_SIZE / 2)
+    .attr("x", (d) => PHOTO_PAD + photoSizeFor(d) / 2)
     .attr("y", NODE_H / 2)
     .attr("text-anchor", "middle")
     .attr("dominant-baseline", "central")
+    .style("font-size", (d) => (isCenter(d) ? "18px" : null))
     .text((d) => ((d.person.given_name || d.person.fullName || "?").trim()[0] || "?").toUpperCase());
 
-  // Every node now has an avatar, so text is always shifted right of it.
-  const TEXT_X = PHOTO_PAD + PHOTO_SIZE + 6 + (NODE_W - PHOTO_PAD - PHOTO_SIZE - 6) / 2;
-  function textX() { return TEXT_X; }
+  // Photo-count badge: a small accent disc at the avatar's bottom-right for
+  // people with 2+ photos. Visibility is gated by zoom (CSS) to reduce clutter.
+  const photoCount = (d) => (d.person.photo_paths || []).length;
+  nodeGroups.filter((d) => photoCount(d) >= 2).each(function(d) {
+    const grp = d3.select(this);
+    const sz = photoSizeFor(d);
+    const n = photoCount(d);
+    const label = n > 9 ? "9+" : String(n);
+    const cx = PHOTO_PAD + sz - 4;
+    const cy = NODE_H / 2 + sz / 2 - 4;
+    const badge = grp.append("g").attr("class", "node-photo-badge");
+    badge.append("circle").attr("cx", cx).attr("cy", cy).attr("r", 7);
+    badge.append("text")
+      .attr("x", cx)
+      .attr("y", cy)
+      .attr("text-anchor", "middle")
+      .attr("dominant-baseline", "central")
+      .text(label);
+    badge.append("title").text(`${n} photos`);
+  });
+  // Append the photo count to the node's aria-label for screen readers.
+  nodeGroups.filter((d) => photoCount(d) >= 2)
+    .attr("aria-label", (d) => `${d.person.fullName}, ${photoCount(d)} photos`);
+
+  // Every node now has an avatar, so text is always shifted right of it. The
+  // center node's larger avatar pushes its text column further right.
+  function textX(d) {
+    const sz = photoSizeFor(d);
+    return PHOTO_PAD + sz + 6 + (NODE_W - PHOTO_PAD - sz - 6) / 2;
+  }
 
   nodeGroups
     .append("text")
@@ -1339,6 +1394,7 @@ export function renderTree() {
   // Update minimap on zoom
   svg.call(zoom.on("zoom", (e) => {
     g.attr("transform", e.transform);
+    svg.classed("tree-zoomed-in", e.transform.k >= BADGE_ZOOM_THRESHOLD);
     updateMinimapViewport(e.transform);
   }));
 

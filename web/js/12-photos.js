@@ -64,7 +64,14 @@ export function buildPanelPhotosInnerHtml(personId) {
   const photos = person.photo_paths || [];
   const captions = person.photo_captions || {};
   let html = "";
-  if (photos.length === 1) {
+  // The profile photo is now shown full-bleed in the panel hero. When the
+  // person's only photo IS the profile photo, don't duplicate it here as a
+  // big single image — but still render the "Manage Photos" button below.
+  const onlyPhotoIsProfile =
+    photos.length === 1 && person._profilePhotoPath === photos[0];
+  if (onlyPhotoIsProfile) {
+    // no photo grid — hero already shows it; fall through to Manage button.
+  } else if (photos.length === 1) {
     const src = photos[0];
     const capText = captions[src] || person.fullName;
     const isProfile = person._profilePhotoPath === src;
@@ -122,6 +129,20 @@ export function _renderPanelPhotos(personId) {
   section.innerHTML = buildPanelPhotosInnerHtml(personId);
   _wireCarousel(section, personId);
   _wirePanelPhotoClicks(section, personId);
+}
+
+// Targeted update of the panel hero <img> after the profile photo changes via
+// the picker's star handler (which only rebuilds the photos section). Only the
+// hero src/data-attr needs to change; the overlay (name/meta) is unaffected.
+export function _syncPanelHeroPhoto(personId) {
+  const person = S.PEOPLE_MAP[personId];
+  if (!person) return;
+  const heroImg = document.querySelector("#panel-content .panel-hero-img");
+  if (!heroImg) return;
+  const src = person._profilePhotoPath;
+  if (!src) return;
+  heroImg.src = "/" + src;
+  heroImg.dataset.photoPath = src;
 }
 
 export function _wireCarousel(container, personId) {
@@ -484,6 +505,7 @@ export function _buildPickerGrid(personId) {
           grid.querySelectorAll(".photo-profile-star").forEach(s => s.classList.remove("active"));
           star.classList.add("active");
           _renderPanelPhotos(personId);
+          _syncPanelHeroPhoto(personId);
           showToast("Profile photo updated");
         }
       } catch (err) {
