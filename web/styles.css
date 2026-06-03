@@ -3597,6 +3597,28 @@ main {
   border-color: var(--accent);
 }
 
+/* Prominent visibility picker — stands out from the other fields. */
+.arf-visibility-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0 4px;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+}
+
+.arf-visibility-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.arf-visibility-select {
+  width: 100%;
+}
+
 .add-relative-actions {
   display: flex;
   gap: 8px;
@@ -5364,6 +5386,41 @@ select.ge-input { padding: 3px 4px; }
   animation: ft-spin 0.8s linear infinite;
 }
 @keyframes ft-spin { to { transform: rotate(360deg); } }
+
+/* ── Login gate (shown when auth is required but user is not signed in) ── */
+#login-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+.login-gate-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 48px 40px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  max-width: 380px;
+  width: 90%;
+}
+.login-gate-title {
+  margin: 0;
+  font-family: var(--header-font);
+  font-size: 1.8rem;
+  color: var(--text);
+}
+.login-gate-subtitle {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
 
 .app-error h2 {
   margin: 0;

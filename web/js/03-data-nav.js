@@ -3,6 +3,76 @@
 // bridged onto window by 99-main.js so inline onclick handlers resolve.
 import { S } from "./00-state.js";
 
+// ── Relationship visibility (client-side declutter) ────────────────────
+// A parent-child link can be tagged: "everyone" (default), "extended"
+// (visible to the family circle + cousins/aunts/uncles), or
+// "self_and_children" / "Family" (direct ancestors, siblings, children,
+// nieces/nephews). This is a UI declutter keyed off the current viewer
+// (S.CENTER_ID_A — the "viewing as" person), not a security boundary; the
+// full graph always stays in S.ORIGINAL_DATA.
+
+// Compute the viewer's kinship circles from the FULL relationship set.
+function _kinCircles(viewerId) {
+  const rels = (S.ORIGINAL_DATA && S.ORIGINAL_DATA.relationships) || [];
+  const parentsOf = {}, childrenOf = {};
+  for (const r of rels) {
+    (parentsOf[r.child_id] ||= []).push(r.parent_id);
+    (childrenOf[r.parent_id] ||= []).push(r.child_id);
+  }
+  const ps = id => parentsOf[id] || [];
+  const cs = id => childrenOf[id] || [];
+
+  const family = new Set([viewerId]);
+  // Direct ancestors (walk parents up).
+  let frontier = [viewerId];
+  const seen = new Set([viewerId]);
+  while (frontier.length) {
+    const next = [];
+    for (const x of frontier) for (const p of ps(x)) if (!seen.has(p)) { seen.add(p); family.add(p); next.push(p); }
+    frontier = next;
+  }
+  const myParents = ps(viewerId);
+  // Siblings (other children of my parents) and my own children.
+  const siblings = new Set();
+  for (const p of myParents) for (const sib of cs(p)) { family.add(sib); if (sib !== viewerId) siblings.add(sib); }
+  for (const ch of cs(viewerId)) family.add(ch);
+  // Nieces/nephews (children of siblings).
+  for (const sib of siblings) for (const n of cs(sib)) family.add(n);
+
+  // Extended = family + aunts/uncles (parents' siblings) + their children (cousins).
+  const extended = new Set(family);
+  for (const p of myParents) for (const gp of ps(p)) {
+    for (const auntUncle of cs(gp)) {
+      if (myParents.includes(auntUncle)) continue;
+      extended.add(auntUncle);
+      for (const cousin of cs(auntUncle)) extended.add(cousin);
+    }
+  }
+  return { family, extended };
+}
+
+// Rebuild S.DATA from S.ORIGINAL_DATA, hiding links the current viewer
+// shouldn't see. Call after the viewer changes (and once at startup).
+export function applyVisibilityFilter() {
+  const full = S.ORIGINAL_DATA;
+  if (!full || !full.relationships) return;
+  const viewerId = S.CENTER_ID_A || null;
+  const { family, extended } = viewerId
+    ? _kinCircles(viewerId)
+    : { family: new Set(), extended: new Set() };
+
+  const relationships = full.relationships.filter((r) => {
+    const v = r.visibility || "everyone";
+    if (v === "everyone") return true;
+    const inFamily = family.has(r.parent_id) || family.has(r.child_id);
+    if (v === "self_and_children") return inFamily;
+    if (v === "extended") return inFamily || extended.has(r.parent_id) || extended.has(r.child_id);
+    return true;
+  });
+
+  S.DATA = { ...full, relationships };
+}
+
 export async function loadData() {
   const resp = await fetch("/api/data");
   if (!resp.ok) throw new Error(`Failed to load family data (HTTP ${resp.status})`);

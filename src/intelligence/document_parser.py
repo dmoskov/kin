@@ -55,7 +55,7 @@ Return ONLY valid JSON with this exact structure:
       "parent_id": "...",
       "child_id": "...",
       "rel_type": "biological|adoptive|step|foster",
-      "visibility": "everyone|self_and_children|private"
+      "visibility": "everyone|extended|self_and_children"
     }
   ],
   "events": [

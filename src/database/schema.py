@@ -5,7 +5,7 @@ The schema mirrors the domain models in models/ and is designed for
 efficient querying.
 """
 
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 18
 
 # ═══════════════════════════════════════════════════════════════════════
 # SQLite schema (local dev / tests)
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS relationships (
     rel_type TEXT NOT NULL DEFAULT 'biological'
         CHECK (rel_type IN ('biological', 'adoptive', 'step', 'foster')),
     visibility TEXT NOT NULL DEFAULT 'everyone'
-        CHECK (visibility IN ('everyone', 'self_and_children', 'private')),
+        CHECK (visibility IN ('everyone', 'extended', 'self_and_children')),
     UNIQUE(parent_id, child_id)
 );
 
@@ -292,6 +292,32 @@ CREATE TABLE IF NOT EXISTS tree_editors (
 );
 """
 
+SCHEMA_V17 = """
+CREATE UNIQUE INDEX IF NOT EXISTS idx_unions_pair
+    ON unions (MIN(partner1_id, partner2_id), MAX(partner1_id, partner2_id));
+"""
+
+# Replace the relationship visibility tiers: drop 'private', add 'extended'.
+# SQLite can't ALTER a CHECK, so rebuild the table (nothing references it).
+SCHEMA_V18 = """
+CREATE TABLE relationships_new (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    parent_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+    child_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+    rel_type TEXT NOT NULL DEFAULT 'biological'
+        CHECK (rel_type IN ('biological', 'adoptive', 'step', 'foster')),
+    visibility TEXT NOT NULL DEFAULT 'everyone'
+        CHECK (visibility IN ('everyone', 'extended', 'self_and_children')),
+    UNIQUE(parent_id, child_id)
+);
+INSERT INTO relationships_new (id, parent_id, child_id, rel_type, visibility)
+    SELECT id, parent_id, child_id, rel_type,
+           CASE WHEN visibility = 'private' THEN 'self_and_children' ELSE visibility END
+    FROM relationships;
+DROP TABLE relationships;
+ALTER TABLE relationships_new RENAME TO relationships;
+"""
+
 SCHEMA_SQL = (
     SCHEMA_V1
     + SCHEMA_V2
@@ -308,6 +334,7 @@ SCHEMA_SQL = (
     + SCHEMA_V13
     + SCHEMA_V15
     + SCHEMA_V16
+    + SCHEMA_V17
 )
 
 MIGRATIONS = {
@@ -326,6 +353,8 @@ MIGRATIONS = {
     14: SCHEMA_V14,
     15: SCHEMA_V15,
     16: SCHEMA_V16,
+    17: SCHEMA_V17,
+    18: SCHEMA_V18,
 }
 
 
@@ -364,7 +393,7 @@ CREATE TABLE IF NOT EXISTS relationships (
     rel_type TEXT NOT NULL DEFAULT 'biological'
         CHECK (rel_type IN ('biological', 'adoptive', 'step', 'foster')),
     visibility TEXT NOT NULL DEFAULT 'everyone'
-        CHECK (visibility IN ('everyone', 'self_and_children', 'private')),
+        CHECK (visibility IN ('everyone', 'extended', 'self_and_children')),
     UNIQUE(parent_id, child_id)
 );
 
@@ -598,6 +627,24 @@ CREATE TABLE IF NOT EXISTS tree_editors (
 );
 """
 
+PG_SCHEMA_V17 = """
+CREATE UNIQUE INDEX IF NOT EXISTS idx_unions_pair
+    ON unions (LEAST(partner1_id, partner2_id), GREATEST(partner1_id, partner2_id));
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chk_rel_not_self') THEN
+        ALTER TABLE relationships ADD CONSTRAINT chk_rel_not_self CHECK (parent_id <> child_id);
+    END IF;
+END $$;
+"""
+
+# Replace visibility tiers: drop 'private', add 'extended' (map legacy private → family).
+PG_SCHEMA_V18 = """
+UPDATE relationships SET visibility = 'self_and_children' WHERE visibility = 'private';
+ALTER TABLE relationships DROP CONSTRAINT IF EXISTS relationships_visibility_check;
+ALTER TABLE relationships ADD CONSTRAINT relationships_visibility_check
+    CHECK (visibility IN ('everyone', 'extended', 'self_and_children'));
+"""
+
 PG_SCHEMA_SQL = (
     PG_SCHEMA_V1
     + PG_SCHEMA_V2
@@ -614,6 +661,7 @@ PG_SCHEMA_SQL = (
     + PG_SCHEMA_V13
     + PG_SCHEMA_V15
     + PG_SCHEMA_V16
+    + PG_SCHEMA_V17
 )
 
 PG_MIGRATIONS = {
@@ -632,4 +680,6 @@ PG_MIGRATIONS = {
     14: PG_SCHEMA_V14,
     15: PG_SCHEMA_V15,
     16: PG_SCHEMA_V16,
+    17: PG_SCHEMA_V17,
+    18: PG_SCHEMA_V18,
 }

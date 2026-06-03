@@ -541,7 +541,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap2.add_argument("--parent", required=True, help="Parent person ID")
     ap2.add_argument("--child", required=True, help="Child person ID")
     ap2.add_argument("--type", choices=["biological", "adoptive", "step", "foster"])
-    ap2.add_argument("--visibility", choices=["everyone", "self_and_children", "private"])
+    ap2.add_argument("--visibility", choices=["everyone", "extended", "self_and_children"])
 
     # add-union
     ap3 = sub.add_parser("add-union", help="Add a marriage/partnership")

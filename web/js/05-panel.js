@@ -177,7 +177,7 @@ export function showPersonPanel(personId) {
   function _visibilityBadge(rel) {
     const v = rel.visibility;
     if (!v || v === "everyone") return "";
-    const label = v === "private" ? "private" : "family only";
+    const label = v === "extended" ? "extended family" : "close family";
     return `<span class="panel-visibility-badge">${label}</span>`;
   }
 
@@ -394,10 +394,13 @@ export function openAddRelativeForm(personId, relationship) {
             <option value="step">Step</option>
             <option value="foster">Foster</option>
           </select>
-          <select id="arf-visibility" class="add-relative-input">
-            <option value="everyone">Visible to everyone</option>
-            <option value="self_and_children">Family only</option>
-            <option value="private">Private</option>
+        </div>
+        <div class="arf-visibility-field">
+          <label class="arf-visibility-label" for="arf-visibility">👁 Who can see this link?</label>
+          <select id="arf-visibility" class="add-relative-input arf-visibility-select">
+            <option value="everyone">Everyone</option>
+            <option value="extended">Extended family — incl. cousins, aunts &amp; uncles</option>
+            <option value="self_and_children">Close family only — ancestors, siblings, children, nieces/nephews</option>
           </select>
         </div>` : ""}
         <div class="add-relative-actions">
@@ -421,10 +424,13 @@ export function openAddRelativeForm(personId, relationship) {
             <option value="step">Step</option>
             <option value="foster">Foster</option>
           </select>
-          <select id="arf-link-visibility" class="add-relative-input">
-            <option value="everyone">Visible to everyone</option>
-            <option value="self_and_children">Family only</option>
-            <option value="private">Private</option>
+        </div>
+        <div class="arf-visibility-field">
+          <label class="arf-visibility-label" for="arf-link-visibility">👁 Who can see this link?</label>
+          <select id="arf-link-visibility" class="add-relative-input arf-visibility-select">
+            <option value="everyone">Everyone</option>
+            <option value="extended">Extended family — incl. cousins, aunts &amp; uncles</option>
+            <option value="self_and_children">Close family only — ancestors, siblings, children, nieces/nephews</option>
           </select>
         </div>` : ""}
         <div class="add-relative-actions">

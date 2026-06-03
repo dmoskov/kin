@@ -20,8 +20,8 @@ class RelationshipType(Enum):
 
 class Visibility(Enum):
     EVERYONE = "everyone"
-    SELF_AND_CHILDREN = "self_and_children"
-    PRIVATE = "private"
+    EXTENDED = "extended"  # family circle + cousins, aunts/uncles
+    SELF_AND_CHILDREN = "self_and_children"  # "Family": ancestors, siblings, children, niblings
 
 
 @dataclass
