@@ -5645,6 +5645,12 @@ select.ge-input { padding: 3px 4px; }
 }
 .leaflet-container.show-place-icons .map-place-icon { opacity: 0.9; }
 
+/* Person journey spotlight: hovering an arc highlights that person's whole
+   path and dims everyone else's. */
+.map-spotlighting .arc-dim { opacity: 0.06 !important; transition: opacity 0.15s; }
+.map-spotlighting path.arc-spot { opacity: 1 !important; stroke-width: 4 !important; transition: opacity 0.15s; }
+.map-spotlighting .arc-spot { opacity: 1 !important; }
+
 /* ── Seaport gateway markers (anchor) ────────────────────────── */
 .map-gateway-marker {
   position: relative;
