@@ -125,7 +125,9 @@ export async function prefetchGeocode() {
     if (p.death_place) places.add(p.death_place);
   }
   for (const e of S.DATA.events || []) {
-    if (e.place) places.add(e.place);
+    if (!e.place) continue;
+    if (hasRoute(e.place)) for (const s of parseRoute(e.place)) places.add(s);
+    else places.add(e.place);
   }
   for (const u of S.DATA.unions || []) {
     if (u.union_place) places.add(u.union_place);
@@ -365,27 +367,35 @@ export function buildMapEvents() {
   //    usable specific place, anchor it at the port — so immigrants "arrive via
   //    Ellis Island" even when the port is mentioned only in the description.
   for (const e of (src.events || [])) {
-    const seaport = detectSeaport(e.place, e.description, e.notes);
-    let ll = null;
-    let place = e.place;
-    if (e.place && !isVaguePlace(e.place)) {
-      ll = geocode(e.place);
+    const year = e.date ? parseInt(e.date.substring(0, 4)) : null;
+    const desc = `${personName(e.person_id)} — ${escapeHtml(e.description || e.event_type)}`;
+
+    // Expand a compound "A → B → C" route into ordered waypoints so the real
+    // multi-hop journey is drawn; otherwise resolve the single place.
+    let stops = [];
+    if (e.place && hasRoute(e.place)) stops = parseRoute(e.place);
+    else if (e.place) stops = [e.place];
+    let resolved = stops.map(resolveStop).filter(Boolean);
+
+    // Nothing geocoded but a seaport is named (often only in the description) →
+    // anchor the arrival at the port via the gazetteer.
+    if (!resolved.length) {
+      const sp = detectSeaport(e.place, e.description, e.notes);
+      if (sp) resolved = [{ latlng: sp.latlng, place: sp.name, seaport: true }];
     }
-    if (!ll && seaport) {
-      ll = seaport.latlng;
-      place = seaport.name;
+
+    for (const r of resolved) {
+      MAP_ALL_EVENTS.push({
+        date: e.date || "",
+        year,
+        type: e.event_type,
+        personId: e.person_id,
+        fogLevel: personFog(e.person_id),
+        place: r.place,
+        desc,
+        latlng: r.latlng,
+      });
     }
-    if (!ll) continue;
-    MAP_ALL_EVENTS.push({
-      date: e.date || "",
-      year: e.date ? parseInt(e.date.substring(0, 4)) : null,
-      type: e.event_type,
-      personId: e.person_id,
-      fogLevel: personFog(e.person_id),
-      place,
-      desc: `${personName(e.person_id)} — ${escapeHtml(e.description || e.event_type)}`,
-      latlng: ll,
-    });
   }
 
   // Marriages
@@ -775,6 +785,35 @@ export function isVaguePlace(place) {
   if (!place) return true;
   const p = place.trim().toLowerCase().replace(/[.,]/g, " ").replace(/\s+/g, " ").trim();
   return VAGUE_PLACES.has(p);
+}
+
+// Migration routes are often recorded as a single compound string,
+// e.g. "Odessa → Hamburg → Castle Garden, New York" or
+// "Liverpool → Londonderry → Quebec (SS Sarmatian, Allan Line)". These collapse
+// to one city under fuzzy geocoding, so we split them into ordered stops and
+// draw the real multi-hop journey.
+export function hasRoute(place) {
+  return !!place && (place.includes("→") || place.includes("->"));
+}
+function cleanStop(seg) {
+  return seg
+    .replace(/\([^)]*\)/g, " ")   // drop "(SS Sarmatian, Allan Line)"
+    .replace(/\[[^\]]*\]/g, " ")
+    .split("/")[0]                // "Hamburg/Bremen" → "Hamburg"
+    .replace(/\s+/g, " ")
+    .trim();
+}
+export function parseRoute(place) {
+  return place.split(/→|->/).map(cleanStop).filter(Boolean);
+}
+// Resolve one stop to { latlng, place }, preferring the precise seaport
+// gazetteer coordinate over a fuzzy geocode. Returns null if unresolvable/vague.
+function resolveStop(seg) {
+  const port = detectSeaport(seg);
+  if (port) return { latlng: port.latlng, place: port.name, seaport: true };
+  if (isVaguePlace(seg)) return null;
+  const ll = geocode(seg);
+  return ll ? { latlng: ll, place: seg } : null;
 }
 
 export function plotMigrationArcs(events) {
