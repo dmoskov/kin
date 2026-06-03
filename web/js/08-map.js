@@ -172,15 +172,18 @@ export async function _fetchGeocodeAndPoll(places) {
       for (const a of MAP_ARCS) { a.polyline.remove(); if (a.hitArea) a.hitArea.remove(); if (a.arrowHead) a.arrowHead.remove(); if (a.boat) a.boat.remove(); }
       for (const m of MAP_GATEWAY_MARKERS) m.remove();
       for (const m of MAP_ICON_MARKERS) m.remove();
+      for (const m of MAP_ORIGIN_MARKERS) m.remove();
       MAP_MARKERS = [];
       MAP_ARCS = [];
       MAP_GATEWAY_MARKERS = [];
       MAP_ICON_MARKERS = [];
+      MAP_ORIGIN_MARKERS = [];
       buildMapEvents();
       const refreshed = _filterEventsByDepth(MAP_ALL_EVENTS);
       plotMapMarkers(refreshed);
       plotMigrationArcs(refreshed);
       buildGateways();
+      renderOrigins();
       renderGateways();
       renderPlaceIcons();
       renderMapRollCall();
@@ -238,6 +241,7 @@ let MAP_ALL_EVENTS = [];   // flat list of {date, year, type, personId, place, d
 let MAP_GATEWAY_MARKERS = []; // anchor markers at seaports (Ports of Entry)
 let MAP_GATEWAYS = [];     // [{ name, latlng, arrivals: [{personId, year}] }] across the family
 let MAP_ICON_MARKERS = []; // playful per-place local-colour emoji markers
+let MAP_ORIGIN_MARKERS = []; // ancestral-origin glow halos
 let mapAnimTimer = null;
 let MAP_ANIMATING = false; // true while the time-lapse is playing (drives boat glide)
 
@@ -485,6 +489,7 @@ export async function renderMap() {
   MAP_ARCS = [];
   MAP_GATEWAY_MARKERS = [];
   MAP_ICON_MARKERS = [];
+  MAP_ORIGIN_MARKERS = [];
 
   S.MAP = L.map("map", {
     center: [40, -40],
@@ -517,6 +522,7 @@ export async function renderMap() {
   plotPhotoMarkers(mapDepthEvents);
   plotMigrationArcs(mapDepthEvents);
   buildGateways();
+  renderOrigins();
   renderGateways();
   renderPlaceIcons();
   renderMapRollCall();
@@ -1135,6 +1141,46 @@ function renderPlaceIcons() {
 function _updatePlaceIconVisibility() {
   if (!S.MAP) return;
   S.MAP.getContainer().classList.toggle("show-place-icons", S.MAP.getZoom() >= 5);
+}
+
+// Ancestral-origin glow: a warm halo at each place people emigrated FROM (the
+// earliest stop of anyone with a migration), sized by how many left from there.
+function renderOrigins() {
+  for (const m of MAP_ORIGIN_MARKERS) m.remove();
+  MAP_ORIGIN_MARKERS = [];
+  if (!S.MAP.getPane("glowPane")) S.MAP.createPane("glowPane").style.zIndex = 350;
+
+  const byPerson = {};
+  for (const e of MAP_ALL_EVENTS) {
+    if (!e.latlng) continue;
+    (byPerson[e.personId] || (byPerson[e.personId] = [])).push(e);
+  }
+  const origins = {};
+  for (const pid in byPerson) {
+    const evs = byPerson[pid].slice().sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+    const distinct = [];
+    const seen = new Set();
+    for (const e of evs) { const k = e.latlng.join(","); if (!seen.has(k)) { seen.add(k); distinct.push(e); } }
+    if (distinct.length < 2) continue; // no migration → no origin
+    const o = distinct[0];
+    const key = o.latlng[0].toFixed(2) + "," + o.latlng[1].toFixed(2);
+    if (!origins[key]) origins[key] = { latlng: o.latlng, place: o.place, n: 0 };
+    origins[key].n++;
+  }
+  for (const key in origins) {
+    const o = origins[key];
+    const size = Math.round(46 + Math.min(o.n, 8) * 16);
+    const marker = L.marker(o.latlng, {
+      icon: L.divIcon({
+        className: "",
+        html: `<div class="map-origin-glow" style="width:${size}px;height:${size}px" title="${escapeHtml(o.place || "")} — ${o.n} emigrated"></div>`,
+        iconSize: [size, size],
+        iconAnchor: [size / 2, size / 2],
+      }),
+      pane: "glowPane", interactive: false, keyboard: false,
+    }).addTo(S.MAP);
+    MAP_ORIGIN_MARKERS.push(marker);
+  }
 }
 
 function rollCallGroup(name, latlng, entries, isPort) {

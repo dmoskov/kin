@@ -5651,6 +5651,13 @@ select.ge-input { padding: 3px 4px; }
 .map-spotlighting path.arc-spot { opacity: 1 !important; stroke-width: 4 !important; transition: opacity 0.15s; }
 .map-spotlighting .arc-spot { opacity: 1 !important; }
 
+/* Ancestral-origin glow: warm halo behind places people emigrated from */
+.map-origin-glow {
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(244,164,96,0.50) 0%, rgba(244,164,96,0.22) 42%, rgba(244,164,96,0) 70%);
+  pointer-events: none;
+}
+
 /* ── Seaport gateway markers (anchor) ────────────────────────── */
 .map-gateway-marker {
   position: relative;
