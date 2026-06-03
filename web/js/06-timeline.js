@@ -35,6 +35,17 @@ function humanizeEventType(slug) {
   if (EVENT_TYPE_LABELS[slug]) return EVENT_TYPE_LABELS[slug];
   return slug.charAt(0).toUpperCase() + slug.slice(1);
 }
+
+// Document-provenance notes (e.g. a 2020 correction letter about a 19th-c.
+// ancestor) are dated by when the document was written, not by a life event, so
+// they pollute recent decades. Keep them out of the chronological timeline.
+function isArchivalNote(e) {
+  const t = e.event_type;
+  if (t !== "custom" && t !== "other" && t !== "note") return false;
+  const d = (e.description || "").toLowerCase();
+  return /\baddendum\b/.test(d) || /requesting corrections?/.test(d) ||
+    /\bcorrespondence\b/.test(d) || /addressed to ['"]/.test(d);
+}
 let LANE_FOCUS = null;            // currently highlighted lane id in stream mode (single-select)
 let _decadeObserver = null;       // IntersectionObserver for decade nav; recreated per render
 
@@ -72,6 +83,7 @@ export function gatherTimelineEntries() {
   // Life events
   for (const e of S.DATA.events) {
     if (e.event_type === "birth" || e.event_type === "death") continue;
+    if (isArchivalNote(e)) continue;
     entries.push({
       date: e.date || "",
       year: e.date ? parseInt(e.date.substring(0, 4)) : null,
@@ -231,7 +243,7 @@ export function renderTimeline(filterPersonId = "all", mode = TIMELINE_MODE) {
   if (mode === "branches") {
     renderBranchesGrid(container, entries);
   } else {
-    renderStreamFeed(container, entries);
+    renderStreamFeed(container, entries, filterPersonId === "all");
   }
 
   // Wire person-link clicks within timeline (shared by both modes)
@@ -253,10 +265,41 @@ export function renderTimeline(filterPersonId = "all", mode = TIMELINE_MODE) {
 // Lane accent: each .tstream-entry carries data-lane="{laneId}" and renders a
 // .tstream-lane-chip. Legend focus adds .lane-focused on .tstream-feed and
 // .lane-match on the chosen branch's entries (non-matches dim via CSS).
-function renderStreamFeed(container, entries) {
+// "Where they are now": a present-day capstone of living family members, so the
+// feed ends on the living rather than trailing into archival notes. Living = no
+// death date and a birth year within ~105 years of now.
+function buildLivingNowHtml() {
+  const CUR = new Date().getFullYear();
+  const living = [];
+  for (const p of S.DATA.people) {
+    if (p.death_date || !p.birth_date) continue;
+    const by = parseInt(p.birth_date.substring(0, 4));
+    if (!by || by < CUR - 105) continue;
+    living.push({ p, by });
+  }
+  if (living.length < 2) return "";
+  const res = {};
+  for (const e of (S.DATA.events || [])) {
+    if (e.event_type !== "residence" || !e.place) continue;
+    if (!res[e.person_id] || (e.date || "") > (res[e.person_id].date || "")) res[e.person_id] = e;
+  }
+  living.sort((a, b) => a.by - b.by); // eldest first
+  const cards = living.map(({ p, by }) => {
+    const loc = (res[p.id] && res[p.id].place) || p.birth_place || "";
+    return `<div class="tnow-card">${personThumb(p.id, 46)}<div class="tnow-body">` +
+      `<div class="tnow-name">${personLink(p.id)}</div>` +
+      `<div class="tnow-meta">age ${CUR - by}${loc ? " · " + escapeHtml(loc) : ""}</div></div></div>`;
+  }).join("");
+  return `<section class="tstream-now-group" id="tl-now">` +
+    `<div class="tstream-decade tstream-now-pill">Where they are now</div>` +
+    `<div class="tnow-grid">${cards}</div></section>`;
+}
+
+function renderStreamFeed(container, entries, showNow) {
   if (_decadeObserver) { _decadeObserver.disconnect(); _decadeObserver = null; }
 
   const laneMeta = _buildLaneMeta();
+  const nowHtml = showNow ? buildLivingNowHtml() : "";
 
   // Group by decade, OMIT empty decades (no continuous backfill here)
   const byDecade = {};
@@ -273,6 +316,7 @@ function renderStreamFeed(container, entries) {
   for (const d of decades) {
     nav += `<button type="button" class="tstream-nav-btn" data-decade="${d}">${d}s</button>`;
   }
+  if (nowHtml) nav += `<button type="button" class="tstream-nav-btn tstream-nav-now" data-decade="now">Now</button>`;
   nav += `</nav>`;
 
   let html = `<div class="tstream tstream-feed">${nav}`;
@@ -282,6 +326,7 @@ function renderStreamFeed(container, entries) {
     html += buildStreamCellHtml(byDecade[decade], laneMeta);
     html += `</section>`;
   }
+  html += nowHtml;
   html += `</div>`;
   container.innerHTML = html;
 
@@ -298,8 +343,8 @@ function renderStreamFeed(container, entries) {
   // Wire minimap buttons → smooth scroll to the decade group
   container.querySelectorAll(".tstream-nav-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const target = document.getElementById(`tl-decade-${btn.dataset.decade}`);
-      target?.scrollIntoView({ behavior: "smooth", block: "start" });
+      const id = btn.dataset.decade === "now" ? "tl-now" : `tl-decade-${btn.dataset.decade}`;
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   });
 

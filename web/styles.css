@@ -4724,9 +4724,39 @@ main {
   font-size: 10px;
   padding: 1px 6px;
 }
+.tstream-nav-now { color: var(--accent); }
 @media (max-width: 600px) {
   .tstream-decade-nav { display: none; }
 }
+
+/* "Where they are now" — living-family capstone at the present end of the feed */
+.tstream-now-group { margin-top: 28px; }
+.tstream-now-pill {
+  background: var(--event-birth, #6db37a);
+  color: #fff;
+}
+.tnow-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+.tnow-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.tnow-card .person-thumb,
+.tnow-card .person-thumb-placeholder,
+.tnow-card .cropped-thumb { flex-shrink: 0; }
+.tnow-body { min-width: 0; }
+.tnow-name { font-size: 14px; font-weight: 600; }
+.tnow-name .person-link { color: var(--text); }
+.tnow-meta { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
 
 /* ── Cropped Thumbnails ─────────────────────────────────────── */
 
