@@ -14,8 +14,8 @@ Object.defineProperty(window, "matchMedia", {
   }),
 });
 
-// localStorage is available in jsdom but referenced at module parse time in 00-state.js
-// (S.SHOW_TIMELINE_STREAM). jsdom provides it, nothing extra needed.
+// localStorage is available in jsdom but referenced at module parse time in
+// 06-timeline.js (timelineAligned / timelineMode). jsdom provides it, nothing extra needed.
 
 // d3 is referenced by 04-tree.js renderTree / zoom functions at the bottom of the
 // module as addEventListener wires. Those are safe because they use optional

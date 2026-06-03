@@ -109,9 +109,8 @@ async function initApp() {
   renderTree();
   renderTimeline();
   populateTimelineFilter();
-  // Initialize stream toggle button state
-  const viewToggle = document.getElementById("timeline-view-toggle");
-  if (viewToggle) viewToggle.textContent = S.SHOW_TIMELINE_STREAM ? "Hide Stream" : "Stream";
+  // renderTimeline() syncs the mode toggle label, alignment-toggle visibility,
+  // and the lane legend via _syncTimelineControls(); no extra init needed here.
   populateRelSelectors();
   prefillRelationshipCalculator();
   initPhotoGalleryFilters();

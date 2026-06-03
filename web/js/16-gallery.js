@@ -388,6 +388,18 @@ export function renderPhotoGallery() {
     </div>`;
   }).join("");
 
+  // Fade-in (P2): flip .is-loaded once each grid image is ready (or already
+  // cached). Pairs with the .js-fade CSS rule that starts these imgs at opacity 0.
+  grid.querySelectorAll(".photos-grid-img img").forEach((img) => {
+    if (img.complete && img.naturalWidth) {
+      img.classList.add("is-loaded");
+    } else {
+      const flip = () => img.classList.add("is-loaded");
+      img.addEventListener("load", flip, { once: true });
+      img.addEventListener("error", flip, { once: true });
+    }
+  });
+
   if (GALLERY_SELECT_MODE) renderBulkToolbar();
 }
 

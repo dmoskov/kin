@@ -15,7 +15,6 @@ export const S = {
   CENTER_ID_A: null,
   CENTER_ID_B: null,
   LANES: [],
-  SHOW_TIMELINE_STREAM: localStorage.getItem("showTimelineStream") !== "false",
   MAP: null,
   TREE_DEPTH: parseInt(localStorage.getItem("ft-tree-depth") || "2", 10),
   MAP_DEPTH: parseInt(localStorage.getItem("ft-map-depth") || "1", 10),

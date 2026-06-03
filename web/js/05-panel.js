@@ -84,10 +84,6 @@ export function showPersonPanel(personId) {
     }
   }
 
-  // Hero header with large avatar
-  const heroSize = 80;
-  const heroThumb = personThumb(personId, heroSize);
-
   // Lifespan string with age
   let lifespanHtml = "";
   if (person.birth_date || person.death_date) {
@@ -100,18 +96,45 @@ export function showPersonPanel(personId) {
     lifespanHtml = `<div class="panel-lifespan">${parts.join(" – ")}${ageStr}</div>`;
   }
 
-  let html = `
-    <div class="panel-hero">
-      <div class="panel-hero-avatar">${heroThumb}</div>
-      <div class="panel-hero-info">
-        <div class="panel-name">${escapeHtml(person.fullName)}</div>
+  const canEdit = !S.CONFIG?.editorsEnabled || S.AUTH_USER?.is_editor;
+  const editBtn = canEdit
+    ? `<button class="panel-hero-edit-btn" onclick="openEditPersonForm('${personId}')" title="Edit person">Edit</button>`
+    : "";
+
+  // Full-bleed hero. Uses the UNCROPPED profile photo (the circular profile
+  // crop doesn't translate to a wide hero); name/meta overlaid in white.
+  const heroPhotoPath = person._profilePhotoPath;
+  let heroInner;
+  if (heroPhotoPath) {
+    heroInner = `
+      <img class="panel-hero-img" src="/${escapeHtml(heroPhotoPath)}" alt="${escapeHtml(person.fullName)}" loading="lazy" data-photo-path="${escapeHtml(heroPhotoPath)}" />
+      <div class="panel-hero-overlay">
         ${relBadge}
+        <div class="panel-name">${escapeHtml(person.fullName)}</div>
         <div class="panel-hero-meta">
           <span class="panel-gender ${escapeHtml(person.gender)}">${escapeHtml(person.gender)}</span>
-          ${!S.CONFIG?.editorsEnabled || S.AUTH_USER?.is_editor ? `<button class="panel-edit-btn" onclick="openEditPersonForm('${personId}')">Edit</button>` : ""}
         </div>
         ${lifespanHtml}
-      </div>
+      </div>`;
+  } else {
+    const initial = ((person.given_name || person.fullName || "?").trim()[0] || "?").toUpperCase();
+    const genderClass = person.gender === "female" ? "female" : person.gender === "male" ? "male" : "unknown";
+    heroInner = `
+      <div class="panel-hero-monogram ${genderClass}">${escapeHtml(initial)}</div>
+      <div class="panel-hero-overlay">
+        ${relBadge}
+        <div class="panel-name">${escapeHtml(person.fullName)}</div>
+        <div class="panel-hero-meta">
+          <span class="panel-gender ${escapeHtml(person.gender)}">${escapeHtml(person.gender)}</span>
+        </div>
+        ${lifespanHtml}
+      </div>`;
+  }
+
+  let html = `
+    <div class="panel-hero-photo${heroPhotoPath ? " has-photo" : " no-photo"}">
+      ${editBtn}
+      ${heroInner}
     </div>
     <div id="edit-person-form" class="add-relative-form hidden"></div>
   `;
@@ -314,6 +337,17 @@ export function showPersonPanel(personId) {
   if (photosSection) {
     _wireCarousel(photosSection, personId);
     _wirePanelPhotoClicks(photosSection, personId);
+  }
+  // Hero photo opens the lightbox (parity with panel photo clicks).
+  const heroImg = content.querySelector(".panel-hero-img");
+  if (heroImg) {
+    heroImg.addEventListener("click", () => {
+      const photoPath = heroImg.dataset.photoPath;
+      const photos = person.photo_paths || [];
+      const captions = person.photo_captions || {};
+      const capText = captions[photoPath] || person.fullName;
+      openLightbox("/" + photoPath, capText, photoPath, photos, personId);
+    });
   }
   panel.classList.remove("hidden");
   requestAnimationFrame(() => panel.classList.add("panel-open"));
