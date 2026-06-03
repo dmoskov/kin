@@ -376,6 +376,7 @@ export function buildMapEvents() {
   for (const e of (src.events || [])) {
     const year = e.date ? parseInt(e.date.substring(0, 4)) : null;
     const desc = `${personName(e.person_id)} — ${escapeHtml(e.description || e.event_type)}`;
+    const ship = extractShip(e.description);
 
     // Expand a compound "A → B → C" route into ordered waypoints so the real
     // multi-hop journey is drawn; otherwise resolve the single place.
@@ -400,6 +401,7 @@ export function buildMapEvents() {
         fogLevel: personFog(e.person_id),
         place: r.place,
         desc,
+        ship,
         latlng: r.latlng,
       });
     }
@@ -823,6 +825,42 @@ function resolveStop(seg) {
   return ll ? { latlng: ll, place: seg } : null;
 }
 
+// Pull a vessel name out of an event description ("SS Homeland", "ship 'Sarmatian'").
+export function extractShip(desc) {
+  if (!desc) return "";
+  let m = desc.match(/\b(?:SS|S\.S\.|RMS|HMS)\s+([A-Z][\w'’-]+)/);
+  if (m) return "SS " + m[1].replace(/[’]/g, "'");
+  m = desc.match(/\bship\s+['"’]([^'"”’]+)['"”’]/i);
+  if (m) return "SS " + m[1];
+  return "";
+}
+
+// Local colour: derive a flag from a place string — country names, or US states
+// → 🇺🇸. Fully data-driven, so it auto-customises for any family's geography.
+const COUNTRY_FLAGS = {
+  russia:"🇷🇺", ukraine:"🇺🇦", poland:"🇵🇱", romania:"🇷🇴", germany:"🇩🇪", turkey:"🇹🇷",
+  greece:"🇬🇷", iceland:"🇮🇸", england:"🇬🇧", scotland:"🇬🇧", wales:"🇬🇧", ireland:"🇮🇪",
+  france:"🇫🇷", italy:"🇮🇹", austria:"🇦🇹", hungary:"🇭🇺", canada:"🇨🇦", morocco:"🇲🇦",
+  lithuania:"🇱🇹", latvia:"🇱🇻", netherlands:"🇳🇱", spain:"🇪🇸", portugal:"🇵🇹", sweden:"🇸🇪",
+  norway:"🇳🇴", denmark:"🇩🇰", "united kingdom":"🇬🇧", uk:"🇬🇧", "united states":"🇺🇸",
+  usa:"🇺🇸", america:"🇺🇸",
+};
+const US_STATES = new Set([
+  "al","ak","az","ar","ca","co","ct","de","fl","ga","hi","id","il","in","ia","ks","ky","la","me",
+  "md","ma","mi","mn","ms","mo","mt","ne","nv","nh","nj","nm","ny","nc","nd","oh","ok","or","pa",
+  "ri","sc","sd","tn","tx","ut","vt","va","wa","wv","wi","wy","dc",
+  "massachusetts","kentucky","minnesota","new york","virginia","maine","ohio","indiana","illinois",
+  "new jersey","texas","california","pennsylvania","connecticut","new hampshire","rhode island",
+]);
+export function placeFlag(place) {
+  if (!place) return "";
+  const segs = place.toLowerCase().split(/[,→]|->/).map((s) => s.replace(/[.]/g, "").trim()).filter(Boolean);
+  for (const s of segs) if (COUNTRY_FLAGS[s]) return COUNTRY_FLAGS[s];
+  for (const s of segs) if (US_STATES.has(s)) return "🇺🇸";
+  if (/\bnew york\b|harbor|massachusetts/.test(place.toLowerCase())) return "🇺🇸";
+  return "";
+}
+
 export function plotMigrationArcs(events) {
   // Group events by person, sorted chronologically
   const byPerson = {};
@@ -837,7 +875,7 @@ export function plotMigrationArcs(events) {
     for (const e of personEvents) {
       const key = e.latlng.join(",");
       if (waypoints.length === 0 || waypoints[waypoints.length - 1].key !== key) {
-        waypoints.push({ latlng: e.latlng, key, year: e.year, date: e.date, place: e.place });
+        waypoints.push({ latlng: e.latlng, key, year: e.year, date: e.date, place: e.place, ship: e.ship });
       }
     }
 
@@ -882,8 +920,11 @@ export function plotMigrationArcs(events) {
       }).addTo(S.MAP);
 
       // Tooltip on hover — bound to hit area for easier triggering
+      const ship = to.ship || from.ship || "";
+      const fF = placeFlag(from.place), tF = placeFlag(to.place);
       hitArea.bindTooltip(
-        `${personName(personId)}: ${escapeHtml(from.place || "?")} → ${escapeHtml(to.place || "?")} (${from.year || "?"} – ${to.year || "?"})`,
+        `${personName(personId)}: ${fF ? fF + " " : ""}${escapeHtml(from.place || "?")} → ${tF ? tF + " " : ""}${escapeHtml(to.place || "?")} (${from.year || "?"} – ${to.year || "?"})` +
+          (ship ? ` · 🚢 ${escapeHtml(ship)}` : ""),
         { sticky: true, className: "arc-tooltip" }
       );
 
@@ -913,7 +954,7 @@ export function plotMigrationArcs(events) {
         boat = L.marker(boatBase, {
           icon: L.divIcon({
             className: "",
-            html: `<div class="map-boat-marker" title="Sea passage to ${escapeHtml(to.place || "port")}">&#128674;</div>`,
+            html: `<div class="map-boat-marker" title="${ship ? escapeHtml(ship) + " — " : ""}sea passage to ${escapeHtml(to.place || "port")}">&#128674;</div>`,
             iconSize: [24, 24],
             iconAnchor: [12, 12],
           }),
@@ -992,7 +1033,7 @@ function renderGateways() {
     });
     const marker = L.marker(g.latlng, { icon, zIndexOffset: 600 }).addTo(S.MAP);
     marker.bindPopup(
-      `<div class="arc-popup-content"><div class="gateway-popup-header">&#9875; ${escapeHtml(g.name)}</div><div class="gateway-popup-sub">${count} ${count === 1 ? "arrival" : "arrivals"}</div>${arrivalRowsHtml(g.arrivals.map((a) => [a.personId, a.year]))}</div>`,
+      `<div class="arc-popup-content"><div class="gateway-popup-header">${placeFlag(g.name) || "🇺🇸"} &#9875; ${escapeHtml(g.name)}</div><div class="gateway-popup-sub">${count} ${count === 1 ? "arrival" : "arrivals"}</div>${arrivalRowsHtml(g.arrivals.map((a) => [a.personId, a.year]))}</div>`,
       { maxWidth: 260, className: "arc-popup" }
     );
     MAP_GATEWAY_MARKERS.push(marker);
@@ -1003,8 +1044,9 @@ function rollCallGroup(name, latlng, entries, isPort) {
   const rows = arrivalRowsHtml(entries);
   const n = entries.filter(([pid]) => S.PEOPLE_MAP[pid]).length;
   const locate = latlng ? `<button type="button" class="roll-call-locate" data-lat="${latlng[0]}" data-lng="${latlng[1]}" title="Show on map">&#9678;</button>` : "";
+  const flag = placeFlag(name) || (isPort ? "🇺🇸" : "");
   return `<details class="roll-call-group">
-    <summary><span class="roll-call-name">${isPort ? "&#9875; " : ""}${escapeHtml(name)}</span><span class="roll-call-count">${n}</span>${locate}</summary>
+    <summary><span class="roll-call-name">${flag ? flag + " " : ""}${isPort ? "&#9875; " : ""}${escapeHtml(name)}</span><span class="roll-call-count">${n}</span>${locate}</summary>
     <div class="roll-call-people">${rows}</div>
   </details>`;
 }
