@@ -171,15 +171,18 @@ export async function _fetchGeocodeAndPoll(places) {
       for (const m of MAP_MARKERS) m.marker.remove();
       for (const a of MAP_ARCS) { a.polyline.remove(); if (a.hitArea) a.hitArea.remove(); if (a.arrowHead) a.arrowHead.remove(); if (a.boat) a.boat.remove(); }
       for (const m of MAP_GATEWAY_MARKERS) m.remove();
+      for (const m of MAP_ICON_MARKERS) m.remove();
       MAP_MARKERS = [];
       MAP_ARCS = [];
       MAP_GATEWAY_MARKERS = [];
+      MAP_ICON_MARKERS = [];
       buildMapEvents();
       const refreshed = _filterEventsByDepth(MAP_ALL_EVENTS);
       plotMapMarkers(refreshed);
       plotMigrationArcs(refreshed);
       buildGateways();
       renderGateways();
+      renderPlaceIcons();
       renderMapRollCall();
     }
 
@@ -234,6 +237,7 @@ let MAP_ARCS = [];         // { polyline, arrowHead, boat, boatBase, latlngs, pe
 let MAP_ALL_EVENTS = [];   // flat list of {date, year, type, personId, place, desc, latlng}
 let MAP_GATEWAY_MARKERS = []; // anchor markers at seaports (Ports of Entry)
 let MAP_GATEWAYS = [];     // [{ name, latlng, arrivals: [{personId, year}] }] across the family
+let MAP_ICON_MARKERS = []; // playful per-place local-colour emoji markers
 let mapAnimTimer = null;
 let MAP_ANIMATING = false; // true while the time-lapse is playing (drives boat glide)
 
@@ -480,6 +484,7 @@ export async function renderMap() {
   MAP_MARKERS = [];
   MAP_ARCS = [];
   MAP_GATEWAY_MARKERS = [];
+  MAP_ICON_MARKERS = [];
 
   S.MAP = L.map("map", {
     center: [40, -40],
@@ -513,6 +518,7 @@ export async function renderMap() {
   plotMigrationArcs(mapDepthEvents);
   buildGateways();
   renderGateways();
+  renderPlaceIcons();
   renderMapRollCall();
   populateMapFilter(mapDepthEvents);
   document.getElementById("map-empty")?.classList.toggle("hidden", mapDepthEvents.length > 0);
@@ -861,6 +867,40 @@ export function placeFlag(place) {
   return "";
 }
 
+// Playful local colour: small themed emoji per place. Tiered & data-driven so it
+// auto-customises for any family — specific famous places first, then US-state
+// defaults, then country defaults. Extend these tables to enrich coverage.
+const PLACE_ICON_OVERRIDES = [
+  ["ocala", ["🐴","🌳"]], ["marion county", ["🐴"]], ["lexington", ["🐎"]],
+  ["san francisco", ["🌉","🦭"]], ["golden gate", ["🌉"]], ["los angeles", ["🌴","🎬"]],
+  ["hollywood", ["🎬"]], ["new york", ["🗽"]], ["boston", ["⚓","🦞"]], ["cape cod", ["🐚"]],
+  ["new orleans", ["🎷"]], ["chicago", ["🌆"]], ["seattle", ["🌲","☕"]], ["miami", ["🌴"]],
+  ["las vegas", ["🎰"]], ["hawaii", ["🌺"]], ["honolulu", ["🌺"]], ["odessa", ["⚓"]],
+  ["pepperell", ["🌾"]], ["minneapolis", ["❄️"]], ["twin cities", ["❄️"]], ["istanbul", ["🕌"]],
+  ["piraeus", ["⚓"]], ["quebec", ["⚜️"]], ["liverpool", ["🎸"]], ["nashville", ["🎸"]],
+];
+const STATE_ICONS = {
+  fl:["🌴","🐊"], florida:["🌴","🐊"], ca:["🌉","🦭"], california:["🌉","🦭"], tx:["🤠"], texas:["🤠"],
+  ky:["🐎"], kentucky:["🐎"], ma:["⚓"], massachusetts:["⚓"], mn:["❄️"], minnesota:["❄️"],
+  ny:["🗽"], "new york":["🗽"], me:["🦞"], maine:["🦞"], la:["🎷"], hi:["🌺"], hawaii:["🌺"],
+  wa:["🌲"], az:["🌵"], arizona:["🌵"], co:["🏔️"], colorado:["🏔️"], ak:["🐻"], nv:["🎰"],
+  vt:["🍁"], wy:["🦬"], mt:["🏔️"], nm:["🌵"], sd:["🦬"],
+};
+const COUNTRY_ICONS = {
+  russia:["⛪"], ukraine:["🌻"], greece:["🏛️"], turkey:["🕌"], italy:["🏛️"], france:["🗼"],
+  germany:["🍺"], ireland:["☘️"], iceland:["🌋"], romania:["🏰"], canada:["🍁"], england:["🎡"],
+  morocco:["🕌"], netherlands:["🌷"], norway:["⛰️"], sweden:["🌲"],
+};
+export function placeIcons(place) {
+  if (!place) return [];
+  const low = place.toLowerCase();
+  for (const [kw, icons] of PLACE_ICON_OVERRIDES) if (low.includes(kw)) return icons;
+  const segs = low.split(/[,→]|->/).map((s) => s.replace(/[.]/g, "").trim()).filter(Boolean);
+  for (const s of segs) if (STATE_ICONS[s]) return STATE_ICONS[s];
+  for (const s of segs) if (COUNTRY_ICONS[s]) return COUNTRY_ICONS[s];
+  return [];
+}
+
 export function plotMigrationArcs(events) {
   // Group events by person, sorted chronologically
   const byPerson = {};
@@ -1038,6 +1078,41 @@ function renderGateways() {
     );
     MAP_GATEWAY_MARKERS.push(marker);
   }
+}
+
+// Scatter playful themed emoji at each distinct family place (zoom-gated so they
+// only appear once you zoom in). Auto-customises via placeIcons().
+function renderPlaceIcons() {
+  for (const m of MAP_ICON_MARKERS) m.remove();
+  MAP_ICON_MARKERS = [];
+  const seen = new Set();
+  for (const e of MAP_ALL_EVENTS) {
+    if (!e.latlng) continue;
+    const key = e.latlng[0].toFixed(2) + "," + e.latlng[1].toFixed(2);
+    if (seen.has(key)) continue;
+    const icons = placeIcons(e.place);
+    if (!icons.length) continue;
+    seen.add(key);
+    const marker = L.marker(e.latlng, {
+      icon: L.divIcon({
+        className: "",
+        html: `<div class="map-place-icon" title="${escapeHtml(e.place || "")}">${icons.slice(0, 2).join("")}</div>`,
+        iconSize: [34, 20],
+        iconAnchor: [-8, 22],
+      }),
+      interactive: false, keyboard: false, zIndexOffset: 200,
+    }).addTo(S.MAP);
+    MAP_ICON_MARKERS.push(marker);
+  }
+  _updatePlaceIconVisibility();
+  if (S.MAP && !S.MAP._placeIconZoomWired) {
+    S.MAP.on("zoomend", _updatePlaceIconVisibility);
+    S.MAP._placeIconZoomWired = true;
+  }
+}
+function _updatePlaceIconVisibility() {
+  if (!S.MAP) return;
+  S.MAP.getContainer().classList.toggle("show-place-icons", S.MAP.getZoom() >= 5);
 }
 
 function rollCallGroup(name, latlng, entries, isPort) {
