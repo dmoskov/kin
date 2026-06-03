@@ -4729,6 +4729,23 @@ main {
   .tstream-decade-nav { display: none; }
 }
 
+/* Historical-context inserts woven into the stream */
+.tstream-era-insert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 6px 0 14px;
+  padding: 9px 14px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+  border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.tstream-era-icon { font-size: 18px; line-height: 22px; flex-shrink: 0; }
+.tstream-era-title { font-size: 13px; font-weight: 700; letter-spacing: 0.2px; color: var(--text); }
+.tstream-era-years { font-weight: 600; color: var(--text-muted); margin-left: 4px; }
+.tstream-era-served { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+.tstream-era-served .person-link { color: var(--accent); }
+
 /* "Where they are now" — living-family capstone at the present end of the feed */
 .tstream-now-group { margin-top: 28px; }
 .tstream-now-pill {

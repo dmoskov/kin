@@ -16,6 +16,43 @@ const STREAM_TREATMENTS = {
   marriage: { tier: "milestone", variant: "marriage" },
 };
 
+// Historical-context inserts woven into the stream. Only eras overlapping the
+// family's own span are shown; `war` eras additionally list family members with
+// military service in that window. Add rows to extend coverage for any family.
+const HISTORICAL_ERAS = [
+  { label: "American Revolution", start: 1775, end: 1783, icon: "🇺🇸", war: true },
+  { label: "American Civil War", start: 1861, end: 1865, icon: "⚔️", war: true },
+  { label: "The Great Wave of immigration (Ellis Island era)", start: 1892, end: 1924, icon: "🚢" },
+  { label: "World War I", start: 1914, end: 1918, icon: "🎖️", war: true },
+  { label: "The 1918 influenza pandemic", start: 1918, end: 1920, icon: "🦠" },
+  { label: "The Great Depression", start: 1929, end: 1939, icon: "📉" },
+  { label: "World War II", start: 1939, end: 1945, icon: "🌍", war: true },
+  { label: "Korean War", start: 1950, end: 1953, icon: "🎖️", war: true },
+  { label: "Vietnam War", start: 1955, end: 1975, icon: "🎖️", war: true },
+  { label: "COVID-19 pandemic", start: 2020, end: 2022, icon: "🦠" },
+];
+function eraMidDecade(e) { return Math.floor(((e.start + e.end) / 2) / 10) * 10; }
+
+// Era bands for one decade (anchored by the era's midpoint decade), gated to the
+// family's year span. War eras list members who served during the window.
+function buildEraInserts(decade, minYear, maxYear, military) {
+  const eras = HISTORICAL_ERAS.filter(
+    (e) => eraMidDecade(e) === decade && e.end >= minYear && e.start <= maxYear
+  );
+  if (!eras.length) return "";
+  return eras.map((e) => {
+    let served = "";
+    if (e.war) {
+      const ids = [...new Set(military.filter((m) => m.year >= e.start && m.year <= e.end).map((m) => m.pid))];
+      if (ids.length) served = `<div class="tstream-era-served">🎖️ ${ids.map((id) => personLink(id)).join(", ")}</div>`;
+    }
+    return `<div class="tstream-era-insert">` +
+      `<span class="tstream-era-icon">${e.icon}</span>` +
+      `<div class="tstream-era-body"><div class="tstream-era-title">${escapeHtml(e.label)} ` +
+      `<span class="tstream-era-years">${e.start}–${e.end}</span></div>${served}</div></div>`;
+  }).join("");
+}
+
 // Humanize a life-event type slug for empty-description fallbacks so titles
 // never read like "Name — career" with a bare lowercase slug.
 const EVENT_TYPE_LABELS = {
@@ -301,6 +338,14 @@ function renderStreamFeed(container, entries, showNow) {
   const laneMeta = _buildLaneMeta();
   const nowHtml = showNow ? buildLivingNowHtml() : "";
 
+  // For historical-context inserts: the family's year span + military events.
+  const allYears = entries.map((e) => e.year).filter(Boolean);
+  const minY = allYears.length ? Math.min(...allYears) : 0;
+  const maxY = allYears.length ? Math.max(...allYears) : 0;
+  const military = (S.DATA.events || [])
+    .filter((e) => e.event_type === "military" && e.date)
+    .map((e) => ({ pid: e.person_id, year: parseInt(e.date.substring(0, 4)) }));
+
   // Group by decade, OMIT empty decades (no continuous backfill here)
   const byDecade = {};
   for (const e of entries) {
@@ -323,6 +368,7 @@ function renderStreamFeed(container, entries, showNow) {
   for (const decade of decades) {
     html += `<section class="tstream-decade-group" id="tl-decade-${decade}" data-decade="${decade}">`;
     html += `<div class="tstream-decade">${decade}s</div>`;
+    html += buildEraInserts(decade, minY, maxY, military);
     html += buildStreamCellHtml(byDecade[decade], laneMeta);
     html += `</section>`;
   }
