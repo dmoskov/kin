@@ -327,7 +327,7 @@ export function buildMapEvents() {
   const src = S.ORIGINAL_DATA || S.DATA;
   // Births
   for (const p of src.people) {
-    if (p.birth_place) {
+    if (p.birth_place && !isVaguePlace(p.birth_place)) {
       const ll = geocode(p.birth_place);
       if (ll) {
         MAP_ALL_EVENTS.push({
@@ -343,7 +343,7 @@ export function buildMapEvents() {
       }
     }
     // Deaths
-    if (p.death_place) {
+    if (p.death_place && !isVaguePlace(p.death_place)) {
       const ll = geocode(p.death_place);
       if (ll) {
         MAP_ALL_EVENTS.push({
@@ -359,10 +359,22 @@ export function buildMapEvents() {
       }
     }
   }
-  // Life events
+  // Life events. Two refinements for migration legibility:
+  //  • Skip bare-country places (they geocode to a centroid and make weird arcs).
+  //  • If an event names a known seaport (in place/description/notes) but has no
+  //    usable specific place, anchor it at the port — so immigrants "arrive via
+  //    Ellis Island" even when the port is mentioned only in the description.
   for (const e of (src.events || [])) {
-    if (!e.place) continue;
-    const ll = geocode(e.place);
+    const seaport = detectSeaport(e.place, e.description, e.notes);
+    let ll = null;
+    let place = e.place;
+    if (e.place && !isVaguePlace(e.place)) {
+      ll = geocode(e.place);
+    }
+    if (!ll && seaport) {
+      ll = seaport.latlng;
+      place = seaport.name;
+    }
     if (!ll) continue;
     MAP_ALL_EVENTS.push({
       date: e.date || "",
@@ -370,7 +382,7 @@ export function buildMapEvents() {
       type: e.event_type,
       personId: e.person_id,
       fogLevel: personFog(e.person_id),
-      place: e.place,
+      place,
       desc: `${personName(e.person_id)} — ${escapeHtml(e.description || e.event_type)}`,
       latlng: ll,
     });
@@ -378,7 +390,7 @@ export function buildMapEvents() {
 
   // Marriages
   for (const u of (src.unions || [])) {
-    if (!u.union_place) continue;
+    if (!u.union_place || isVaguePlace(u.union_place)) continue;
     const minFog = Math.min(personFog(u.partner1_id), personFog(u.partner2_id));
     const ll = geocode(u.union_place);
     if (!ll) continue;
@@ -402,7 +414,7 @@ export function buildMapEvents() {
       let ll = null;
       if (photo.lat != null && photo.lng != null) {
         ll = [photo.lat, photo.lng];
-      } else if (photo.place) {
+      } else if (photo.place && !isVaguePlace(photo.place)) {
         ll = geocode(photo.place);
       }
       if (!ll) continue;
@@ -749,6 +761,20 @@ export function detectSeaport(...texts) {
 
 export function isSeaportPlace(place) {
   return !!detectSeaport(place);
+}
+
+// Bare country/region names geocode to a meaningless centroid and produce
+// backwards, misleading arcs (e.g. "United States" → the middle of Kansas).
+// Treated as vague only when the WHOLE place string is the country — a place
+// like "Chicago, United States" still geocodes normally.
+const VAGUE_PLACES = new Set([
+  "united states", "united states of america", "usa", "us", "u s a", "u s",
+  "america", "north america",
+]);
+export function isVaguePlace(place) {
+  if (!place) return true;
+  const p = place.trim().toLowerCase().replace(/[.,]/g, " ").replace(/\s+/g, " ").trim();
+  return VAGUE_PLACES.has(p);
 }
 
 export function plotMigrationArcs(events) {
