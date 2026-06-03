@@ -254,9 +254,10 @@ def _enforce_login():
     if not os.environ.get("GOOGLE_CLIENT_ID"):
         return  # No auth configured — open access
     path = request.path
-    # Always allow: auth endpoints, config, static assets, and the index page
+    # Always allow: health check, auth endpoints, config, static assets, index
     if (
-        path.startswith("/api/auth/")
+        path == "/healthz"
+        or path.startswith("/api/auth/")
         or path == "/api/config"
         or path in ("/", "")
         or path.startswith("/js/")
@@ -275,6 +276,12 @@ def _enforce_login():
         path.startswith("/api/") or path.startswith("/photos/") or path.startswith("/documents/")
     ) and "person_id" not in session:
         return jsonify({"error": "login required", "code": "unauthorized"}), 401
+
+
+@app.route("/healthz")
+def healthz():
+    """Unauthenticated liveness probe for deploys/monitoring."""
+    return jsonify({"status": "ok"})
 
 
 @app.route("/")

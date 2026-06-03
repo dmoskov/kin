@@ -62,8 +62,8 @@ jobs:
           for i in $(seq 1 10); do
             active=$($SSH "$REMOTE" "sudo -n systemctl is-active familytree" 2>/dev/null || true)
             if [ "$active" = "active" ]; then
-              code=$($SSH "$REMOTE" "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/api/data" 2>/dev/null || true)
-              echo "service active; /api/data -> $code"
+              code=$($SSH "$REMOTE" "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/healthz" 2>/dev/null || true)
+              echo "service active; /healthz -> $code"
               [ "$code" = "200" ] && exit 0
             fi
             sleep 3
