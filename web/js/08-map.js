@@ -901,6 +901,25 @@ export function placeIcons(place) {
   return [];
 }
 
+// Spotlight one person's whole journey: brighten all their arcs/boats and dim
+// everyone else's. Implemented via CSS classes on the SVG/marker elements, so
+// clearing is just removing the container class — no per-arc style recompute.
+export function setSpotlight(personId) {
+  const cont = S.MAP && S.MAP.getContainer();
+  if (!cont) return;
+  if (!personId) { cont.classList.remove("map-spotlighting"); return; }
+  cont.classList.add("map-spotlighting");
+  for (const a of MAP_ARCS) {
+    const on = a.personId === personId;
+    for (const layer of [a.polyline, a.hitArea, a.arrowHead]) {
+      const el = layer && layer.getElement && layer.getElement();
+      if (el) { el.classList.toggle("arc-spot", on); el.classList.toggle("arc-dim", !on); }
+    }
+    const bel = a.boat && a.boat.getElement && a.boat.getElement();
+    if (bel) { bel.classList.toggle("arc-spot", on); bel.classList.toggle("arc-dim", !on); }
+  }
+}
+
 export function plotMigrationArcs(events) {
   // Group events by person, sorted chronologically
   const byPerson = {};
@@ -968,8 +987,10 @@ export function plotMigrationArcs(events) {
         { sticky: true, className: "arc-tooltip" }
       );
 
-      // Hover highlight: thicken and brighten the visible arc
+      // Hover: spotlight this person's WHOLE journey (dim everyone else),
+      // plus thicken the hovered segment.
       hitArea.on("mouseover", () => {
+        setSpotlight(personId);
         polyline.setStyle({
           weight: arcWeight + 3,
           opacity: Math.min(arcOpacity + 0.3, 1),
@@ -977,6 +998,7 @@ export function plotMigrationArcs(events) {
         arrowHead.setStyle({ radius: lerp(2, 4, ratio) + 2 });
       });
       hitArea.on("mouseout", () => {
+        setSpotlight(null);
         polyline.setStyle({ weight: arcWeight, opacity: arcOpacity });
         arrowHead.setStyle({ radius: lerp(2, 4, ratio) });
       });
