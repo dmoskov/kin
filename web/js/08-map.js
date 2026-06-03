@@ -161,12 +161,17 @@ export async function _fetchGeocodeAndPoll(places) {
       // Clear existing markers and arcs before re-plotting
       for (const m of MAP_MARKERS) m.marker.remove();
       for (const a of MAP_ARCS) { a.polyline.remove(); if (a.hitArea) a.hitArea.remove(); if (a.arrowHead) a.arrowHead.remove(); if (a.boat) a.boat.remove(); }
+      for (const m of MAP_GATEWAY_MARKERS) m.remove();
       MAP_MARKERS = [];
       MAP_ARCS = [];
+      MAP_GATEWAY_MARKERS = [];
       buildMapEvents();
       const refreshed = _filterEventsByDepth(MAP_ALL_EVENTS);
       plotMapMarkers(refreshed);
       plotMigrationArcs(refreshed);
+      buildGateways();
+      renderGateways();
+      renderMapRollCall();
     }
 
     // Poll again if places are still being resolved in the background
@@ -216,9 +221,19 @@ export const EVENT_COLORS = {
 };
 
 let MAP_MARKERS = [];      // { marker, latlng, events: [{date, year, type, personId, desc, place}] }
-let MAP_ARCS = [];         // { polyline, arrowHead, personId, fromYear, toYear }
+let MAP_ARCS = [];         // { polyline, arrowHead, boat, boatBase, latlngs, personId, fromYear, toYear }
 let MAP_ALL_EVENTS = [];   // flat list of {date, year, type, personId, place, desc, latlng}
+let MAP_GATEWAY_MARKERS = []; // anchor markers at seaports (Ports of Entry)
+let MAP_GATEWAYS = [];     // [{ name, latlng, arrivals: [{personId, year}] }] across the family
 let mapAnimTimer = null;
+let MAP_ANIMATING = false; // true while the time-lapse is playing (drives boat glide)
+
+// Point at fraction t (0..1) along a polyline's vertex list.
+function pointAlong(latlngs, t) {
+  if (!latlngs || !latlngs.length) return null;
+  const i = Math.max(0, Math.min(latlngs.length - 1, Math.round(t * (latlngs.length - 1))));
+  return latlngs[i];
+}
 // The slider/filter/play controls are static DOM elements; their listeners are
 // wired once (renderMap can run repeatedly via refreshAllViews).
 let _mapListenersWired = false;
@@ -433,6 +448,7 @@ export async function renderMap() {
   if (S.MAP) { S.MAP.remove(); S.MAP = null; }
   MAP_MARKERS = [];
   MAP_ARCS = [];
+  MAP_GATEWAY_MARKERS = [];
 
   S.MAP = L.map("map", {
     center: [40, -40],
@@ -464,6 +480,9 @@ export async function renderMap() {
   plotMapMarkers(mapDepthEvents);
   plotPhotoMarkers(mapDepthEvents);
   plotMigrationArcs(mapDepthEvents);
+  buildGateways();
+  renderGateways();
+  renderMapRollCall();
   populateMapFilter(mapDepthEvents);
   document.getElementById("map-empty")?.classList.toggle("hidden", mapDepthEvents.length > 0);
 
@@ -703,17 +722,33 @@ export function getPersonColor(personId) {
   return PERSON_COLORS[personId];
 }
 
-// Known immigrant seaports / arrival stations — arcs ending at one of these
-// get a little boat to mark the sea passage. Matched as a substring of the
-// destination place name, so it only triggers when the port is named explicitly.
-const SEAPORT_KEYWORDS = [
-  "ellis island", "castle garden", "castle clinton", "angel island",
-  "galveston", "seaport", "port of ", "immigration station", "immigration depot",
+// Known immigrant seaports / arrival stations, with hardcoded coordinates so
+// detection never depends on the (flaky) geocoder. Each `match` substring is
+// tested against an event's place, description, and notes — so a port named
+// only in free text still counts. First match wins.
+const SEAPORTS = [
+  { match: "ellis island",         name: "Ellis Island",         latlng: [40.6995, -74.0397] },
+  { match: "castle garden",        name: "Castle Garden",        latlng: [40.7036, -74.0170] },
+  { match: "castle clinton",       name: "Castle Garden",        latlng: [40.7036, -74.0170] },
+  { match: "angel island",         name: "Angel Island",         latlng: [37.8607, -122.4326] },
+  { match: "galveston",            name: "Galveston",            latlng: [29.3013, -94.7977] },
+  { match: "port of new york",     name: "Port of New York",     latlng: [40.6995, -74.0397] },
+  { match: "port of boston",       name: "Port of Boston",       latlng: [42.3601, -71.0489] },
+  { match: "port of philadelphia", name: "Port of Philadelphia", latlng: [39.9434, -75.1435] },
+  { match: "port of baltimore",    name: "Port of Baltimore",    latlng: [39.2660, -76.5790] },
+  { match: "port of new orleans",  name: "Port of New Orleans",  latlng: [29.9450, -90.0660] },
 ];
+
+// Scan one or more free-text fields for any known seaport; return the matched
+// SEAPORTS entry, or null. Used by arcs (boat), gateways, and the roll-call.
+export function detectSeaport(...texts) {
+  const hay = texts.filter(Boolean).join(" · ").toLowerCase();
+  if (!hay) return null;
+  return SEAPORTS.find((s) => hay.includes(s.match)) || null;
+}
+
 export function isSeaportPlace(place) {
-  if (!place) return false;
-  const p = place.toLowerCase();
-  return SEAPORT_KEYWORDS.some((k) => p.includes(k));
+  return !!detectSeaport(place);
 }
 
 export function plotMigrationArcs(events) {
@@ -797,12 +832,13 @@ export function plotMigrationArcs(events) {
       const popupContent = buildArcPopup(personId, from, to);
       hitArea.bindPopup(popupContent, { maxWidth: 280, className: "arc-popup" });
 
-      // Boat on sea crossings ending at a known immigrant seaport. Placed ~70%
-      // along the curve so it reads as approaching port.
+      // Boat on sea crossings ending at a known immigrant seaport. At rest it
+      // sits ~70% along the curve (approaching port); during playback it glides
+      // from origin to port (see updateMapForYear).
       let boat = null;
+      const boatBase = latlngs[Math.floor(latlngs.length * 0.7)] || to.latlng;
       if (isSeaportPlace(to.place)) {
-        const mid = latlngs[Math.floor(latlngs.length * 0.7)] || to.latlng;
-        boat = L.marker(mid, {
+        boat = L.marker(boatBase, {
           icon: L.divIcon({
             className: "",
             html: `<div class="map-boat-marker" title="Sea passage to ${escapeHtml(to.place || "port")}">&#128674;</div>`,
@@ -820,6 +856,8 @@ export function plotMigrationArcs(events) {
         hitArea,
         arrowHead,
         boat,
+        boatBase,
+        latlngs,
         personId,
         fromYear: from.year,
         toYear: to.year,
@@ -827,6 +865,126 @@ export function plotMigrationArcs(events) {
         _arcOpacity: arcOpacity,
       });
     }
+  }
+}
+
+// ── Ports of Entry: seaport gateways + the family roll-call ──────────
+
+// Index every event whose place/description/notes names a known seaport into
+// per-port arrival lists (one arrival per person per port, earliest year).
+export function buildGateways() {
+  const src = S.ORIGINAL_DATA || S.DATA;
+  const byPort = {};
+  for (const e of (src.events || [])) {
+    const port = detectSeaport(e.place, e.description, e.notes);
+    if (!port) continue;
+    const g = byPort[port.name] || (byPort[port.name] = { name: port.name, latlng: port.latlng, arrivals: new Map() });
+    const year = e.date ? parseInt(e.date.substring(0, 4)) : null;
+    const prev = g.arrivals.get(e.person_id);
+    if (prev === undefined || (year && (prev == null || year < prev))) g.arrivals.set(e.person_id, year ?? prev ?? null);
+  }
+  MAP_GATEWAYS = Object.values(byPort)
+    .map((g) => ({
+      name: g.name,
+      latlng: g.latlng,
+      arrivals: [...g.arrivals.entries()]
+        .map(([personId, year]) => ({ personId, year }))
+        .filter((a) => S.PEOPLE_MAP[a.personId])
+        .sort((a, b) => (a.year || 9999) - (b.year || 9999)),
+    }))
+    .filter((g) => g.arrivals.length > 0)
+    .sort((a, b) => b.arrivals.length - a.arrivals.length);
+  return MAP_GATEWAYS;
+}
+
+function arrivalRowsHtml(entries) {
+  return entries
+    .filter(([pid]) => S.PEOPLE_MAP[pid])
+    .sort((a, b) => (a[1] || 9999) - (b[1] || 9999))
+    .map(([pid, year]) => `<div class="gateway-arrival">${personLink(pid)}<span class="gateway-arrival-year">${year || "?"}</span></div>`)
+    .join("");
+}
+
+function renderGateways() {
+  for (const m of MAP_GATEWAY_MARKERS) m.remove();
+  MAP_GATEWAY_MARKERS = [];
+  for (const g of MAP_GATEWAYS) {
+    const count = g.arrivals.length;
+    const size = Math.round(20 + Math.min(count, 12) * 1.8);
+    const box = size + 18;
+    const icon = L.divIcon({
+      className: "",
+      html: `<div class="map-gateway-marker" title="${escapeHtml(g.name)} — ${count} ${count === 1 ? "arrival" : "arrivals"}"><span class="map-gateway-anchor" style="font-size:${size}px">&#9875;</span><span class="map-gateway-count">${count}</span></div>`,
+      iconSize: [box, box],
+      iconAnchor: [box / 2, box / 2],
+    });
+    const marker = L.marker(g.latlng, { icon, zIndexOffset: 600 }).addTo(S.MAP);
+    marker.bindPopup(
+      `<div class="arc-popup-content"><div class="gateway-popup-header">&#9875; ${escapeHtml(g.name)}</div><div class="gateway-popup-sub">${count} ${count === 1 ? "arrival" : "arrivals"}</div>${arrivalRowsHtml(g.arrivals.map((a) => [a.personId, a.year]))}</div>`,
+      { maxWidth: 260, className: "arc-popup" }
+    );
+    MAP_GATEWAY_MARKERS.push(marker);
+  }
+}
+
+function rollCallGroup(name, latlng, entries, isPort) {
+  const rows = arrivalRowsHtml(entries);
+  const n = entries.filter(([pid]) => S.PEOPLE_MAP[pid]).length;
+  const locate = latlng ? `<button type="button" class="roll-call-locate" data-lat="${latlng[0]}" data-lng="${latlng[1]}" title="Show on map">&#9678;</button>` : "";
+  return `<details class="roll-call-group">
+    <summary><span class="roll-call-name">${isPort ? "&#9875; " : ""}${escapeHtml(name)}</span><span class="roll-call-count">${n}</span>${locate}</summary>
+    <div class="roll-call-people">${rows}</div>
+  </details>`;
+}
+
+let _rollCallWired = false;
+// The roll-call panel: ports of entry + other gathering places (a place where
+// 4+ family members share events), each expandable to the people tied to it.
+export function renderMapRollCall() {
+  const panel = document.getElementById("map-roll-call");
+  if (!panel) return;
+  const body = panel.querySelector(".map-roll-call-body");
+  if (!body) return;
+
+  const byPlace = {};
+  for (const e of MAP_ALL_EVENTS) {
+    if (!e.place || !e.personId) continue;
+    const g = byPlace[e.place] || (byPlace[e.place] = { place: e.place, latlng: e.latlng, people: new Map() });
+    const cur = g.people.get(e.personId);
+    if (cur === undefined || (e.year && (cur == null || e.year < cur))) g.people.set(e.personId, e.year ?? cur ?? null);
+  }
+  const GATHER_MIN = 4;
+  const portNames = new Set(MAP_GATEWAYS.map((g) => g.name));
+  const gathering = Object.values(byPlace)
+    .map((g) => ({ place: g.place, latlng: g.latlng, count: g.people.size, people: [...g.people.entries()] }))
+    .filter((g) => g.count >= GATHER_MIN && !portNames.has(g.place))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 12);
+
+  let html = "";
+  if (MAP_GATEWAYS.length) {
+    html += `<div class="roll-call-section-title">&#9875; Ports of entry</div>`;
+    for (const g of MAP_GATEWAYS) html += rollCallGroup(g.name, g.latlng, g.arrivals.map((a) => [a.personId, a.year]), true);
+  }
+  if (gathering.length) {
+    html += `<div class="roll-call-section-title">Gathering places</div>`;
+    for (const g of gathering) html += rollCallGroup(g.place, g.latlng, g.people, false);
+  }
+  body.innerHTML = html || `<div class="roll-call-empty">No notable places yet.</div>`;
+  panel.classList.toggle("hidden", !html);
+
+  if (!_rollCallWired) {
+    document.getElementById("map-roll-call-toggle")?.addEventListener("click", () => {
+      panel.classList.toggle("collapsed");
+    });
+    body.addEventListener("click", (ev) => {
+      const loc = ev.target.closest(".roll-call-locate");
+      if (loc && S.MAP) {
+        ev.preventDefault();
+        S.MAP.flyTo([parseFloat(loc.dataset.lat), parseFloat(loc.dataset.lng)], 6, { duration: 0.8 });
+      }
+    });
+    _rollCallWired = true;
   }
 }
 
@@ -946,7 +1104,21 @@ export function updateMapForYear(maxYear) {
         opacity: lerp(0.2, 1, ratio),
         radius: lerp(2, 4, ratio),
       });
-      a.boat?.setOpacity(lerp(0.4, 1, ratio));
+      if (a.boat) {
+        if (MAP_ANIMATING && a.fromYear && a.toYear && a.toYear > a.fromYear) {
+          // Glide from origin to port across the crossing's year span.
+          if (maxYear < a.fromYear) {
+            a.boat.setOpacity(0);
+          } else {
+            const t = Math.max(0, Math.min(1, (maxYear - a.fromYear) / (a.toYear - a.fromYear)));
+            a.boat.setLatLng(pointAlong(a.latlngs, t));
+            a.boat.setOpacity(1);
+          }
+        } else {
+          a.boat.setLatLng(a.boatBase);
+          a.boat.setOpacity(lerp(0.4, 1, ratio));
+        }
+      }
     } else {
       a.polyline.setStyle({ opacity: 0.03, weight: WEIGHT_FLOOR });
       if (a.hitArea) a.hitArea.setStyle({ weight: 0 });
@@ -1009,14 +1181,17 @@ export function toggleMapAnimation() {
     // Stop
     clearInterval(mapAnimTimer);
     mapAnimTimer = null;
+    MAP_ANIMATING = false;
     btn.classList.remove("playing");
     btn.innerHTML = "&#9654;";
     setArcFlowAnimation(false);
     badge?.classList.remove("visible");
+    updateMapForYear(parseInt(slider.value));  // settle boats back to rest
     return;
   }
 
   // Start from earliest year
+  MAP_ANIMATING = true;
   slider.value = MIN_YEAR;
   yearEndLabel.textContent = MIN_YEAR;
   updateMapForYear(MIN_YEAR);
@@ -1033,10 +1208,14 @@ export function toggleMapAnimation() {
     if (year > MAX_YEAR) {
       clearInterval(mapAnimTimer);
       mapAnimTimer = null;
+      MAP_ANIMATING = false;
       btn.classList.remove("playing");
       btn.innerHTML = "&#9654;";
       setArcFlowAnimation(false);
       badge?.classList.remove("visible");
+      slider.value = MAX_YEAR;
+      yearEndLabel.textContent = MAX_YEAR;
+      updateMapForYear(MAX_YEAR);  // settle boats at their ports
       return;
     }
     slider.value = year;
