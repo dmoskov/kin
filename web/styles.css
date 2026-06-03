@@ -4563,6 +4563,18 @@ main {
 .tstream-photo-place { display: inline-flex; align-items: center; opacity: 0.9; }
 .tstream-photo-overlay .tstream-lane-chip { color: #fff; }
 
+/* "age N" / "married at X & Y" life-stage chip on timeline entries */
+.tstream-age {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--text-muted) 12%, transparent);
+  border-radius: 8px;
+  padding: 0 7px;
+  white-space: nowrap;
+}
+.tstream-photo-overlay-meta .tstream-age { color: #fff; background: rgba(255, 255, 255, 0.22); }
+
 /* Cluster card: hero stage + small filmstrip of additional members. */
 .tstream-photo-card--cluster .tstream-cluster-strip {
   display: flex;

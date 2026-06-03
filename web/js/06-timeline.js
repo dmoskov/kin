@@ -245,7 +245,33 @@ export function gatherTimelineEntries() {
     }
   }
 
+  // Life-stage context: age of the subject at each event ("married at 24",
+  // "immigrated at 18"). Births are age 0 (skipped); marriage also gets the
+  // second partner's age.
+  const birthYear = {};
+  for (const p of S.DATA.people) if (p.birth_date) birthYear[p.id] = parseInt(p.birth_date.substring(0, 4));
+  for (const e of entries) {
+    if (!e.year) continue;
+    const by = birthYear[e.personId];
+    if (by != null) { const a = e.year - by; if (a >= 0 && a <= 119) e.age = a; }
+    if (e.type === "marriage" && e.partner2Id && birthYear[e.partner2Id] != null) {
+      const a2 = e.year - birthYear[e.partner2Id];
+      if (a2 >= 0 && a2 <= 119) e.partner2Age = a2;
+    }
+  }
+
   return clusterPhotoEntries(entries).filter((e) => e.date && e.year);
+}
+
+// Small "age at event" chip — "married at 24 & 22", "age 18", etc.
+function ageChipHtml(e) {
+  if (e.type === "marriage") {
+    if (e.age && e.partner2Age) return `<span class="tstream-age">married at ${e.age} & ${e.partner2Age}</span>`;
+    if (e.age) return `<span class="tstream-age">married at ${e.age}</span>`;
+    return "";
+  }
+  if (e.type === "birth" || !e.age) return "";
+  return `<span class="tstream-age">age ${e.age}</span>`;
 }
 
 // ── Photo clustering (same-event grouping with collage safety) ───
@@ -740,6 +766,7 @@ export function buildPhotoCardHtml(entry, laneChipHtml = "") {
       <div class="tstream-photo-overlay-meta">
         ${e.personId ? personThumb(e.personId, 22) : ""}
         <span class="tstream-photo-date">${escapeHtml(e.dateDisplay || e.year)}</span>
+        ${ageChipHtml(e)}
         ${e.place ? `<span class="tstream-photo-place"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;margin-right:3px"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>${escapeHtml(e.place)}</span>` : ""}
         ${laneChipHtml}
       </div>
@@ -819,6 +846,7 @@ export function buildStreamCellHtml(entries, laneMeta = null) {
             <span class="tstream-flat-date">${escapeHtml(e.dateDisplay || e.year)}</span>
             <span class="tstream-flat-title">${e.title}</span>
             ${e.personId ? `<span class="tstream-flat-person">${personLink(e.personId)}</span>` : ""}
+            ${ageChipHtml(e)}
             ${laneChip}
           </div>
         </div>`;
@@ -854,7 +882,7 @@ function buildMilestoneCellHtml(e, treatment, color, laneAttr, laneChip) {
     body = `
         <div class="tstream-marriage-thumbs">${thumbs}</div>
         <div class="tstream-milestone-text">
-          <div class="tstream-milestone-meta"><span class="tstream-date">${dateText}</span>${laneChip}</div>
+          <div class="tstream-milestone-meta"><span class="tstream-date">${dateText}</span>${ageChipHtml(e)}${laneChip}</div>
           <div class="tstream-title">${e.title}</div>
           ${placeRow}
         </div>`;
@@ -865,7 +893,7 @@ function buildMilestoneCellHtml(e, treatment, color, laneAttr, laneChip) {
         ${e.personId ? `<div class="tstream-milestone-thumb">${personThumb(e.personId, 30)}</div>` : ""}
         <div class="tstream-milestone-text">
           <div class="tstream-milestone-eyebrow">${eyebrow}</div>
-          <div class="tstream-milestone-meta"><span class="tstream-date">${dateText}</span>${laneChip}</div>
+          <div class="tstream-milestone-meta"><span class="tstream-date">${dateText}</span>${ageChipHtml(e)}${laneChip}</div>
           <div class="tstream-title">${e.title}</div>
           ${placeRow}
         </div>`;
