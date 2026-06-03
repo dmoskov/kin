@@ -4746,6 +4746,22 @@ main {
 .tstream-era-served { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
 .tstream-era-served .person-link { color: var(--accent); }
 
+/* Per-branch origin back-story cards */
+.tstream-backstory {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  margin: 6px 0 14px;
+  padding: 11px 15px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+}
+.tstream-backstory-icon { font-size: 20px; line-height: 24px; flex-shrink: 0; }
+.tstream-backstory-title { font-size: 13px; font-weight: 700; color: var(--text); }
+.tstream-backstory-text { font-size: 12.5px; line-height: 1.5; color: var(--text-muted); margin-top: 2px; }
+
 /* "Where they are now" — living-family capstone at the present end of the feed */
 .tstream-now-group { margin-top: 28px; }
 .tstream-now-pill {

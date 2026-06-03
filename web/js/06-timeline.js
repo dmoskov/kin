@@ -49,6 +49,51 @@ const HISTORICAL_ERAS = [
 ];
 function eraMidDecade(e) { return Math.floor(((e.start + e.end) / 2) / 10) * 10; }
 
+// Per-branch back-stories: a short note on a significant origin place, shown
+// when that branch first appears in the timeline. Matched (and so gated) by
+// place keywords against family geography, so each only surfaces for families
+// actually from there. Phrased as place facts so they read true for any family.
+const PLACE_BACKSTORIES = [
+  { match: ["odessa"], icon: "⚓", title: "Odessa",
+    text: "A cosmopolitan Black Sea port and home to one of the largest Jewish communities in the Russian Empire — until the pogroms of the 1880s and 1900s drove mass emigration." },
+  { match: ["romania", "kostence", "constanța", "constanta"], icon: "🏰", title: "Romania",
+    text: "Romania's 1866 constitution denied citizenship to its Jews, leaving them legally stateless and pushing successive waves of emigration." },
+  { match: ["istanbul", "constantinople", "turkey"], icon: "🕌", title: "Istanbul",
+    text: "Atatürk's 1933 university reform drew 70+ German-Jewish refugee professors to Istanbul, building a Western-standard medical school that trained a generation of physicians." },
+  { match: ["iceland"], icon: "🌋", title: "Iceland",
+    text: "Harsh winters, volcanic eruptions, and economic hardship in the late 1800s spurred thousands of Icelanders to emigrate to the Upper Midwest." },
+  { match: ["kamenets", "podolsk", "brody"], icon: "🏘️", title: "The Podolia shtetls",
+    text: "Towns like Kamenets-Podolsky and the border crossing at Brody were waypoints for Jewish families leaving the Pale of Settlement for Hamburg and the Atlantic." },
+  { match: ["north end", "salem street", "boston"], icon: "🦞", title: "Boston's North End",
+    text: "The North End and Salem Street were the heart of Jewish immigrant commercial life in turn-of-the-century Boston." },
+];
+
+// Anchor each matching back-story to the decade its branch first appears (by
+// event place OR the person's birthplace), so it introduces the branch in time.
+function computeBackstoryAnchors(entries, placesText) {
+  const anchors = {};
+  const birthById = {};
+  for (const p of S.DATA.people) birthById[p.id] = (p.birth_place || "").toLowerCase();
+  for (const b of PLACE_BACKSTORIES) {
+    if (!b.match.some((k) => placesText.includes(k))) continue;
+    let minYear = null;
+    for (const e of entries) {
+      if (!e.year) continue;
+      const hay = ((e.place || "") + " " + (birthById[e.personId] || "")).toLowerCase();
+      if (b.match.some((k) => hay.includes(k)) && (minYear === null || e.year < minYear)) minYear = e.year;
+    }
+    if (minYear === null) continue;
+    const d = Math.floor(minYear / 10) * 10;
+    (anchors[d] || (anchors[d] = [])).push(b);
+  }
+  return anchors;
+}
+function buildBackstoryHtml(b) {
+  return `<div class="tstream-backstory"><span class="tstream-backstory-icon">${b.icon}</span>` +
+    `<div class="tstream-backstory-body"><div class="tstream-backstory-title">${escapeHtml(b.title)}</div>` +
+    `<div class="tstream-backstory-text">${escapeHtml(b.text)}</div></div></div>`;
+}
+
 // Era bands for one decade (anchored by the era's midpoint decade), gated to the
 // family's year span. War eras list members who served during the window.
 function buildEraInserts(decade, minYear, maxYear, military, placesText) {
@@ -368,6 +413,7 @@ function renderStreamFeed(container, entries, showNow) {
     ...(S.DATA.events || []).map((e) => e.place),
     ...(S.DATA.unions || []).map((u) => u.union_place),
   ].filter(Boolean).join(" | ").toLowerCase();
+  const backstories = computeBackstoryAnchors(entries, placesText);
 
   // Group by decade, OMIT empty decades (no continuous backfill here)
   const byDecade = {};
@@ -391,6 +437,7 @@ function renderStreamFeed(container, entries, showNow) {
   for (const decade of decades) {
     html += `<section class="tstream-decade-group" id="tl-decade-${decade}" data-decade="${decade}">`;
     html += `<div class="tstream-decade">${decade}s</div>`;
+    (backstories[decade] || []).forEach((b) => { html += buildBackstoryHtml(b); });
     html += buildEraInserts(decade, minY, maxY, military, placesText);
     html += buildStreamCellHtml(byDecade[decade], laneMeta);
     html += `</section>`;
