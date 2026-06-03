@@ -442,7 +442,18 @@ class TestAudit:
 
     def test_detects_and_fixes_self_loop(self, repo, capsys):
         repo.save_person(Person(id="x", given_name="X", surname="Y", gender=Gender.MALE))
-        repo.save_relationship(Relationship(parent_id="x", child_id="x"))  # self-loop
+        # Inject a self-loop via raw SQL: the repository now rejects these, so
+        # this simulates the legacy/bad data the audit tool is meant to fix.
+        conn = repo._conn()
+        try:
+            conn.execute(
+                "INSERT INTO relationships (parent_id, child_id, rel_type, visibility) "
+                "VALUES (?, ?, 'biological', 'everyone')",
+                ("x", "x"),
+            )
+            conn.commit()
+        finally:
+            conn.close()
         main(["audit"])
         assert "SELF-LOOPS" in capsys.readouterr().out
         main(["audit", "--fix"])

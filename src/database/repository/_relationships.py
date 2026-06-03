@@ -18,6 +18,8 @@ class RelationshipsRepoMixin:
     def _conn(self) -> Any: ...  # provided by TreeRepository
 
     def _do_save_relationship(self, conn: Any, rel: Relationship) -> None:
+        if rel.parent_id == rel.child_id:
+            raise ValueError("a person cannot be their own parent")
         _upsert(
             conn,
             "relationships",
@@ -137,10 +139,52 @@ class RelationshipsRepoMixin:
     # ── Unions ──────────────────────────────────────────────────────────
 
     def save_union(self, union: Union) -> None:
-        """Insert a marriage/partnership."""
+        """Insert a marriage/partnership.
+
+        A couple has at most one union row. If one already exists for this
+        (unordered) pair, enrich it — fill any empty fields from the new
+        data — rather than creating a duplicate. This keeps every write path
+        idempotent and consistent with the unique index on the partner pair.
+        """
+        if union.partner1_id == union.partner2_id:
+            raise ValueError("a person cannot be in a union with themselves")
         conn = self._conn()
         try:
-            self._do_save_union(conn, union)
+            p = _ph()
+            existing = _fetchone(
+                conn,
+                f"""
+                SELECT id FROM unions
+                WHERE (partner1_id = {p} AND partner2_id = {p})
+                   OR (partner1_id = {p} AND partner2_id = {p})
+                LIMIT 1
+                """,
+                (union.partner1_id, union.partner2_id, union.partner2_id, union.partner1_id),
+            )
+            if existing:
+                # Fill only currently-empty fields (keep existing values).
+                _execute(
+                    conn,
+                    f"""
+                    UPDATE unions SET
+                        union_date  = COALESCE(union_date, {p}),
+                        union_place = COALESCE(union_place, {p}),
+                        end_date    = COALESCE(end_date, {p}),
+                        end_reason  = COALESCE(end_reason, {p}),
+                        notes       = CASE WHEN notes IS NULL OR notes = '' THEN {p} ELSE notes END
+                    WHERE id = {p}
+                    """,
+                    (
+                        union.union_date,
+                        union.union_place,
+                        union.end_date,
+                        union.end_reason,
+                        union.notes,
+                        existing["id"],
+                    ),
+                )
+            else:
+                self._do_save_union(conn, union)
             conn.commit()
         finally:
             conn.close()
