@@ -21,6 +21,7 @@ const BENIGN = [
   /tile\.openstreetmap/,
   /basemaps\.cartocdn/,
   /Failed to load resource/, // URL-less mirror; covered by the response listener
+  /\/api\/people\/.*\/summary/, // optional AI summary — 503 when no ANTHROPIC_API_KEY (CI/local)
 ];
 const isBenign = (s) => BENIGN.some((re) => re.test(s));
 
