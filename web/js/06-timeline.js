@@ -148,6 +148,91 @@ function isArchivalNote(e) {
 let LANE_FOCUS = null;            // currently highlighted lane id in stream mode (single-select)
 let _decadeObserver = null;       // IntersectionObserver for decade nav; recreated per render
 
+// ── Wikipedia-sourced dated history (auto, for any family's places) ──
+// We fetch each notable place's Wikipedia extract (CORS), split it into a few
+// high-confidence dated events, cache in localStorage, and weave them into the
+// stream — so historical context is generated automatically, not hand-curated.
+const _placeHistory = {};       // place string -> [{year, text}]
+let _historyFetched = false;    // one fetch pass per data load
+const _STATE_ABBR = {
+  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
+  CO: "Colorado", CT: "Connecticut", DE: "Delaware", DC: "Washington, D.C.",
+  FL: "Florida", GA: "Georgia", HI: "Hawaii", ID: "Idaho", IL: "Illinois",
+  IN: "Indiana", IA: "Iowa", KS: "Kansas", KY: "Kentucky", LA: "Louisiana",
+  ME: "Maine", MD: "Maryland", MA: "Massachusetts", MI: "Michigan", MN: "Minnesota",
+  MS: "Mississippi", MO: "Missouri", MT: "Montana", NE: "Nebraska", NV: "Nevada",
+  NH: "New Hampshire", NJ: "New Jersey", NM: "New Mexico", NY: "New York",
+  NC: "North Carolina", ND: "North Dakota", OH: "Ohio", OK: "Oklahoma", OR: "Oregon",
+  PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina", SD: "South Dakota",
+  TN: "Tennessee", TX: "Texas", UT: "Utah", VT: "Vermont", VA: "Virginia",
+  WA: "Washington", WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming",
+};
+// Derive a Wikipedia article title: "Lexington, KY" → "Lexington, Kentucky";
+// foreign "Odessa, Russia" → the city article "Odessa".
+function _wikiTitle(place) {
+  const segs = place.split(",").map((s) => s.trim()).filter(Boolean);
+  if (segs.length >= 2) {
+    const full = _STATE_ABBR[segs[segs.length - 1].toUpperCase()];
+    if (full) return `${segs[0]}, ${full}`;
+  }
+  return segs[0] || place;
+}
+const _HIST_EVENT_RE = /\b(founded|established|settled|incorporated|chartered|destroyed|burned|burnt|rebuilt|captured|besieged|occupied|annexed|liberated|conquered|sacked|bombed|bombarded|massacre|pogrom|revolution|uprising|revolt|rebellion|\bwar\b|battle|treaty|independence|declared|famine|plague|epidemic|cholera|earthquake|flood|\bfire\b|opened|completed|expelled|deported|emancipat|abolished|renamed|annexation)/i;
+const _HIST_NOISE_RE = /\b(population|census|inhabitants|residents|km2|km²|sq\s?mi|square (kilomet|mile)|metro area|estimated at|as of \d{4}|GDP|elevation|latitude|longitude)\b/i;
+function parseWikiEvents(extract) {
+  const text = (extract || "").replace(/\n+/g, " ");
+  const sentences = text.split(/(?<=[.!?])\s+(?=[A-Z(0-9])/);
+  const out = [];
+  const seen = new Set();
+  for (const s of sentences) {
+    if (s.length < 25 || s.length > 220) continue;
+    if (_HIST_NOISE_RE.test(s)) continue;
+    if (/\(\s*\d{4}\s*[–-]\s*\d{4}\s*\)/.test(s)) continue; // skip person lifespans/bios
+    if (!_HIST_EVENT_RE.test(s)) continue;
+    const m = s.match(/\b(1[0-9]{3}|20[0-2][0-9])\b/);
+    if (!m) continue;
+    const year = parseInt(m[1]);
+    if (seen.has(year)) continue;
+    seen.add(year);
+    out.push({ year, text: s.trim() });
+  }
+  return out.sort((a, b) => a.year - b.year).slice(0, 4);
+}
+async function _fetchOneHistory(place) {
+  const title = _wikiTitle(place);
+  const key = "ftwiki:v1:" + title;
+  try {
+    const c = JSON.parse(localStorage.getItem(key) || "null");
+    if (c && Date.now() - c.ts < 30 * 864e5) return c.events;
+  } catch (_) {}
+  try {
+    const url = `https://en.wikipedia.org/w/api.php?action=query&format=json&prop=extracts&explaintext=1&redirects=1&titles=${encodeURIComponent(title)}&origin=*`;
+    const data = await (await fetch(url)).json();
+    const page = Object.values(data?.query?.pages || {})[0] || {};
+    const events = page.extract ? parseWikiEvents(page.extract) : [];
+    try { localStorage.setItem(key, JSON.stringify({ events, ts: Date.now() })); } catch (_) {}
+    return events;
+  } catch (_) { return []; }
+}
+function _selectNotablePlaces(entries) {
+  const freq = {};
+  for (const e of entries) if (e.place) freq[e.place] = (freq[e.place] || 0) + 1;
+  return Object.keys(freq).sort((a, b) => freq[b] - freq[a]).slice(0, 12);
+}
+async function _prefetchHistories(places, filterPersonId) {
+  const results = await Promise.all(places.map((p) => _fetchOneHistory(p).then((evs) => [p, evs])));
+  let any = false;
+  for (const [p, evs] of results) { _placeHistory[p] = evs; if (evs.length) any = true; }
+  // Only re-render if the user hasn't navigated away (still stream + everyone).
+  const cur = document.getElementById("timeline-filter")?.value || "all";
+  if (any && TIMELINE_MODE === "stream" && cur === filterPersonId) renderTimeline(filterPersonId, "stream");
+}
+function buildHistoryHtml(ev) {
+  return `<div class="tstream-history"><span class="tstream-history-icon">📜</span>` +
+    `<div class="tstream-history-body"><div class="tstream-history-meta">${escapeHtml(ev.place)} · ${ev.year} · <span class="tstream-history-src">Wikipedia</span></div>` +
+    `<div class="tstream-history-text">${escapeHtml(ev.text)}</div></div></div>`;
+}
+
 export function gatherTimelineEntries() {
   let entries = [];
 
@@ -441,6 +526,24 @@ function renderStreamFeed(container, entries, showNow) {
   ].filter(Boolean).join(" | ").toLowerCase();
   const backstories = computeBackstoryAnchors(entries, placesText);
 
+  // Wikipedia dated history (everyone view only): fetch once per load, then a
+  // re-render weaves the results in. Group resolved events by decade, in-span.
+  if (showNow && !_historyFetched) {
+    _historyFetched = true;
+    const notable = _selectNotablePlaces(entries);
+    if (notable.length) _prefetchHistories(notable, "all");
+  }
+  const historyByDecade = {};
+  if (showNow) {
+    for (const [place, evs] of Object.entries(_placeHistory)) {
+      for (const ev of evs) {
+        if (ev.year < minY - 5 || ev.year > maxY + 5) continue;
+        const d = Math.floor(ev.year / 10) * 10;
+        (historyByDecade[d] || (historyByDecade[d] = [])).push({ ...ev, place });
+      }
+    }
+  }
+
   // Group by decade, OMIT empty decades (no continuous backfill here)
   const byDecade = {};
   for (const e of entries) {
@@ -465,6 +568,7 @@ function renderStreamFeed(container, entries, showNow) {
     html += `<div class="tstream-decade">${decade}s</div>`;
     (backstories[decade] || []).forEach((b) => { html += buildBackstoryHtml(b); });
     html += buildEraInserts(decade, minY, maxY, military, placesText);
+    (historyByDecade[decade] || []).slice(0, 2).forEach((ev) => { html += buildHistoryHtml(ev); });
     html += buildStreamCellHtml(byDecade[decade], laneMeta);
     html += `</section>`;
   }
