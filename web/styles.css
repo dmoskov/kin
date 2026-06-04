@@ -439,6 +439,28 @@ main {
   display: block;
   cursor: pointer;
 }
+/* Face-crop hero: cropped face over a blurred backdrop of the full image */
+.panel-hero-blur {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  filter: blur(18px) saturate(1.1);
+  transform: scale(1.15);
+}
+.panel-hero-face {
+  position: absolute;
+  top: 34px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+  cursor: pointer;
+}
+.panel-hero-face .cropped-thumb {
+  border: 3px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+}
+.panel-hero-photo .panel-hero-overlay { z-index: 2; }
 .panel-hero-monogram {
   width: 100%;
   height: 100%;
@@ -1270,6 +1292,13 @@ main {
   font-size: 14px;
   text-align: center;
 }
+.lightbox-source {
+  margin-top: 4px;
+  text-align: center;
+  font-size: 12px;
+}
+.lightbox-source a { color: #9bb8d6; text-decoration: none; }
+.lightbox-source a:hover { text-decoration: underline; }
 .lightbox-close {
   position: absolute;
   top: -12px;

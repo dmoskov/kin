@@ -101,13 +101,19 @@ export function showPersonPanel(personId) {
     ? `<button class="panel-hero-edit-btn" onclick="openEditPersonForm('${personId}')" title="Edit person">Edit</button>`
     : "";
 
-  // Full-bleed hero. Uses the UNCROPPED profile photo (the circular profile
-  // crop doesn't translate to a wide hero); name/meta overlaid in white.
+  // Full-bleed hero. When the profile photo has a face-crop (e.g. a face within
+  // a group painting), show the cropped face over a blurred backdrop so it reads
+  // as a real portrait; otherwise show the whole photo cover-cropped.
   const heroPhotoPath = person._profilePhotoPath;
   let heroInner;
   if (heroPhotoPath) {
+    const crop = person._profileCrop;
+    const media = crop
+      ? `<div class="panel-hero-blur" style="background-image:url('/${escapeHtml(heroPhotoPath)}')" aria-hidden="true"></div>
+         <div class="panel-hero-face" data-photo-path="${escapeHtml(heroPhotoPath)}">${croppedImg(heroPhotoPath, person.fullName, 172, crop, "panel-hero-face-img")}</div>`
+      : `<img class="panel-hero-img" src="/${escapeHtml(heroPhotoPath)}" alt="${escapeHtml(person.fullName)}" loading="lazy" data-photo-path="${escapeHtml(heroPhotoPath)}" />`;
     heroInner = `
-      <img class="panel-hero-img" src="/${escapeHtml(heroPhotoPath)}" alt="${escapeHtml(person.fullName)}" loading="lazy" data-photo-path="${escapeHtml(heroPhotoPath)}" />
+      ${media}
       <div class="panel-hero-overlay">
         ${relBadge}
         <div class="panel-name">${escapeHtml(person.fullName)}</div>
@@ -342,7 +348,7 @@ export function showPersonPanel(personId) {
     _wirePanelPhotoClicks(photosSection, personId);
   }
   // Hero photo opens the lightbox (parity with panel photo clicks).
-  const heroImg = content.querySelector(".panel-hero-img");
+  const heroImg = content.querySelector(".panel-hero-img, .panel-hero-face");
   if (heroImg) {
     heroImg.addEventListener("click", () => {
       const photoPath = heroImg.dataset.photoPath;

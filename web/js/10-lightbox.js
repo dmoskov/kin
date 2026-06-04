@@ -3,6 +3,16 @@
 // bridged onto window by 99-main.js so inline onclick handlers resolve.
 import { S } from "./00-state.js";
 
+// Images sourced from Wikimedia Commons are named "wikimedia-<slug>.<ext>".
+// Build a Commons media-search link from the slug so the source is credited.
+function _wikimediaSource(path) {
+  if (!path) return "";
+  const base = path.split("/").pop().replace(/\.[a-z0-9]+$/i, "");
+  if (!base.toLowerCase().startsWith("wikimedia-")) return "";
+  const terms = base.slice(10).replace(/-/g, " ").replace(/\b\d{6,}\b/g, "").replace(/\s+/g, " ").trim();
+  return "https://commons.wikimedia.org/w/index.php?title=Special:MediaSearch&type=image&search=" + encodeURIComponent(terms);
+}
+
 export function openLightbox(src, alt, photoPath, photoList, contextPersonId) {
   const existing = document.getElementById("lightbox");
   if (existing) existing.remove();
@@ -27,6 +37,7 @@ export function openLightbox(src, alt, photoPath, photoList, contextPersonId) {
           <img src="${src}" alt="${alt}" />
         </div>
         <div class="lightbox-caption">${escapeHtml(alt)}</div>
+        <div class="lightbox-source"></div>
         ${hasNav ? `<div class="lightbox-counter">${currentIdx + 1} / ${photoList.length}</div>` : ""}
       </div>
       ${hasNav ? `<button class="lightbox-nav lightbox-next" aria-label="Next photo">&#8250;</button>` : ""}
@@ -39,7 +50,17 @@ export function openLightbox(src, alt, photoPath, photoList, contextPersonId) {
   const img = imgWrap.querySelector("img");
   const captionEl = overlay.querySelector(".lightbox-caption");
   const counterEl = overlay.querySelector(".lightbox-counter");
+  const sourceEl = overlay.querySelector(".lightbox-source");
   let ro = null;
+
+  function updateSource() {
+    if (!sourceEl) return;
+    const url = _wikimediaSource(currentPhotoPath);
+    sourceEl.innerHTML = url
+      ? `<a href="${url}" target="_blank" rel="noopener">Source: Wikimedia Commons &#8599;</a>`
+      : "";
+  }
+  updateSource();
 
   function getPhotoData() {
     return currentPhotoPath ? S.PHOTOS_MAP[currentPhotoPath] : null;
@@ -105,6 +126,7 @@ export function openLightbox(src, alt, photoPath, photoList, contextPersonId) {
     img.src = currentSrc;
     img.alt = currentAlt;
     captionEl.textContent = currentAlt;
+    updateSource();
     if (counterEl) counterEl.textContent = `${currentIdx + 1} / ${photoList.length}`;
     imgWrap.classList.remove("annotation-mode");
     const tagBtn = overlay.querySelector(".lightbox-tag-faces-btn");
