@@ -365,19 +365,31 @@ export function renderPhotoGallery() {
   });
 
   grid.innerHTML = sorted.map(photo => {
-    const tagCount = (photo.tagged_people || []).length;
+    const taggedPeople = photo.tagged_people || [];
+    const tagCount = taggedPeople.length;
     const hasGps = photo.lat != null && photo.lng != null;
     const esc = escapeHtml;
+    // Who's in the photo — names, not just a count. Resolve via PEOPLE_MAP so
+    // it stays correct even if the tag row lacks denormalized name fields.
+    const nameOf = (tp) =>
+      S.PEOPLE_MAP[tp.person_id]?.fullName ||
+      [tp.given_name, tp.surname].filter(Boolean).join(" ") ||
+      "Unknown";
+    const tagNames = taggedPeople.map(nameOf);
+    const namesTitle = esc(tagNames.join(", "));
+    const namesShown = tagNames.slice(0, 3).map(esc).join(", ");
+    const namesExtra = tagNames.length - 3;
     const selected = GALLERY_SELECT_MODE && GALLERY_SELECTED.has(photo.file_path);
     return `<div class="photos-grid-item${selected ? " gallery-selected" : ""}" data-photo-path="${photo.file_path}" data-photo-id="${photo.id}">
       ${GALLERY_SELECT_MODE ? `<div class="gallery-select-check${selected ? " checked" : ""}" onclick="togglePhotoSelection('${photo.file_path}')">${selected ? "&#10003;" : ""}</div>` : ""}
       <div class="photos-grid-img" onclick="galleryPhotoClick(event, '${photo.file_path}', ${photo.id})">
         <img src="/${photo.file_path}" alt="" loading="lazy" />
-        ${tagCount > 0 ? `<span class="photos-grid-tag-count">${tagCount} tagged</span>` : `<span class="photos-grid-untagged">Untagged</span>`}
+        ${tagCount > 0 ? `<span class="photos-grid-tag-count" title="${namesTitle}">${tagCount} tagged</span>` : `<span class="photos-grid-untagged">Untagged</span>`}
         ${hasGps ? `<span class="photos-grid-gps" title="Has GPS coordinates">&#128205;</span>` : ""}
       </div>
       <div class="photos-grid-info">
         <div class="photos-grid-info-text">
+          ${tagCount > 0 ? `<span class="photos-grid-people" title="${namesTitle}">${namesShown}${namesExtra > 0 ? ` +${namesExtra}` : ""}</span>` : ""}
           ${photo.date ? `<span class="photo-date">${photo.date_circa ? "c. " : ""}${esc(photo.date)}</span>` : ""}
           ${photo.place ? `<span class="photo-place" title="${esc(photo.place)}">${esc(photo.place)}</span>` : ""}
           ${!photo.date && !photo.place ? `<span class="photo-place photo-no-meta">No metadata</span>` : ""}
