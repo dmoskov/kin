@@ -1532,8 +1532,40 @@ main {
 .timeline-cell > .timeline-entry:first-child::before {
   top: 11px;
 }
+.timeline-cell > .timeline-decade + .timeline-entry-minimal::before,
+.timeline-cell > .timeline-entry-minimal:first-child::before {
+  top: 6px;
+}
 .timeline-entry:last-child::before {
   bottom: calc(100% - 21px);
+}
+.timeline-entry-minimal:last-child::before {
+  bottom: calc(100% - 16px);
+}
+
+/* Compact style for born/died/married with no extra info */
+.timeline-entry-minimal {
+  min-height: 0;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+.timeline-entry-minimal .timeline-entry-dot {
+  top: 6px;
+  width: 7px;
+  height: 7px;
+  left: 1.5px;
+  border-width: 2px;
+}
+.timeline-entry-minimal .timeline-content {
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+}
+.timeline-entry-minimal .timeline-content h4 {
+  font-size: 11.5px;
+  font-weight: 500;
+  margin-bottom: 0;
+  color: var(--text-muted);
 }
 
 .timeline-cross-marriage {
