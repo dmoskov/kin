@@ -139,18 +139,21 @@
 
     <!-- Timeline View -->
     <section id="view-timeline" class="view" role="tabpanel" aria-labelledby="tab-timeline">
-      <div class="timeline-container">
-        <div class="timeline-header">
-          <h2>Family Timeline</h2>
-          <div class="timeline-controls">
-            <select id="timeline-filter">
-              <option value="all">Everyone</option>
-            </select>
-            <button id="timeline-view-toggle" class="timeline-align-btn" onclick="toggleTimelineView()">Stream</button>
-            <button id="timeline-align-toggle" class="timeline-align-btn" onclick="toggleTimelineAlignment()">Compact</button>
+      <div class="timeline-outer">
+        <nav id="decade-nav" class="decade-nav" aria-label="Timeline decades"></nav>
+        <div class="timeline-container">
+          <div class="timeline-header">
+            <h2>Family Timeline</h2>
+            <div class="timeline-controls">
+              <select id="timeline-filter">
+                <option value="all">Everyone</option>
+              </select>
+              <button id="timeline-view-toggle" class="timeline-align-btn" onclick="toggleTimelineView()">Stream</button>
+              <button id="timeline-align-toggle" class="timeline-align-btn" onclick="toggleTimelineAlignment()">Compact</button>
+            </div>
           </div>
+          <div id="timeline-entries"></div>
         </div>
-        <div id="timeline-entries"></div>
       </div>
     </section>
 

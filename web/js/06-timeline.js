@@ -121,6 +121,8 @@ export function renderTimeline(filterPersonId = "all") {
           : "Add birth, death, or marriage dates to people and they'll appear on the timeline."
       }</p>
     </div>`;
+    const nav = document.getElementById("decade-nav");
+    if (nav) nav.innerHTML = "";
     return;
   }
 
@@ -206,7 +208,7 @@ export function renderTimeline(filterPersonId = "all") {
 
   // One row per decade
   for (const decade of decades) {
-    html += `<div class="timeline-row">`;
+    html += `<div class="timeline-row" id="decade-row-${decade}">`;
     // Stream column first (left side)
     if (S.SHOW_TIMELINE_STREAM) {
       const streamEntries = byDecade[decade] || [];
@@ -251,6 +253,8 @@ export function renderTimeline(filterPersonId = "all") {
       showPersonPanel(a.dataset.personId);
     });
   });
+
+  renderDecadeNav(decades, entries);
 }
 
 export function toggleTimelineAlignment() {
@@ -308,6 +312,119 @@ export function buildStreamCellHtml(entries) {
     }
   }
   return html;
+}
+
+const NAV_TYPE_ICONS = {
+  birth: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="3"/><path d="M3 14c0-2.8 2.2-5 5-5s5 2.2 5 5"/></svg>`,
+  death: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/></svg>`,
+  marriage: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 8a4 4 0 014-4 4 4 0 014 4c0 4-4 7-4 7s-4-3-4-7z"/></svg>`,
+  photo: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="10" rx="1.5"/><circle cx="8" cy="8" r="2.5"/></svg>`,
+  immigration: `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8h10m0 0l-3-3m3 3l-3 3"/></svg>`,
+};
+
+function renderDecadeNav(decades, entries) {
+  const nav = document.getElementById("decade-nav");
+  if (!nav) return;
+
+  const byDecade = {};
+  let maxCount = 0;
+  for (const e of entries) {
+    const d = Math.floor(e.year / 10) * 10;
+    if (!byDecade[d]) byDecade[d] = [];
+    byDecade[d].push(e);
+    if (byDecade[d].length > maxCount) maxCount = byDecade[d].length;
+  }
+
+  let html = `<div class="decade-nav-label">Decades</div>`;
+
+  for (const decade of decades) {
+    const decadeEntries = byDecade[decade] || [];
+    const count = decadeEntries.length;
+    const barPct = maxCount > 0 ? Math.max(4, Math.round((count / maxCount) * 100)) : 0;
+
+    const typeCounts = {};
+    for (const e of decadeEntries) {
+      typeCounts[e.type] = (typeCounts[e.type] || 0) + 1;
+    }
+    const topTypes = Object.entries(typeCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3);
+
+    let iconsHtml = "";
+    for (const [type] of topTypes) {
+      const icon = NAV_TYPE_ICONS[type];
+      const color = EVENT_COLORS[type] || EVENT_COLORS.custom || "#b066e0";
+      if (icon) {
+        iconsHtml += `<span class="decade-nav-icon" style="color:${color}">${icon}</span>`;
+      } else {
+        iconsHtml += `<span class="decade-nav-dot" style="background:${color}"></span>`;
+      }
+    }
+
+    html += `
+      <button class="decade-nav-item${count === 0 ? " decade-nav-empty" : ""}" data-decade="${decade}" title="${decade}s — ${count} event${count !== 1 ? "s" : ""}">
+        <span class="decade-nav-year">${decade}s</span>
+        <span class="decade-nav-bar-track">
+          <span class="decade-nav-bar" style="width:${count > 0 ? barPct : 0}%"></span>
+        </span>
+        <span class="decade-nav-icons">${iconsHtml}</span>
+      </button>`;
+  }
+
+  nav.innerHTML = html;
+
+  if (!nav._hasClickHandler) {
+    nav._hasClickHandler = true;
+    nav.addEventListener("click", (e) => {
+      const btn = e.target.closest(".decade-nav-item");
+      if (!btn) return;
+      const decade = btn.dataset.decade;
+      const row = document.getElementById(`decade-row-${decade}`);
+      if (!row) return;
+      const scroller = row.closest(".timeline-container");
+      if (scroller) {
+        const headerOffset = scroller.querySelector(".timeline-header")?.offsetHeight || 0;
+        const rowTop = row.offsetTop - scroller.offsetTop - headerOffset - 8;
+        scroller.scrollTo({ top: rowTop, behavior: "smooth" });
+      }
+
+      nav.querySelectorAll(".decade-nav-item").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+    });
+  }
+
+  observeDecadeScroll(nav, decades);
+}
+
+let _decadeObserver = null;
+function observeDecadeScroll(nav, decades) {
+  if (_decadeObserver) _decadeObserver.disconnect();
+
+  const scroller = document.querySelector(".timeline-container");
+  if (!scroller) return;
+
+  _decadeObserver = new IntersectionObserver(
+    (observedEntries) => {
+      let topDecade = null;
+      for (const oe of observedEntries) {
+        if (oe.isIntersecting && !topDecade) {
+          topDecade = oe.target.id.replace("decade-row-", "");
+        }
+      }
+      if (!topDecade) return;
+      nav.querySelectorAll(".decade-nav-item").forEach((b) => {
+        b.classList.toggle("active", b.dataset.decade === topDecade);
+      });
+      const activeBtn = nav.querySelector(".decade-nav-item.active");
+      if (activeBtn) activeBtn.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    },
+    { root: scroller, rootMargin: "-10% 0px -80% 0px", threshold: 0 },
+  );
+
+  for (const decade of decades) {
+    const row = document.getElementById(`decade-row-${decade}`);
+    if (row) _decadeObserver.observe(row);
+  }
 }
 
 export function populateTimelineFilter() {
