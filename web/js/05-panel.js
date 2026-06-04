@@ -3,16 +3,6 @@
 // bridged onto window by 99-main.js so inline onclick handlers resolve.
 import { S } from "./00-state.js";
 
-function _calcAge(birthDate, deathDate) {
-  if (!birthDate) return null;
-  const bYear = parseInt(birthDate, 10);
-  if (isNaN(bYear)) return null;
-  const endDate = deathDate || new Date().toISOString().slice(0, 10);
-  const eYear = parseInt(endDate, 10);
-  if (isNaN(eYear)) return null;
-  return eYear - bYear;
-}
-
 const _EVENT_ICONS = {
   birth: "✶", death: "✝", marriage: "♡",
   career: "⚒", education: "⌂", immigration: "✈",
@@ -88,16 +78,13 @@ export function showPersonPanel(personId) {
   const heroSize = 80;
   const heroThumb = personThumb(personId, heroSize);
 
-  // Lifespan string with age
   let lifespanHtml = "";
   if (person.birth_date || person.death_date) {
     const parts = [];
     if (person.birth_date) parts.push(escapeHtml(person.birth_date));
     if (person.death_date) parts.push(escapeHtml(person.death_date));
     else if (person.birth_date) parts.push("present");
-    const age = _calcAge(person.birth_date, person.death_date);
-    const ageStr = age !== null ? ` · age ${age}` : "";
-    lifespanHtml = `<div class="panel-lifespan">${parts.join(" – ")}${ageStr}</div>`;
+    lifespanHtml = `<div class="panel-lifespan">${parts.join(" – ")}</div>`;
   }
 
   let html = `
