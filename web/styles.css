@@ -4774,6 +4774,22 @@ main {
 .tstream-backstory-title { font-size: 13px; font-weight: 700; color: var(--text); }
 .tstream-backstory-text { font-size: 12.5px; line-height: 1.5; color: var(--text-muted); margin-top: 2px; }
 
+/* Wikipedia-sourced dated history events */
+.tstream-history {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 4px 0 12px;
+  padding: 8px 13px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--text-muted) 6%, transparent);
+  border-left: 2px solid color-mix(in srgb, var(--text-muted) 35%, transparent);
+}
+.tstream-history-icon { font-size: 14px; line-height: 19px; flex-shrink: 0; opacity: 0.8; }
+.tstream-history-meta { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 700; color: var(--text-muted); }
+.tstream-history-src { font-weight: 600; opacity: 0.75; text-transform: none; letter-spacing: 0; }
+.tstream-history-text { font-size: 12.5px; line-height: 1.45; color: var(--text); margin-top: 2px; }
+
 /* "Where they are now" — living-family capstone at the present end of the feed */
 .tstream-now-group { margin-top: 28px; }
 .tstream-now-pill {
