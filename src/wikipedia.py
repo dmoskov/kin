@@ -48,6 +48,12 @@ _EVENT_RE = re.compile(
     re.I,
 )
 _NOISE_RE = re.compile(r"\b(population|census|km2|km²|metres|feet above)\b", re.I)
+# Titles that are places/institutions, not people — reject these outright.
+_LANDMARK_RE = re.compile(
+    r"\b(House|Site|Park|Bridge|School|Building|Historic|Memorial|Church|Library|"
+    r"Hospital|University|College|Hall|Museum|Township|County|River|Street|Square|"
+    r"Cemetery|Monument|Station|District|Society|Company|Award|Prize|\(disambiguation\))\b"
+)
 
 
 def resolve_people(people: list[dict]) -> tuple[dict[str, dict], int]:
@@ -127,19 +133,38 @@ def _lookup(name: str, by: int | None, dy: int | None) -> dict:
             "explaintext": "1",
         }
     )
+    tokens = [t for t in re.split(r"\s+", name.lower()) if len(t) > 1]
+    given = tokens[0] if tokens else ""
+    surname = tokens[-1] if len(tokens) > 1 else ""
+
     pages = list((data or {}).get("query", {}).get("pages", {}).values())
+    # Wikipedia ranks search results by index; prefer that order.
+    pages.sort(key=lambda p: p.get("index", 99))
     for pg in pages:
         ex = pg.get("extract") or ""
+        title = pg.get("title", "")
+        tl = title.lower()
         if not ex or re.search(r"may refer to|disambiguation", ex, re.I):
+            continue
+        # Reject non-person (place/landmark/institution) articles.
+        if _LANDMARK_RE.search(title):
             continue
         if not _PERSON_RE.search(ex):
             continue
-        hit = (by and any(str(y) in ex for y in (by - 1, by, by + 1))) or (
+        # The ARTICLE must be about THIS person, not merely mention them: the
+        # surname must be in the title AND in the opening of the bio.
+        if surname and (surname not in tl or surname not in ex[:90].lower()):
+            continue
+        year_hit = (by and any(str(y) in ex for y in (by - 1, by, by + 1))) or (
             dy and any(str(y) in ex for y in (dy - 1, dy, dy + 1))
         )
-        if not hit:
+        if not year_hit:
             continue
-        title = pg["title"]
+        # Confirm identity: given name in the title, or BOTH birth & death years
+        # present (handles nicknames like Fanny → Frances).
+        both_years = by and dy and str(by) in ex and str(dy) in ex
+        if given and given not in tl and not both_years:
+            continue
         desc = ex.strip().split(". ")[0][:240]
         events = _fetch_and_parse_events(title, by, dy)
         return {
