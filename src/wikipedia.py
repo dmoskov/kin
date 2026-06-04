@@ -127,7 +127,7 @@ def _lookup(name: str, by: int | None, dy: int | None) -> dict:
             "format": "json",
             "generator": "search",
             "gsrsearch": name,
-            "gsrlimit": "3",
+            "gsrlimit": "5",
             "prop": "extracts",
             "exintro": "1",
             "explaintext": "1",
