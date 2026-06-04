@@ -685,8 +685,9 @@ function renderBranchesGrid(container, entries) {
       }
       for (const e of decadeEntries) {
         const isCross = e.crossLane;
+        const isMinimal = (e.type === "birth" || e.type === "death" || e.type === "marriage") && !e.place && !e.desc;
         html += `
-          <div class="timeline-entry${isCross ? " timeline-cross-marriage" : ""}${e.type === "photo" ? " timeline-photo-entry" : ""}" data-type="${e.type}" data-year="${e.year}" data-person-id="${e.personId || ""}">
+          <div class="timeline-entry${isCross ? " timeline-cross-marriage" : ""}${e.type === "photo" ? " timeline-photo-entry" : ""}${isMinimal ? " timeline-entry-minimal" : ""}" data-type="${e.type}" data-year="${e.year}" data-person-id="${e.personId || ""}">
             <div class="timeline-entry-dot" style="border-color:${e.type === "photo" ? (EVENT_COLORS.photo || "#d4a843") : lane.color}"></div>
             <div class="timeline-content">
               <span class="timeline-year-inline">${escapeHtml(e.dateDisplay || e.year)}</span>
