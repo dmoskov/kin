@@ -4508,11 +4508,16 @@ main {
 .tstream-photo-card {
   content-visibility: auto;
   contain-intrinsic-size: auto 480px;
+  /* Lane accent: a colored left edge ties a big portrait to its subject's
+     branch so it doesn't read as belonging to the milestone node above it.
+     Transparent (no shift) when the entry has no lane. */
+  border-left: 4px solid var(--lane-edge, transparent);
 }
 .tstream-photo-stage {
   position: relative;
   aspect-ratio: 4 / 5;
-  max-height: 70vh;
+  /* Tighter cap so portraits don't dwarf the text milestones around them. */
+  max-height: 56vh;
   overflow: hidden;
   cursor: pointer;
   background: #000;
@@ -4568,11 +4573,24 @@ main {
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
   pointer-events: none;
 }
+/* Subject name — the headline of a tagged photo (who, before who-painted-it). */
+.tstream-photo-person {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+  margin-bottom: 3px;
+}
 .tstream-photo-caption {
   font-size: 15px;
   font-weight: 600;
   line-height: 1.35;
   margin-bottom: 6px;
+}
+/* When a caption follows the name it's an attribution sub-line — demote it. */
+.tstream-photo-person + .tstream-photo-caption {
+  font-size: 12.5px;
+  font-weight: 500;
+  opacity: 0.92;
 }
 .tstream-photo-overlay-meta {
   display: flex;
@@ -5390,6 +5408,14 @@ main {
   color: var(--text);
 }
 .photos-grid-info .photo-place {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Who's tagged — the primary identity line on each gallery tile. */
+.photos-grid-people {
+  font-weight: 600;
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

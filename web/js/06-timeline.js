@@ -181,7 +181,12 @@ const _HIST_EVENT_RE = /\b(founded|established|settled|incorporated|chartered|de
 const _HIST_NOISE_RE = /\b(population|census|inhabitants|residents|km2|km²|sq\s?mi|square (kilomet|mile)|metro area|estimated at|as of \d{4}|GDP|elevation|latitude|longitude)\b/i;
 function parseWikiEvents(extract) {
   const text = (extract || "").replace(/\n+/g, " ");
-  const sentences = text.split(/(?<=[.!?])\s+(?=[A-Z(0-9])/);
+  // Split on sentence boundaries, but never after an abbreviation period
+  // ("Dr. Henry", "St. Paul", "U.S. Army") — those aren't sentence ends, and
+  // splitting there truncates the visible history blurb mid-clause.
+  const sentences = text.split(
+    /(?<=[.!?])(?<![A-Z]\.)(?<!\b(?:Dr|Mr|Mrs|Ms|Prof|Sr|Jr|St|Mt|Ft|Rev|Hon|Gen|Col|Capt|Lt|Sgt|Sen|Rep|Gov|vs|etc|al|No|Co|Inc|Ltd|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\.)\s+(?=[A-Z(0-9])/,
+  );
   const out = [];
   const seen = new Set();
   for (const s of sentences) {
@@ -852,9 +857,12 @@ function _applyLaneFocusClass(container) {
 // The img defaults to object-fit:contain over a blurred fill (never crops a
 // face); renderStreamFeed opts an img into .is-cover with a face-aware
 // object-position after measuring its runtime aspect on load.
-export function buildPhotoCardHtml(entry, laneChipHtml = "") {
+export function buildPhotoCardHtml(entry, laneChipHtml = "", laneColor = "") {
   const e = entry;
   const safeAlt = (e.title || "").replace(/'/g, "\\'");
+  // Tie the card to its subject's lane with a colored edge, so a big portrait
+  // reads as belonging to that person's branch rather than the node above it.
+  const laneEdge = laneColor ? ` style="--lane-edge:${laneColor}"` : "";
 
   // Cluster cards open the whole set in the lightbox (photoList = all members);
   // single cards open just themselves.
@@ -863,10 +871,20 @@ export function buildPhotoCardHtml(entry, laneChipHtml = "") {
     : "null";
   const onClick = `openLightbox('/${e.photoPath}', '${safeAlt}', '${e.photoPath}', ${listArg})`;
 
+  // Identity first: the subject's name is the headline (people want "who" before
+  // "who painted it"), with any real caption demoted to a smaller attribution
+  // sub-line. Untagged photos keep the caption as the headline.
+  const subjectName = e.personId ? personName(e.personId) : "";
+  const attribution = e.rawCaption ? escapeHtml(e.rawCaption) : "";
+  const headline = subjectName
+    ? `<div class="tstream-photo-person">${subjectName}</div>` +
+      (attribution ? `<div class="tstream-photo-caption">${attribution}</div>` : "")
+    : (e.title ? `<div class="tstream-photo-caption">${e.title}</div>` : "");
+
   const overlay = `
     <div class="tstream-photo-scrim" aria-hidden="true"></div>
     <div class="tstream-photo-overlay">
-      ${e.title ? `<div class="tstream-photo-caption">${e.title}</div>` : ""}
+      ${headline}
       <div class="tstream-photo-overlay-meta">
         ${e.personId ? personThumb(e.personId, 22) : ""}
         <span class="tstream-photo-date">${escapeHtml(e.dateDisplay || e.year)}</span>
@@ -890,7 +908,7 @@ export function buildPhotoCardHtml(entry, laneChipHtml = "") {
     }
     strip += `</div>`;
     return `
-      <div class="tstream-card tstream-photo-card tstream-photo-card--cluster">
+      <div class="tstream-card tstream-photo-card tstream-photo-card--cluster"${laneEdge}>
         <div class="tstream-photo-stage" onclick="${onClick}">
           <div class="tstream-photo-blurfill" aria-hidden="true" style="background-image:url(/${e.photoPath})"></div>
           <img class="tstream-photo-img" src="/${e.photoPath}" alt="${escapeHtml(e.title || "")}" loading="lazy" />
@@ -902,7 +920,7 @@ export function buildPhotoCardHtml(entry, laneChipHtml = "") {
 
   // Single hero card.
   return `
-    <div class="tstream-card tstream-photo-card">
+    <div class="tstream-card tstream-photo-card"${laneEdge}>
       <div class="tstream-photo-stage" onclick="${onClick}">
         <div class="tstream-photo-blurfill" aria-hidden="true" style="background-image:url(/${e.photoPath})"></div>
         <img class="tstream-photo-img" src="/${e.photoPath}" alt="${escapeHtml(e.title || "")}" loading="lazy" />
@@ -932,7 +950,7 @@ export function buildStreamCellHtml(entries, laneMeta = null) {
       html += `
         <div class="tstream-entry tstream-photo-entry"${laneAttr}>
           <div class="tstream-rail"><div class="tstream-dot" style="border-color:${color}"></div></div>
-          ${buildPhotoCardHtml(e, laneChip)}
+          ${buildPhotoCardHtml(e, laneChip, lm?.color)}
         </div>`;
     } else {
       const t = STREAM_TREATMENTS[e.type];
