@@ -142,6 +142,9 @@ export function showPersonPanel(personId) {
   // AI-powered biographical summary
   html += `<div id="panel-summary" class="panel-summary"><div class="panel-summary-loading"><span class="panel-summary-spinner"></span> Generating summary…</div></div>`;
 
+  // Wikipedia link + parsed history (populated async from the cache)
+  html += `<div id="panel-wikipedia" class="panel-wikipedia hidden"></div>`;
+
   // Photos + Manage Photos button. The inner markup is shared with
   // _renderPanelPhotos (the picker-refresh path) via buildPanelPhotosInnerHtml.
   html += `<div class="panel-photos-section">`;
@@ -358,7 +361,40 @@ export function showPersonPanel(personId) {
     ensureTreeNodeVisible(personId);
   }
 
+  const wikiEl = document.getElementById("panel-wikipedia");
+  if (wikiEl) wikiEl.dataset.personId = personId;
   _fetchPersonSummary(personId);
+  _fetchPersonWikipedia(personId);
+}
+
+// Look up this person's Wikipedia article (cached server-side, year-verified).
+// Background resolution is rate-limited, so retry a few times while pending.
+function _fetchPersonWikipedia(personId, attempt = 0) {
+  const el = document.getElementById("panel-wikipedia");
+  if (!el || el.dataset.personId !== personId) return;
+  fetch("/api/person-wikipedia", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify([personId]),
+  })
+    .then((r) => (r.ok ? r.json() : Promise.reject()))
+    .then((data) => {
+      if (el.dataset.personId !== personId) return; // panel moved on
+      const res = data.results && data.results[personId];
+      if (res && res.matched) {
+        const events = (res.events || [])
+          .map((e) => `<div class="panel-wiki-event"><span class="panel-wiki-year">${e.year}</span><span class="panel-wiki-text">${escapeHtml(e.text)}</span></div>`)
+          .join("");
+        el.innerHTML =
+          `<a class="panel-wiki-badge" href="${res.url}" target="_blank" rel="noopener">📖 On Wikipedia</a>` +
+          (res.description ? `<div class="panel-wiki-desc">${escapeHtml(res.description)}</div>` : "") +
+          (events ? `<div class="panel-wiki-events">${events}</div>` : "");
+        el.classList.remove("hidden");
+      } else if (data.pending && attempt < 4) {
+        setTimeout(() => _fetchPersonWikipedia(personId, attempt + 1), 2600);
+      }
+    })
+    .catch(() => {});
 }
 
 function _fetchPersonSummary(personId) {

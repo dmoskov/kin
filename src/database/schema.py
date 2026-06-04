@@ -5,7 +5,7 @@ The schema mirrors the domain models in models/ and is designed for
 efficient querying.
 """
 
-SCHEMA_VERSION = 18
+SCHEMA_VERSION = 19
 
 # ═══════════════════════════════════════════════════════════════════════
 # SQLite schema (local dev / tests)
@@ -318,6 +318,18 @@ DROP TABLE relationships;
 ALTER TABLE relationships_new RENAME TO relationships;
 """
 
+SCHEMA_V19 = """
+CREATE TABLE IF NOT EXISTS person_wikipedia (
+    person_id TEXT PRIMARY KEY,
+    matched INTEGER DEFAULT 0,
+    title TEXT,
+    url TEXT,
+    description TEXT,
+    events TEXT DEFAULT '[]',
+    fetched_at TEXT DEFAULT (datetime('now'))
+);
+"""
+
 SCHEMA_SQL = (
     SCHEMA_V1
     + SCHEMA_V2
@@ -335,6 +347,7 @@ SCHEMA_SQL = (
     + SCHEMA_V15
     + SCHEMA_V16
     + SCHEMA_V17
+    + SCHEMA_V19
 )
 
 MIGRATIONS = {
@@ -355,6 +368,7 @@ MIGRATIONS = {
     16: SCHEMA_V16,
     17: SCHEMA_V17,
     18: SCHEMA_V18,
+    19: SCHEMA_V19,
 }
 
 
@@ -645,6 +659,18 @@ ALTER TABLE relationships ADD CONSTRAINT relationships_visibility_check
     CHECK (visibility IN ('everyone', 'extended', 'self_and_children'));
 """
 
+PG_SCHEMA_V19 = """
+CREATE TABLE IF NOT EXISTS person_wikipedia (
+    person_id TEXT PRIMARY KEY,
+    matched BOOLEAN DEFAULT FALSE,
+    title TEXT,
+    url TEXT,
+    description TEXT,
+    events TEXT DEFAULT '[]',
+    fetched_at TIMESTAMP DEFAULT NOW()
+);
+"""
+
 PG_SCHEMA_SQL = (
     PG_SCHEMA_V1
     + PG_SCHEMA_V2
@@ -662,6 +688,7 @@ PG_SCHEMA_SQL = (
     + PG_SCHEMA_V15
     + PG_SCHEMA_V16
     + PG_SCHEMA_V17
+    + PG_SCHEMA_V19
 )
 
 PG_MIGRATIONS = {
@@ -682,4 +709,5 @@ PG_MIGRATIONS = {
     16: PG_SCHEMA_V16,
     17: PG_SCHEMA_V17,
     18: PG_SCHEMA_V18,
+    19: PG_SCHEMA_V19,
 }
