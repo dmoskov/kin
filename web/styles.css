@@ -632,6 +632,28 @@ main {
 .panel-summary {
   margin-top: 12px;
 }
+
+/* Wikipedia link + parsed history on the person panel */
+.panel-wikipedia { margin-top: 10px; }
+.panel-wiki-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  border-radius: 999px;
+  padding: 4px 12px;
+}
+.panel-wiki-badge:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.panel-wiki-desc { font-size: 12.5px; line-height: 1.5; color: var(--text-muted); margin-top: 8px; }
+.panel-wiki-events { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.panel-wiki-event { display: flex; gap: 8px; font-size: 12px; line-height: 1.4; }
+.panel-wiki-year { flex-shrink: 0; font-weight: 700; color: var(--accent); min-width: 34px; }
+.panel-wiki-text { color: var(--text); }
 .panel-summary-loading {
   font-size: 12px;
   color: var(--text-muted);
