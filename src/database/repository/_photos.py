@@ -225,7 +225,7 @@ class PhotosRepoMixin:
                 people = _fetchall(
                     conn,
                     f"""
-                    SELECT pp.person_id, pp.is_profile, pp.caption,
+                    SELECT pp.person_id, pp.is_profile, pp.caption, pp.display_order,
                            pp.crop_x, pp.crop_y, pp.crop_w, pp.crop_h,
                            ppl.given_name, ppl.surname
                     FROM person_photos pp

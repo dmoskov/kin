@@ -227,17 +227,15 @@ export async function openGooglePhotosPicker() {
       return;
     }
 
-    // Update local caches
-    const person = S.PEOPLE_MAP[personId];
-    if (person && Array.isArray(result.photo_paths)) {
-      person.photo_paths = result.photo_paths;
-    }
+    // Update local caches. Newly imported photos need their full objects in
+    // S.DATA.photos for the person_photos-derived views, so reload canonical
+    // data before refreshing the picker/panel.
     if (S.ALL_PHOTOS && result.photo_paths) {
       for (const p of result.photo_paths) {
         if (!S.ALL_PHOTOS.includes(p)) S.ALL_PHOTOS.push(p);
       }
     }
-
+    await loadData();
     _buildPickerGrid(personId);
     _renderPanelPhotos(personId);
 

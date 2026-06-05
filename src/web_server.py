@@ -416,6 +416,7 @@ def api_data():
                         "person_id": tp["person_id"],
                         "is_profile": bool(tp.get("is_profile")),
                         "caption": tp.get("caption", ""),
+                        "display_order": tp.get("display_order", 0),
                         "given_name": tp.get("given_name", ""),
                         "surname": tp.get("surname", ""),
                         "crop_x": tp.get("crop_x"),

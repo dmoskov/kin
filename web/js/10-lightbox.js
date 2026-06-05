@@ -145,8 +145,11 @@ export function openLightbox(src, alt, photoPath, photoList, contextPersonId) {
     currentPhotoPath = photoList[currentIdx];
     currentSrc = "/" + currentPhotoPath;
     const person = contextPersonId ? S.PEOPLE_MAP[contextPersonId] : null;
-    const captions = person?.photo_captions || {};
-    currentAlt = captions[currentPhotoPath] || person?.fullName || "";
+    const photo = S.PHOTOS_MAP?.[currentPhotoPath];
+    const tp = photo && contextPersonId
+      ? (photo.tagged_people || []).find((t) => t.person_id === contextPersonId)
+      : null;
+    currentAlt = (tp && tp.caption) || person?.fullName || "";
     img.src = currentSrc;
     img.alt = currentAlt;
     captionEl.textContent = currentAlt;
