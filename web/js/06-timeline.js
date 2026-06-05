@@ -563,16 +563,40 @@ function buildLivingNowHtml() {
     if (e.event_type !== "residence" || !e.place) continue;
     if (!res[e.person_id] || (e.date || "") > (res[e.person_id].date || "")) res[e.person_id] = e;
   }
-  living.sort((a, b) => a.by - b.by); // eldest first
-  const cards = living.map(({ p, by }) => {
-    const loc = (res[p.id] && res[p.id].place) || p.birth_place || "";
-    return `<div class="tnow-card">${personThumb(p.id, 46)}<div class="tnow-body">` +
-      `<div class="tnow-name">${personLink(p.id)}</div>` +
-      `<div class="tnow-meta">age ${CUR - by}${loc ? " · " + escapeHtml(loc) : ""}</div></div></div>`;
-  }).join("");
+  // Group by current location (latest residence, else birthplace). Eldest first
+  // within each location, and groups ordered by their eldest member; whereabouts
+  // unknown goes last. Ages are intentionally not shown here.
+  const groups = {};
+  for (const item of living) {
+    const loc = ((res[item.p.id] && res[item.p.id].place) || item.p.birth_place || "").trim();
+    const key = loc || " ";
+    (groups[key] || (groups[key] = { loc, members: [] })).members.push(item);
+  }
+  const ordered = Object.values(groups);
+  for (const g of ordered) g.members.sort((a, b) => a.by - b.by);
+  ordered.sort((a, b) => {
+    if (!a.loc) return 1;
+    if (!b.loc) return -1;
+    return a.members[0].by - b.members[0].by;
+  });
+  const groupsHtml = ordered
+    .map((g) => {
+      const cards = g.members
+        .map(
+          ({ p }) =>
+            `<div class="tnow-card">${personThumb(p.id, 46)}<div class="tnow-body">` +
+            `<div class="tnow-name">${personLink(p.id)}</div></div></div>`,
+        )
+        .join("");
+      const header = g.loc
+        ? `<div class="tnow-location">📍 ${escapeHtml(g.loc)}</div>`
+        : `<div class="tnow-location tnow-location--unknown">Whereabouts unknown</div>`;
+      return `<div class="tnow-location-group">${header}<div class="tnow-grid">${cards}</div></div>`;
+    })
+    .join("");
   return `<section class="tstream-now-group" id="tl-now">` +
     `<div class="tstream-decade tstream-now-pill">Where they are now</div>` +
-    `<div class="tnow-grid">${cards}</div></section>`;
+    groupsHtml + `</section>`;
 }
 
 function renderStreamFeed(container, entries, showNow) {
