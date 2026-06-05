@@ -146,6 +146,23 @@ class TestPersonCrud:
         loaded = repo.get_person("alice")
         assert loaded.photo_paths == ["photos/alice1.jpg"]
 
+    def test_save_person_preserves_directly_assigned_photos(self, repo):
+        """Regression: a photo linked via assign_photo_to_person (so it lives in
+        person_photos but not in the legacy photo_paths list) must survive a
+        later save_person. The old destructive sync rebuilt person_photos from
+        photo_paths and silently deleted such links."""
+        repo.save_person(self._make_person())
+        photo_id = repo.get_or_create_photo("photos/portrait.jpg")
+        repo.assign_photo_to_person("alice", photo_id, is_profile=True)
+
+        # Edit an unrelated column — this used to wipe the person_photos link.
+        person = repo.get_person("alice")
+        person.notes = "edited"
+        repo.save_person(person)
+
+        linked = {p["file_path"] for p in repo.photos_for_person("alice")}
+        assert "photos/portrait.jpg" in linked
+
 
 # ── Relationships ──────────────────────────────────────────────────────
 

@@ -13,9 +13,15 @@ class PhotosRepoMixin:
     def _conn(self) -> Any: ...  # provided by TreeRepository
 
     def _sync_person_photos(self, conn: Any, person: "Person") -> None:
-        """Sync the new photos/person_photos tables from a person's photo_paths.
+        """Additively mirror a person's photo_paths into photos/person_photos.
 
-        Called during save_person for dual-write compatibility.
+        Called during save_person for dual-write compatibility. This is
+        INSERT/UPDATE-only by design: it never deletes person_photos rows.
+        person_photos is the authoritative store (crops, profile flag, face
+        regions, multi-person tags); deriving deletions from the flat
+        photo_paths list here would wipe data added directly via
+        assign_photo_to_person whenever an unrelated column is saved. Removal is
+        owned by the photo routes, which call unassign_photo_from_person.
         """
         p = _ph()
         for idx, file_path in enumerate(person.photo_paths):
@@ -52,24 +58,6 @@ class PhotosRepoMixin:
                     VALUES ({_ph(5)})
                 """,
                     (person.id, photo_id, is_profile_val, idx, caption),
-                )
-
-        current_photos = _fetchall(
-            conn,
-            f"""
-            SELECT p.file_path, pp.photo_id FROM person_photos pp
-            JOIN photos p ON p.id = pp.photo_id
-            WHERE pp.person_id = {p}
-        """,
-            (person.id,),
-        )
-        paths_set = set(person.photo_paths)
-        for cp in current_photos:
-            if cp["file_path"] not in paths_set:
-                _execute(
-                    conn,
-                    f"DELETE FROM person_photos WHERE person_id = {p} AND photo_id = {p}",
-                    (person.id, cp["photo_id"]),
                 )
 
     # ── Photos ─────────────────────────────────────────────────────────
