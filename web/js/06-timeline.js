@@ -312,6 +312,26 @@ export function gatherTimelineEntries() {
     });
   }
 
+  // Children of a couple = people who have BOTH partners as parents (so a
+  // person's kids split correctly across multiple marriages). Built from one
+  // child→parents index for the family-formation summary on marriage cards.
+  const parentsByChild = {};
+  for (const r of S.DATA.relationships || []) {
+    (parentsByChild[r.child_id] || (parentsByChild[r.child_id] = new Set())).add(r.parent_id);
+  }
+  function coupleChildren(p1, p2) {
+    const kids = [];
+    for (const childId in parentsByChild) {
+      const parents = parentsByChild[childId];
+      if (parents.has(p1) && parents.has(p2)) {
+        const person = S.PEOPLE_MAP[childId];
+        kids.push({ id: childId, year: person?.birth_date ? dateYear(person.birth_date) : null });
+      }
+    }
+    kids.sort((a, b) => (a.year ?? 99999) - (b.year ?? 99999));
+    return kids;
+  }
+
   // Marriages (assign to first partner's lane, mark cross-lane)
   for (const u of S.DATA.unions) {
     if (u.union_date) {
@@ -326,6 +346,7 @@ export function gatherTimelineEntries() {
         title: `${personLink(u.partner1_id)} & ${personLink(u.partner2_id)}`,
         desc: u.notes || "",
         place: u.union_place,
+        children: coupleChildren(u.partner1_id, u.partner2_id),
         lane: lane1,
         crossLane: lane1 !== lane2 ? lane2 : null,
       });
@@ -383,6 +404,8 @@ export function gatherTimelineEntries() {
 // Small "age at event" chip — "married at 24 & 22", "age 18", etc.
 function ageChipHtml(e) {
   if (e.type === "marriage") {
+    // Casually omit ages when the partners' gap is large (> 15 years).
+    if (e.age && e.partner2Age && Math.abs(e.age - e.partner2Age) > 15) return "";
     if (e.age && e.partner2Age) return `<span class="tstream-age">married at ${e.age} & ${e.partner2Age}</span>`;
     if (e.age) return `<span class="tstream-age">married at ${e.age}</span>`;
     return "";
@@ -1018,6 +1041,29 @@ function _placeRowHtml(place) {
 // events. Returns a full .tstream-entry (rail + dot reused from the photo path)
 // so it shares the lane-focus + person-click wiring. `e.title` is raw HTML
 // (already contains personLink for one or both names) — never re-escape it.
+// Family-formation summary for a marriage card: "👶 8 children · 1714–1732"
+// plus a row of small clickable child avatars (each a .person-link so the
+// existing timeline handler opens that person). Empty when the couple has no
+// recorded children.
+function _marriageChildrenHtml(e) {
+  const kids = e.children || [];
+  if (!kids.length) return "";
+  const years = kids.map((k) => k.year).filter((y) => y != null);
+  const span = years.length
+    ? years[0] === years[years.length - 1]
+      ? `${years[0]}`
+      : `${years[0]}–${years[years.length - 1]}`
+    : "";
+  const label = `${kids.length} ${kids.length === 1 ? "child" : "children"}${span ? ` · ${span}` : ""}`;
+  const chips = kids
+    .map(
+      (k) =>
+        `<a class="person-link tstream-kid" data-person-id="${k.id}" href="javascript:void(0)" title="${escapeHtml(S.PEOPLE_MAP[k.id]?.fullName || "")}">${personThumb(k.id, 22)}</a>`,
+    )
+    .join("");
+  return `<div class="tstream-kids"><span class="tstream-kids-label">\u{1F476} ${label}</span><div class="tstream-kids-row">${chips}</div></div>`;
+}
+
 function buildMilestoneCellHtml(e, treatment, color, laneAttr, laneChip) {
   const variant = treatment.variant;
   const dateText = escapeHtml(e.dateDisplay || e.year);
@@ -1035,6 +1081,7 @@ function buildMilestoneCellHtml(e, treatment, color, laneAttr, laneChip) {
           <div class="tstream-milestone-meta"><span class="tstream-date">${dateText}</span>${ageChipHtml(e)}${laneChip}</div>
           <div class="tstream-title">${e.title}</div>
           ${placeRow}
+          ${_marriageChildrenHtml(e)}
         </div>`;
   } else {
     // birth / death share structure: thumb + eyebrow + date + title + place.

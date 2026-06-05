@@ -4584,6 +4584,33 @@ main {
   font-size: 16px;
   line-height: 1;
 }
+/* Family-formation summary on a marriage card: "👶 N children · years" + a row
+   of small clickable child avatars. */
+.tstream-kids {
+  margin-top: 6px;
+}
+.tstream-kids-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.tstream-kids-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 4px;
+}
+.tstream-kids-row .person-thumb,
+.tstream-kids-row .person-thumb-placeholder {
+  flex-shrink: 0;
+}
+.tstream-kid {
+  display: inline-flex;
+  border-radius: 50%;
+  transition: transform 0.1s ease;
+}
+.tstream-kid:hover {
+  transform: scale(1.12);
+}
 /* ── Photo-first stream card (the photo IS the card) ──────────────
    NOTE for styles.css merge: classes added below are
    .tstream-photo-stage, .tstream-photo-blurfill, .tstream-photo-img(.is-cover),
