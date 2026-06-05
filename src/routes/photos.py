@@ -78,6 +78,13 @@ def api_remove_photo(person_id):
     person.photo_paths = updated
     person.photo_captions = captions
     repo.save_person(person)
+    # save_person's photo sync is additive-only, so the link must be removed
+    # from person_photos (the authoritative store) explicitly.
+    match = next(
+        (ph for ph in repo.photos_for_person(person_id) if ph["file_path"] == photo_path), None
+    )
+    if match:
+        repo.unassign_photo_from_person(person_id, match["id"])
     return jsonify({"photo_paths": updated})
 
 
