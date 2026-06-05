@@ -1074,10 +1074,13 @@ function _marriageChildrenHtml(e) {
   // This replaces a separate birth line item for each child in the stream.
   const chips = kids
     .map((k) => {
-      const name = S.PEOPLE_MAP[k.id]?.fullName || "";
+      const person = S.PEOPLE_MAP[k.id];
+      const name = person?.fullName || "";
+      const given = person?.given_name || name;
       const title = k.year != null ? `${name} (b. ${k.year})` : name;
+      const nameEl = given ? `<span class="tstream-kid-name">${escapeHtml(given)}</span>` : "";
       const yr = k.year != null ? `<span class="tstream-kid-year">${k.year}</span>` : "";
-      return `<a class="person-link tstream-kid" data-person-id="${k.id}" href="javascript:void(0)" title="${escapeHtml(title)}">${personThumb(k.id, 24)}${yr}</a>`;
+      return `<a class="person-link tstream-kid" data-person-id="${k.id}" href="javascript:void(0)" title="${escapeHtml(title)}">${personThumb(k.id, 28)}${nameEl}${yr}</a>`;
     })
     .join("");
   return `<div class="tstream-kids"><span class="tstream-kids-label">\u{1F476} ${label}</span><div class="tstream-kids-row tstream-kids-timeline">${chips}</div></div>`;

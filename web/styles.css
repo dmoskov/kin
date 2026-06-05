@@ -4616,13 +4616,21 @@ main {
    per child in the stream. */
 .tstream-kids-timeline {
   align-items: flex-start;
-  gap: 8px;
+  gap: 10px;
 }
 .tstream-kids-timeline .tstream-kid {
   flex-direction: column;
   align-items: center;
-  gap: 1px;
+  gap: 2px;
   border-radius: 6px;
+  max-width: 64px;
+}
+.tstream-kid-name {
+  font-size: 11px;
+  line-height: 1.1;
+  color: var(--text);
+  text-align: center;
+  word-break: break-word;
 }
 .tstream-kid-year {
   font-size: 10px;
