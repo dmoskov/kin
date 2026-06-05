@@ -332,11 +332,16 @@ export function gatherTimelineEntries() {
     return kids;
   }
 
-  // Marriages (assign to first partner's lane, mark cross-lane)
+  // Marriages (assign to first partner's lane, mark cross-lane). Each card
+  // carries its children, and those children's BIRTH entries are absorbed into
+  // the card's mini-timeline (suppressed from the everyone-stream to save space).
+  const absorbedBirthIds = new Set();
   for (const u of S.DATA.unions) {
     if (u.union_date) {
       const lane1 = assignLane(u.partner1_id);
       const lane2 = assignLane(u.partner2_id);
+      const kids = coupleChildren(u.partner1_id, u.partner2_id);
+      for (const k of kids) absorbedBirthIds.add(k.id);
       entries.push({
         date: u.union_date,
         year: dateYear(u.union_date),
@@ -346,11 +351,16 @@ export function gatherTimelineEntries() {
         title: `${personLink(u.partner1_id)} & ${personLink(u.partner2_id)}`,
         desc: u.notes || "",
         place: u.union_place,
-        children: coupleChildren(u.partner1_id, u.partner2_id),
+        children: kids,
         lane: lane1,
         crossLane: lane1 !== lane2 ? lane2 : null,
       });
     }
+  }
+  // Mark birth entries shown inside a family card so the everyone-stream can
+  // drop them (single-person views keep them — see renderTimeline).
+  for (const e of entries) {
+    if (e.type === "birth" && absorbedBirthIds.has(e.personId)) e.absorbedBirth = true;
   }
 
   // Photo entries (gated by config)
@@ -483,9 +493,14 @@ export function renderTimeline(filterPersonId = "all", mode = TIMELINE_MODE) {
 
   let entries = gatherTimelineEntries();
 
-  // Filter by person (applies to both modes)
+  // Filter by person (applies to both modes). In the everyone *stream*, drop
+  // child births that are folded into their parents' family-card mini-timeline;
+  // keep them when focused on one person, and in branches/grid mode (which has
+  // no family card to absorb them).
   if (filterPersonId !== "all") {
     entries = entries.filter((e) => e.personId === filterPersonId);
+  } else if (mode === "stream") {
+    entries = entries.filter((e) => !e.absorbedBirth);
   }
 
   // Sort chronologically
@@ -1055,13 +1070,17 @@ function _marriageChildrenHtml(e) {
       : `${years[0]}–${years[years.length - 1]}`
     : "";
   const label = `${kids.length} ${kids.length === 1 ? "child" : "children"}${span ? ` · ${span}` : ""}`;
+  // A compact births mini-timeline: one avatar + birth year per child, in order.
+  // This replaces a separate birth line item for each child in the stream.
   const chips = kids
-    .map(
-      (k) =>
-        `<a class="person-link tstream-kid" data-person-id="${k.id}" href="javascript:void(0)" title="${escapeHtml(S.PEOPLE_MAP[k.id]?.fullName || "")}">${personThumb(k.id, 22)}</a>`,
-    )
+    .map((k) => {
+      const name = S.PEOPLE_MAP[k.id]?.fullName || "";
+      const title = k.year != null ? `${name} (b. ${k.year})` : name;
+      const yr = k.year != null ? `<span class="tstream-kid-year">${k.year}</span>` : "";
+      return `<a class="person-link tstream-kid" data-person-id="${k.id}" href="javascript:void(0)" title="${escapeHtml(title)}">${personThumb(k.id, 24)}${yr}</a>`;
+    })
     .join("");
-  return `<div class="tstream-kids"><span class="tstream-kids-label">\u{1F476} ${label}</span><div class="tstream-kids-row">${chips}</div></div>`;
+  return `<div class="tstream-kids"><span class="tstream-kids-label">\u{1F476} ${label}</span><div class="tstream-kids-row tstream-kids-timeline">${chips}</div></div>`;
 }
 
 function buildMilestoneCellHtml(e, treatment, color, laneAttr, laneChip) {

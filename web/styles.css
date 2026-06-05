@@ -4611,6 +4611,25 @@ main {
 .tstream-kid:hover {
   transform: scale(1.12);
 }
+/* Births mini-timeline: each child is a small avatar with its birth year
+   stacked beneath, in birth order — a compact replacement for one birth card
+   per child in the stream. */
+.tstream-kids-timeline {
+  align-items: flex-start;
+  gap: 8px;
+}
+.tstream-kids-timeline .tstream-kid {
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  border-radius: 6px;
+}
+.tstream-kid-year {
+  font-size: 10px;
+  line-height: 1;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
 /* ── Photo-first stream card (the photo IS the card) ──────────────
    NOTE for styles.css merge: classes added below are
    .tstream-photo-stage, .tstream-photo-blurfill, .tstream-photo-img(.is-cover),
