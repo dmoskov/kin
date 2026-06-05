@@ -139,11 +139,12 @@ export function renderTimeline(filterPersonId = "all") {
 
   // Build decade lists: full continuous range for aligned, events-only for compact
   const eventDecades = [...new Set(entries.map((e) => Math.floor(e.year / 10) * 10))].sort();
+  const nowDecade = Math.floor(new Date().getFullYear() / 10) * 10;
   let fullDecades = eventDecades;
   if (eventDecades.length > 1) {
     fullDecades = [];
     const min = eventDecades[0];
-    const max = eventDecades[eventDecades.length - 1];
+    const max = Math.max(eventDecades[eventDecades.length - 1], nowDecade);
     for (let d = min; d <= max; d += 10) fullDecades.push(d);
   }
   const decades = TIMELINE_ALIGNED ? fullDecades : eventDecades;
@@ -244,6 +245,7 @@ export function renderTimeline(filterPersonId = "all") {
     html += `</div>`;
   }
 
+  html += `<div class="timeline-now-marker" id="decade-row-now"><span>Now</span></div>`;
   html += `</div>`;
   container.innerHTML = html;
 
@@ -351,6 +353,24 @@ function renderDecadeNav(decades, entries) {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 3);
 
+    let barHtml = "";
+    if (count > 0 && topTypes.length > 0) {
+      let segments = "";
+      for (const [type, tc] of topTypes) {
+        const segPct = (tc / count) * barPct;
+        const color = EVENT_COLORS[type] || EVENT_COLORS.custom || "#b066e0";
+        segments += `<span class="decade-nav-seg" style="width:${segPct}%;background:${color}"></span>`;
+      }
+      const topTotal = topTypes.reduce((s, t) => s + t[1], 0);
+      if (topTotal < count) {
+        const restPct = ((count - topTotal) / count) * barPct;
+        segments += `<span class="decade-nav-seg" style="width:${restPct}%;background:var(--text-muted)"></span>`;
+      }
+      barHtml = `<span class="decade-nav-bar-track">${segments}</span>`;
+    } else {
+      barHtml = `<span class="decade-nav-bar-track"></span>`;
+    }
+
     let iconsHtml = "";
     for (const [type] of topTypes) {
       const icon = NAV_TYPE_ICONS[type];
@@ -365,12 +385,15 @@ function renderDecadeNav(decades, entries) {
     html += `
       <button class="decade-nav-item${count === 0 ? " decade-nav-empty" : ""}" data-decade="${decade}" title="${decade}s — ${count} event${count !== 1 ? "s" : ""}">
         <span class="decade-nav-year">${decade}s</span>
-        <span class="decade-nav-bar-track">
-          <span class="decade-nav-bar" style="width:${count > 0 ? barPct : 0}%"></span>
-        </span>
+        ${barHtml}
         <span class="decade-nav-icons">${iconsHtml}</span>
       </button>`;
   }
+
+  html += `
+    <button class="decade-nav-item decade-nav-now" data-decade="now" title="Scroll to bottom">
+      <span class="decade-nav-year">Now</span>
+    </button>`;
 
   nav.innerHTML = html;
 
@@ -380,10 +403,15 @@ function renderDecadeNav(decades, entries) {
       const btn = e.target.closest(".decade-nav-item");
       if (!btn) return;
       const decade = btn.dataset.decade;
-      const row = document.getElementById(`decade-row-${decade}`);
-      if (!row) return;
-      const scroller = row.closest(".timeline-container");
-      if (scroller) {
+
+      const scroller = document.querySelector(".timeline-container");
+      if (!scroller) return;
+
+      if (decade === "now") {
+        scroller.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
+      } else {
+        const row = document.getElementById(`decade-row-${decade}`);
+        if (!row) return;
         const headerOffset = scroller.querySelector(".timeline-header")?.offsetHeight || 0;
         const rowTop = row.offsetTop - scroller.offsetTop - headerOffset - 8;
         scroller.scrollTo({ top: rowTop, behavior: "smooth" });
