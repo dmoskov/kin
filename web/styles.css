@@ -1299,6 +1299,33 @@ main {
 }
 .lightbox-source a { color: #9bb8d6; text-decoration: none; }
 .lightbox-source a:hover { text-decoration: underline; }
+.lightbox-tags {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  max-width: 90vw;
+}
+.lightbox-tags-label { color: #999; font-size: 12px; margin-right: 2px; }
+.lightbox-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #eee;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.lightbox-tag-chip:hover { background: rgba(255, 255, 255, 0.22); }
+.lightbox-tag-chip .person-thumb,
+.lightbox-tag-chip .cropped-thumb,
+.lightbox-tag-chip .person-thumb-placeholder { flex-shrink: 0; }
 .lightbox-close {
   position: absolute;
   top: -12px;

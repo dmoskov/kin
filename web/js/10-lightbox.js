@@ -38,6 +38,7 @@ export function openLightbox(src, alt, photoPath, photoList, contextPersonId) {
         </div>
         <div class="lightbox-caption">${escapeHtml(alt)}</div>
         <div class="lightbox-source"></div>
+        <div class="lightbox-tags"></div>
         ${hasNav ? `<div class="lightbox-counter">${currentIdx + 1} / ${photoList.length}</div>` : ""}
       </div>
       ${hasNav ? `<button class="lightbox-nav lightbox-next" aria-label="Next photo">&#8250;</button>` : ""}
@@ -65,6 +66,29 @@ export function openLightbox(src, alt, photoPath, photoList, contextPersonId) {
   function getPhotoData() {
     return currentPhotoPath ? S.PHOTOS_MAP[currentPhotoPath] : null;
   }
+
+  const tagsEl = overlay.querySelector(".lightbox-tags");
+  function renderTags() {
+    if (!tagsEl) return;
+    const pd = getPhotoData();
+    const tags = (pd && pd.tagged_people) || [];
+    if (!tags.length) { tagsEl.innerHTML = ""; return; }
+    tagsEl.innerHTML =
+      `<span class="lightbox-tags-label">In this photo:</span>` +
+      tags.map((t) => {
+        const nm = [t.given_name, t.surname].filter(Boolean).join(" ") ||
+          (S.PEOPLE_MAP[t.person_id] && S.PEOPLE_MAP[t.person_id].fullName) || "Unknown";
+        return `<button type="button" class="lightbox-tag-chip" data-person-id="${t.person_id}">${personThumb(t.person_id, 22)}<span>${escapeHtml(nm)}</span></button>`;
+      }).join("");
+    tagsEl.querySelectorAll(".lightbox-tag-chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        const pid = chip.dataset.personId;
+        close();
+        if (pid && typeof showPersonPanel === "function") showPersonPanel(pid);
+      });
+    });
+  }
+  renderTags();
 
   function renderFaceRegions() {
     imgWrap.querySelectorAll(".face-region-overlay").forEach(el => el.remove());
@@ -127,6 +151,7 @@ export function openLightbox(src, alt, photoPath, photoList, contextPersonId) {
     img.alt = currentAlt;
     captionEl.textContent = currentAlt;
     updateSource();
+    renderTags();
     if (counterEl) counterEl.textContent = `${currentIdx + 1} / ${photoList.length}`;
     imgWrap.classList.remove("annotation-mode");
     const tagBtn = overlay.querySelector(".lightbox-tag-faces-btn");
