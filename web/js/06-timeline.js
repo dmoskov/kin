@@ -246,7 +246,7 @@ export function gatherTimelineEntries() {
     if (p.birth_date) {
       entries.push({
         date: p.birth_date,
-        year: parseInt(p.birth_date.substring(0, 4)),
+        year: dateYear(p.birth_date),
         type: "birth",
         personId: p.id,
         title: `${personLink(p.id)} born`,
@@ -258,7 +258,7 @@ export function gatherTimelineEntries() {
     if (p.death_date) {
       entries.push({
         date: p.death_date,
-        year: parseInt(p.death_date.substring(0, 4)),
+        year: dateYear(p.death_date),
         type: "death",
         personId: p.id,
         title: `${personLink(p.id)} died`,
@@ -275,7 +275,7 @@ export function gatherTimelineEntries() {
     if (isArchivalNote(e)) continue;
     entries.push({
       date: e.date || "",
-      year: e.date ? parseInt(e.date.substring(0, 4)) : null,
+      year: e.date ? dateYear(e.date) : null,
       type: e.event_type,
       personId: e.person_id,
       title: `${personLink(e.person_id)} — ${escapeHtml(e.description || humanizeEventType(e.event_type))}`,
@@ -292,7 +292,7 @@ export function gatherTimelineEntries() {
       const lane2 = assignLane(u.partner2_id);
       entries.push({
         date: u.union_date,
-        year: parseInt(u.union_date.substring(0, 4)),
+        year: dateYear(u.union_date),
         type: "marriage",
         personId: u.partner1_id,
         partner2Id: u.partner2_id,
@@ -309,7 +309,7 @@ export function gatherTimelineEntries() {
   if (S.CONFIG?.timelinePhotos !== false && S.DATA.photos) {
     for (const photo of S.DATA.photos) {
       if (!photo.date) continue;
-      const year = parseInt(photo.date.substring(0, 4));
+      const year = dateYear(photo.date);
       if (!year) continue;
       const primaryPerson = (photo.tagged_people || [])[0];
       const personId = primaryPerson?.person_id;
@@ -339,7 +339,7 @@ export function gatherTimelineEntries() {
   // "immigrated at 18"). Births are age 0 (skipped); marriage also gets the
   // second partner's age.
   const birthYear = {};
-  for (const p of S.DATA.people) if (p.birth_date) birthYear[p.id] = parseInt(p.birth_date.substring(0, 4));
+  for (const p of S.DATA.people) if (p.birth_date) birthYear[p.id] = dateYear(p.birth_date);
   for (const e of entries) {
     if (!e.year) continue;
     const by = birthYear[e.personId];
@@ -439,7 +439,7 @@ export function renderTimeline(filterPersonId = "all", mode = TIMELINE_MODE) {
   }
 
   // Sort chronologically
-  entries.sort((a, b) => a.date.localeCompare(b.date));
+  entries.sort((a, b) => dateSortKey(a.date).localeCompare(dateSortKey(b.date)));
 
   if (entries.length === 0) {
     // Tear down any stale decade observer before replacing the DOM
@@ -488,7 +488,7 @@ function buildLivingNowHtml() {
   const living = [];
   for (const p of S.DATA.people) {
     if (p.death_date || !p.birth_date) continue;
-    const by = parseInt(p.birth_date.substring(0, 4));
+    const by = dateYear(p.birth_date);
     if (!by || by < CUR - 105) continue;
     living.push({ p, by });
   }
@@ -522,7 +522,7 @@ function renderStreamFeed(container, entries, showNow) {
   const maxY = allYears.length ? Math.max(...allYears) : 0;
   const military = (S.DATA.events || [])
     .filter((e) => e.event_type === "military" && e.date)
-    .map((e) => ({ pid: e.person_id, year: parseInt(e.date.substring(0, 4)) }));
+    .map((e) => ({ pid: e.person_id, year: dateYear(e.date) }));
   // All place strings across the family, for region-gating historical eras.
   const placesText = [
     ...S.DATA.people.flatMap((p) => [p.birth_place, p.death_place]),

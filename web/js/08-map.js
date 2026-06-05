@@ -349,7 +349,7 @@ export function buildMapEvents() {
       if (ll) {
         MAP_ALL_EVENTS.push({
           date: p.birth_date || "",
-          year: p.birth_date ? parseInt(p.birth_date.substring(0, 4)) : null,
+          year: p.birth_date ? dateYear(p.birth_date) : null,
           type: "birth",
           personId: p.id,
           fogLevel: personFog(p.id),
@@ -365,7 +365,7 @@ export function buildMapEvents() {
       if (ll) {
         MAP_ALL_EVENTS.push({
           date: p.death_date || "",
-          year: p.death_date ? parseInt(p.death_date.substring(0, 4)) : null,
+          year: p.death_date ? dateYear(p.death_date) : null,
           type: "death",
           personId: p.id,
           fogLevel: personFog(p.id),
@@ -382,7 +382,7 @@ export function buildMapEvents() {
   //    usable specific place, anchor it at the port — so immigrants "arrive via
   //    Ellis Island" even when the port is mentioned only in the description.
   for (const e of (src.events || [])) {
-    const year = e.date ? parseInt(e.date.substring(0, 4)) : null;
+    const year = e.date ? dateYear(e.date) : null;
     const desc = `${personName(e.person_id)} — ${escapeHtml(e.description || e.event_type)}`;
     const ship = extractShip(e.description);
 
@@ -423,7 +423,7 @@ export function buildMapEvents() {
     if (!ll) continue;
     MAP_ALL_EVENTS.push({
       date: u.union_date || "",
-      year: u.union_date ? parseInt(u.union_date.substring(0, 4)) : null,
+      year: u.union_date ? dateYear(u.union_date) : null,
       type: "marriage",
       personId: u.partner1_id,
       partner2Id: u.partner2_id,
@@ -449,7 +449,7 @@ export function buildMapEvents() {
       const pid = primaryPerson?.person_id;
       MAP_ALL_EVENTS.push({
         date: photo.date || "",
-        year: photo.date ? parseInt(photo.date.substring(0, 4)) : null,
+        year: photo.date ? dateYear(photo.date) : null,
         type: "photo",
         personId: pid || "",
         fogLevel: pid ? personFog(pid) : 0,
@@ -461,7 +461,7 @@ export function buildMapEvents() {
     }
   }
 
-  MAP_ALL_EVENTS.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+  MAP_ALL_EVENTS.sort((a, b) => dateSortKey(a.date, true).localeCompare(dateSortKey(b.date, true)));
 
   // Compute dynamic year range from actual data
   const years = MAP_ALL_EVENTS.map((e) => e.year).filter(Boolean);
@@ -1062,7 +1062,7 @@ export function buildGateways() {
     const port = detectSeaport(e.place, e.description, e.notes);
     if (!port) continue;
     const g = byPort[port.name] || (byPort[port.name] = { name: port.name, latlng: port.latlng, arrivals: new Map() });
-    const year = e.date ? parseInt(e.date.substring(0, 4)) : null;
+    const year = e.date ? dateYear(e.date) : null;
     const prev = g.arrivals.get(e.person_id);
     if (prev === undefined || (year && (prev == null || year < prev))) g.arrivals.set(e.person_id, year ?? prev ?? null);
   }
@@ -1159,7 +1159,7 @@ function renderOrigins() {
   }
   const origins = {};
   for (const pid in byPerson) {
-    const evs = byPerson[pid].slice().sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+    const evs = byPerson[pid].slice().sort((a, b) => dateSortKey(a.date, true).localeCompare(dateSortKey(b.date, true)));
     const distinct = [];
     const seen = new Set();
     for (const e of evs) { const k = e.latlng.join(","); if (!seen.has(k)) { seen.add(k); distinct.push(e); } }
@@ -1502,7 +1502,7 @@ function buildStories() {
   }
   const stories = [];
   for (const pid in byPerson) {
-    const evs = byPerson[pid].slice().sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+    const evs = byPerson[pid].slice().sort((a, b) => dateSortKey(a.date, true).localeCompare(dateSortKey(b.date, true)));
     const stops = [];
     const seen = new Set();
     let ship = "";
@@ -1574,7 +1574,7 @@ export function updateStats() {
   const n = S.DATA.people.length;
 
   // Compute year span
-  const years = S.DATA.people.map((p) => p.birth_date ? parseInt(p.birth_date.substring(0, 4)) : null).filter(Boolean);
+  const years = S.DATA.people.map((p) => p.birth_date ? dateYear(p.birth_date) : null).filter(Boolean);
   const minYear = years.length ? Math.min(...years) : "?";
   const maxYear = years.length ? Math.max(...years) : "?";
 

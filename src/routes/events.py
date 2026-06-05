@@ -1,18 +1,15 @@
 """Life-event CRUD endpoints (create, update, delete)."""
 
-import re
-
 from flask import Blueprint, jsonify, request
 
 import web_server
 from database.repository import TreeRepository
+from dates import normalize_date
 from models.event import EventType, LifeEvent
 
 events_bp = Blueprint("events", __name__)
 
 _VALID_EVENT_TYPES = {e.value for e in EventType}
-
-_DATE_RE = re.compile(r"^\d{4}(-\d{2}(-\d{2})?)?$")
 
 
 def _validate_event_payload(body: dict, *, require_person: bool) -> tuple[dict, str | None, int]:
@@ -34,13 +31,11 @@ def _validate_event_payload(body: dict, *, require_person: bool) -> tuple[dict, 
         out["event_type"] = et
 
     for date_field in ("date", "end_date"):
-        v = body.get(date_field)
-        if v is not None:
-            if isinstance(v, str):
-                v = v.strip() or None
-            if v and not _DATE_RE.match(v):
-                return {}, f"{date_field} must be YYYY, YYYY-MM, or YYYY-MM-DD", 400
-            out[date_field] = v
+        if body.get(date_field) is not None:
+            try:
+                out[date_field] = normalize_date(body.get(date_field))
+            except ValueError as e:
+                return {}, f"{date_field}: {e}", 400
 
     for str_field in ("place", "description", "source"):
         if str_field in body:

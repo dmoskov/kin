@@ -73,7 +73,7 @@ export function showPersonPanel(personId) {
     .map((u) => (u.partner1_id === personId ? u.partner2_id : u.partner1_id));
   const events = S.DATA.events
     .filter((e) => e.person_id === personId)
-    .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+    .sort((a, b) => dateSortKey(a.date, true).localeCompare(dateSortKey(b.date, true)));
 
   // Show viewer-relative relationship if a viewer is set and this isn't the viewer
   let relBadge = "";

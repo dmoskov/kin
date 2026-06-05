@@ -9,6 +9,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from dates import normalize_date_lenient
 from models.article import NewsArticle
 from models.citation import Citation, Confidence, EntityType
 from models.event import EventType, LifeEvent
@@ -32,9 +33,9 @@ def load_tree(path: str) -> FamilyTree:
             given_name=p["given_name"],
             surname=p["surname"],
             gender=Gender(p.get("gender", "unknown")),
-            birth_date=p.get("birth_date"),
+            birth_date=normalize_date_lenient(p.get("birth_date")),
             birth_place=p.get("birth_place"),
-            death_date=p.get("death_date"),
+            death_date=normalize_date_lenient(p.get("death_date")),
             death_place=p.get("death_place"),
             maiden_name=p.get("maiden_name"),
             nicknames=p.get("nicknames", []),
@@ -58,9 +59,9 @@ def load_tree(path: str) -> FamilyTree:
         union = Union(
             partner1_id=u["partner1_id"],
             partner2_id=u["partner2_id"],
-            union_date=u.get("union_date"),
+            union_date=normalize_date_lenient(u.get("union_date")),
             union_place=u.get("union_place"),
-            end_date=u.get("end_date"),
+            end_date=normalize_date_lenient(u.get("end_date")),
             end_reason=u.get("end_reason"),
             notes=u.get("notes", ""),
         )
@@ -70,8 +71,8 @@ def load_tree(path: str) -> FamilyTree:
         event = LifeEvent(
             person_id=e["person_id"],
             event_type=EventType(e["event_type"]),
-            date=e.get("date"),
-            end_date=e.get("end_date"),
+            date=normalize_date_lenient(e.get("date")),
+            end_date=normalize_date_lenient(e.get("end_date")),
             place=e.get("place"),
             description=e.get("description", ""),
             source=e.get("source"),

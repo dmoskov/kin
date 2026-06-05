@@ -18,9 +18,9 @@ export function buildHovercardHtml(personId) {
 
   let dates = "";
   if (person.birth_date) {
-    const by = person.birth_date.substring(0, 4);
+    const by = dateYear(person.birth_date);
     if (person.death_date) {
-      const dy = person.death_date.substring(0, 4);
+      const dy = dateYear(person.death_date);
       dates = `${by} – ${dy}`;
     } else {
       dates = `b. ${by}`;
