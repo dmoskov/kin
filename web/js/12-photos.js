@@ -2,7 +2,7 @@
 // Shared mutable state lives in S (00-state.js); functions/consts are
 // bridged onto window by 99-main.js so inline onclick handlers resolve.
 import { S } from "./00-state.js";
-import { trapFocus } from "./03-data-nav.js";
+import { loadData, trapFocus } from "./03-data-nav.js";
 
 let _photoPickerPasteHandler = null;
 let _photoPickerTrap = null;
@@ -18,6 +18,64 @@ export function showToast(message, type = "success") {
   toast._timer = setTimeout(() => toast.classList.add("hidden"), 2000);
 }
 
+// ── person_photos as the single client-side source ────────────────────
+// A person's photos derived from person_photos (the authoritative store),
+// via S.DATA.photos / S.PHOTOS_MAP, ordered by display_order. This replaces
+// reading the legacy person.photo_paths array on the display side.
+export function _personPhotos(personId) {
+  const out = [];
+  for (const photo of S.DATA?.photos || []) {
+    const tp = (photo.tagged_people || []).find((t) => t.person_id === personId);
+    if (!tp) continue;
+    out.push({
+      path: photo.file_path,
+      caption: tp.caption || "",
+      isProfile: !!tp.is_profile,
+      order: tp.display_order ?? 0,
+      info: photo,
+    });
+  }
+  out.sort((a, b) => a.order - b.order || a.path.localeCompare(b.path));
+  return out;
+}
+
+// ── Optimistic local cache patches (keep S.DATA.photos in step with edits) ──
+// S.PHOTOS_MAP entries are the same objects as S.DATA.photos, so mutating one
+// is reflected everywhere a person's photos are derived.
+function _localAssign(personId, photoPath) {
+  const photo = S.PHOTOS_MAP[photoPath];
+  if (!photo) return;
+  photo.tagged_people = photo.tagged_people || [];
+  if (photo.tagged_people.some((t) => t.person_id === personId)) return;
+  const person = S.PEOPLE_MAP[personId];
+  const maxOrder = Math.max(-1, ..._personPhotos(personId).map((e) => e.order));
+  photo.tagged_people.push({
+    person_id: personId,
+    is_profile: false,
+    caption: "",
+    display_order: maxOrder + 1,
+    given_name: person?.given_name || "",
+    surname: person?.surname || "",
+  });
+}
+function _localUnassign(personId, photoPath) {
+  const photo = S.PHOTOS_MAP[photoPath];
+  if (!photo) return;
+  photo.tagged_people = (photo.tagged_people || []).filter((t) => t.person_id !== personId);
+}
+function _localSetCaption(personId, photoPath, caption) {
+  const photo = S.PHOTOS_MAP[photoPath];
+  const tp = photo && (photo.tagged_people || []).find((t) => t.person_id === personId);
+  if (tp) tp.caption = caption;
+}
+function _localSetProfile(personId, photoPath) {
+  for (const photo of S.DATA?.photos || []) {
+    for (const tp of photo.tagged_people || []) {
+      if (tp.person_id === personId) tp.is_profile = photo.file_path === photoPath;
+    }
+  }
+}
+
 // ── Photo Picker ──────────────────────────────────────────────────────
 
 // Rebuild only the photos section inside the open side panel (no full-tree
@@ -26,18 +84,19 @@ export function showToast(message, type = "success") {
 // Build the inner HTML of the panel's photos section (the photo grid plus the
 // "+ Manage Photos" button). Shared by showPersonPanel (full render) and
 // _renderPanelPhotos (picker-refresh render) so the markup stays in sync.
-function _buildPhotoSlide(src, personId, person, captions, index) {
-  const capText = captions[src] || person.fullName;
-  const isProfile = person._profilePhotoPath === src;
-  const photoInfo = S.PHOTOS_MAP[src];
+function _buildPhotoSlide(entry, personId, person, index) {
+  const src = entry.path;
+  const capText = entry.caption || person.fullName;
+  const isProfile = entry.isProfile;
+  const photoInfo = entry.info;
   let html = `<div class="carousel-slide${index === 0 ? " active" : ""}" data-index="${index}">`;
   html += `<div class="carousel-img-wrap">`;
   if (isProfile) html += `<span class="photo-profile-badge" title="Profile photo">&#9733;</span>`;
   html += `<img class="carousel-photo" src="/${src}" alt="${escapeHtml(capText)}" loading="lazy" data-photo-path="${src}" data-person-id="${personId}" />`;
   html += `</div>`;
   html += `<div class="carousel-info">`;
-  if (captions[src]) {
-    html += `<div class="panel-photo-caption">${escapeHtml(captions[src])}</div>`;
+  if (entry.caption) {
+    html += `<div class="panel-photo-caption">${escapeHtml(entry.caption)}</div>`;
   }
   if (photoInfo) {
     const others = (photoInfo.tagged_people || []).filter(tp => tp.person_id !== personId);
@@ -61,27 +120,25 @@ function _buildPhotoSlide(src, personId, person, captions, index) {
 export function buildPanelPhotosInnerHtml(personId) {
   const person = S.PEOPLE_MAP[personId];
   if (!person) return "";
-  const photos = person.photo_paths || [];
-  const captions = person.photo_captions || {};
+  const photos = _personPhotos(personId);
   let html = "";
   // The profile photo is now shown full-bleed in the panel hero. When the
   // person's only photo IS the profile photo, don't duplicate it here as a
   // big single image — but still render the "Manage Photos" button below.
-  const onlyPhotoIsProfile =
-    photos.length === 1 && person._profilePhotoPath === photos[0];
+  const onlyPhotoIsProfile = photos.length === 1 && photos[0].isProfile;
   if (onlyPhotoIsProfile) {
     // no photo grid — hero already shows it; fall through to Manage button.
   } else if (photos.length === 1) {
-    const src = photos[0];
-    const capText = captions[src] || person.fullName;
-    const isProfile = person._profilePhotoPath === src;
-    const photoInfo = S.PHOTOS_MAP[src];
+    const entry = photos[0];
+    const src = entry.path;
+    const capText = entry.caption || person.fullName;
+    const photoInfo = entry.info;
     html += `<div class="panel-photos panel-photos-single">`;
     html += `<div class="panel-photo-wrap">`;
-    if (isProfile) html += `<span class="photo-profile-badge" title="Profile photo">&#9733;</span>`;
+    if (entry.isProfile) html += `<span class="photo-profile-badge" title="Profile photo">&#9733;</span>`;
     html += `<img class="panel-photo" src="/${src}" alt="${escapeHtml(capText)}" loading="lazy" data-photo-path="${src}" data-person-id="${personId}" />`;
-    if (captions[src]) {
-      html += `<div class="panel-photo-caption">${escapeHtml(capText)}</div>`;
+    if (entry.caption) {
+      html += `<div class="panel-photo-caption">${escapeHtml(entry.caption)}</div>`;
     }
     if (photoInfo) {
       const others = (photoInfo.tagged_people || []).filter(tp => tp.person_id !== personId);
@@ -101,8 +158,8 @@ export function buildPanelPhotosInnerHtml(personId) {
   } else if (photos.length > 1) {
     html += `<div class="photo-carousel" data-person-id="${personId}">`;
     html += `<div class="carousel-track">`;
-    photos.forEach((src, i) => {
-      html += _buildPhotoSlide(src, personId, person, captions, i);
+    photos.forEach((entry, i) => {
+      html += _buildPhotoSlide(entry, personId, person, i);
     });
     html += `</div>`;
     html += `<button class="carousel-prev" aria-label="Previous photo">&#8249;</button>`;
@@ -191,12 +248,13 @@ export function _wireCarousel(container, personId) {
 export function _wirePanelPhotoClicks(container, personId) {
   const person = S.PEOPLE_MAP[personId];
   if (!person) return;
-  const photos = person.photo_paths || [];
+  const entries = _personPhotos(personId);
+  const photos = entries.map((e) => e.path);
+  const captionByPath = Object.fromEntries(entries.map((e) => [e.path, e.caption]));
   container.querySelectorAll("img[data-photo-path]").forEach((img) => {
     img.addEventListener("click", () => {
       const photoPath = img.dataset.photoPath;
-      const captions = person.photo_captions || {};
-      const capText = captions[photoPath] || person.fullName;
+      const capText = captionByPath[photoPath] || person.fullName;
       openLightbox("/" + photoPath, capText, photoPath, photos, personId);
     });
   });
@@ -225,12 +283,7 @@ export function _wireCaptionInput(input, personId) {
         return;
       }
       _lastSaved = caption;
-      const person = S.PEOPLE_MAP[personId];
-      if (person) {
-        person.photo_captions = person.photo_captions || {};
-        if (caption) person.photo_captions[photo] = caption;
-        else delete person.photo_captions[photo];
-      }
+      _localSetCaption(personId, photo, caption);
       _renderPanelPhotos(personId);
       showToast("Caption saved");
     } catch (err) {
@@ -370,8 +423,9 @@ export function _buildPickerGrid(personId) {
   if (!person) return;
 
   const grid = document.getElementById("photo-picker-grid");
-  const assigned = new Set(person.photo_paths || []);
-  const captions = person.photo_captions || {};
+  const personEntries = _personPhotos(personId);
+  const assigned = new Set(personEntries.map((e) => e.path));
+  const captions = Object.fromEntries(personEntries.map((e) => [e.path, e.caption]));
 
   grid.innerHTML = S.ALL_PHOTOS.map((photo) => {
     const sel = assigned.has(photo) ? "selected" : "";
@@ -417,7 +471,7 @@ export function _buildPickerGrid(personId) {
           input.type = "text";
           input.placeholder = "Add caption...";
           input.dataset.photo = photo;
-          input.value = (S.PEOPLE_MAP[personId]?.photo_captions || {})[photo] || "";
+          input.value = "";
           _wireCaptionInput(input, personId);
           item.appendChild(input);
         }
@@ -453,15 +507,10 @@ export function _buildPickerGrid(personId) {
           return;
         }
 
-        // Update local cache from server's authoritative response so
-        // the side panel re-renders with the correct set.
-        const p = S.PEOPLE_MAP[personId];
-        if (p && Array.isArray(data.photo_paths)) {
-          p.photo_paths = data.photo_paths;
-          if (wasSelected && p.photo_captions) {
-            delete p.photo_captions[photo];
-          }
-        }
+        // Mirror the change into S.DATA.photos (the client source of truth)
+        // so the side panel re-renders with the correct set.
+        if (wasSelected) _localUnassign(personId, photo);
+        else _localAssign(personId, photo);
         _renderPanelPhotos(personId);
         showToast(wasSelected ? "Photo removed" : "Photo assigned");
       } catch (err) {
@@ -502,6 +551,7 @@ export function _buildPickerGrid(personId) {
         if (resp.ok) {
           const person = S.PEOPLE_MAP[personId];
           if (person) person._profilePhotoPath = photoPath;
+          _localSetProfile(personId, photoPath);
           grid.querySelectorAll(".photo-profile-star").forEach(s => s.classList.remove("active"));
           star.classList.add("active");
           _renderPanelPhotos(personId);
@@ -874,10 +924,6 @@ export async function _uploadFiles(files, personId, progressEl, progressText) {
         });
         const assignData = await assignResp.json().catch(() => ({}));
         if (assignResp.ok) {
-          if (Array.isArray(assignData.photo_paths)) {
-            const p = S.PEOPLE_MAP[S.PHOTO_PICKER_PERSON];
-            if (p) p.photo_paths = assignData.photo_paths;
-          }
           if (!S.ALL_PHOTOS.includes(data.path)) S.ALL_PHOTOS.push(data.path);
           uploaded++;
         } else {
@@ -895,7 +941,9 @@ export async function _uploadFiles(files, personId, progressEl, progressText) {
 
   if (uploaded > 0) {
     showToast(`${uploaded} photo${uploaded > 1 ? "s" : ""} uploaded`);
-    // Refresh just what's needed — no full-tree reload.
+    // New photos need their full objects (id, tagged_people) in S.DATA.photos
+    // for the person_photos-derived views; reload the canonical data once.
+    await loadData();
     _renderPanelPhotos(personId);
     _buildPickerGrid(personId);
   }
@@ -920,8 +968,8 @@ export function closePhotoPicker() {
   S.PHOTO_PICKER_PERSON = null;
 }
 
-document.getElementById("photo-picker-close").addEventListener("click", closePhotoPicker);
-document.getElementById("photo-picker-overlay").addEventListener("click", (e) => {
+document.getElementById("photo-picker-close")?.addEventListener("click", closePhotoPicker);
+document.getElementById("photo-picker-overlay")?.addEventListener("click", (e) => {
   if (e.target.id === "photo-picker-overlay") closePhotoPicker();
 });
 

@@ -352,9 +352,9 @@ export function showPersonPanel(personId) {
   if (heroImg) {
     heroImg.addEventListener("click", () => {
       const photoPath = heroImg.dataset.photoPath;
-      const photos = person.photo_paths || [];
-      const captions = person.photo_captions || {};
-      const capText = captions[photoPath] || person.fullName;
+      const entries = _personPhotos(personId);
+      const photos = entries.map((e) => e.path);
+      const capText = entries.find((e) => e.path === photoPath)?.caption || person.fullName;
       openLightbox("/" + photoPath, capText, photoPath, photos, personId);
     });
   }

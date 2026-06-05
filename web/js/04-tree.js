@@ -1178,7 +1178,7 @@ export function renderTree() {
 
   // Photo-count badge: a small accent disc at the avatar's bottom-right for
   // people with 2+ photos. Visibility is gated by zoom (CSS) to reduce clutter.
-  const photoCount = (d) => (d.person.photo_paths || []).length;
+  const photoCount = (d) => _personPhotos(d.person.id).length;
   nodeGroups.filter((d) => photoCount(d) >= 2).each(function(d) {
     const grp = d3.select(this);
     const sz = photoSizeFor(d);

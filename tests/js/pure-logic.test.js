@@ -7,6 +7,7 @@ import { rankPeople, searchPeopleLocal } from "../../web/js/03-data-nav.js";
 import { computeFogDistance, buildButterflyLayout } from "../../web/js/04-tree.js";
 import { calculateRelationship } from "../../web/js/07-relationship.js";
 import { autoComputeLanes, assignLane, buildLaneCache } from "../../web/js/02-lanes.js";
+import { _personPhotos } from "../../web/js/12-photos.js";
 
 // ─── Fixture helpers ───────────────────────────────────────────────────────
 
@@ -566,5 +567,50 @@ describe("buildButterflyLayout sibling placement", () => {
     // Siblings should be closer to the center than the grandparents-row spread.
     const rowSpan = Math.max(n.Me.cx, n.Spouse.cx) - Math.min(n.Bro.cx, n.Sis.cx, n.InLaw.cx);
     expect(rowSpan).toBeLessThan(1000); // a handful of node-widths, not a sprawl
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// _personPhotos — derive a person's photos from person_photos (S.DATA.photos)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("_personPhotos", () => {
+  beforeEach(() => {
+    S.DATA = {
+      photos: [
+        {
+          file_path: "photos/b.jpg",
+          tagged_people: [
+            { person_id: "X", caption: "second", is_profile: false, display_order: 2 },
+            { person_id: "Y", caption: "y-pic", is_profile: true, display_order: 0 },
+          ],
+        },
+        {
+          file_path: "photos/a.jpg",
+          tagged_people: [
+            { person_id: "X", caption: "first", is_profile: true, display_order: 1 },
+          ],
+        },
+        {
+          file_path: "photos/untagged.jpg",
+          tagged_people: [],
+        },
+      ],
+    };
+  });
+
+  it("returns only photos the person is tagged in, ordered by display_order", () => {
+    const out = _personPhotos("X");
+    expect(out.map((e) => e.path)).toEqual(["photos/a.jpg", "photos/b.jpg"]);
+  });
+
+  it("surfaces the person's own caption and profile flag, not another tag's", () => {
+    const out = _personPhotos("X");
+    expect(out[0]).toMatchObject({ caption: "first", isProfile: true });
+    expect(out[1]).toMatchObject({ caption: "second", isProfile: false });
+  });
+
+  it("returns an empty list for a person with no tagged photos", () => {
+    expect(_personPhotos("Z")).toEqual([]);
   });
 });
