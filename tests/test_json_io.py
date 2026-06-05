@@ -120,6 +120,60 @@ def test_roundtrip(tmp_path):
         assert orig_e.description == load_e.description
 
 
+def test_export_derives_photos_from_person_photos(tmp_path):
+    """When photos are supplied, exported photo_paths/captions come from the
+    photos table (person_photos), ordered by display_order — not the legacy
+    per-person columns (which may be stale after the source-of-truth migration)."""
+    tree = FamilyTree()
+    # Stale legacy column data that must be ignored in favor of the photos arg.
+    tree.add_person(
+        Person(
+            id="P1",
+            given_name="A",
+            surname="B",
+            photo_paths=["photos/stale.jpg"],
+            photo_captions={"photos/stale.jpg": "old"},
+        )
+    )
+    tree.add_person(Person(id="P2", given_name="C", surname="D"))
+    photos = [
+        {
+            "file_path": "photos/second.jpg",
+            "tagged_people": [{"person_id": "P1", "caption": "two", "display_order": 2}],
+        },
+        {
+            "file_path": "photos/first.jpg",
+            "tagged_people": [
+                {"person_id": "P1", "caption": "one", "display_order": 1},
+                {"person_id": "P2", "caption": "", "display_order": 0},
+            ],
+        },
+    ]
+    out_file = str(tmp_path / "with_photos.json")
+    save_tree(tree, out_file, photos=photos)
+    loaded = load_tree(out_file)
+
+    # P1: ordered by display_order, captions carried from person_photos.
+    assert loaded.people["P1"].photo_paths == ["photos/first.jpg", "photos/second.jpg"]
+    assert loaded.people["P1"].photo_captions == {
+        "photos/first.jpg": "one",
+        "photos/second.jpg": "two",
+    }
+    # P2: tagged with no caption → path present, no caption entry.
+    assert loaded.people["P2"].photo_paths == ["photos/first.jpg"]
+    assert loaded.people["P2"].photo_captions == {}
+
+
+def test_export_without_photos_falls_back_to_columns(tmp_path):
+    """No photos arg → keep the legacy per-person columns (back-compat)."""
+    tree = FamilyTree()
+    tree.add_person(Person(id="P1", given_name="A", surname="B", photo_paths=["photos/legacy.jpg"]))
+    out_file = str(tmp_path / "no_photos.json")
+    save_tree(tree, out_file)
+    loaded = load_tree(out_file)
+    assert loaded.people["P1"].photo_paths == ["photos/legacy.jpg"]
+
+
 def test_validation_catches_missing_person():
     """Validate should flag relationships/events referencing unknown people."""
     tree = FamilyTree()

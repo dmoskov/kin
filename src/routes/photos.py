@@ -18,6 +18,18 @@ logger = logging.getLogger(__name__)
 photos_bp = Blueprint("photos", __name__)
 
 
+def _person_photo_paths(repo, person_id):
+    """A person's photo paths, ordered by display_order, from person_photos."""
+    return [r["file_path"] for r in repo.photos_for_person(person_id)]
+
+
+def _person_photo_captions(repo, person_id):
+    """A person's {file_path: caption} map (non-empty captions) from person_photos."""
+    return {
+        r["file_path"]: r["caption"] for r in repo.photos_for_person(person_id) if r.get("caption")
+    }
+
+
 @photos_bp.route("/api/people/<person_id>/photos", methods=["POST"])
 @web_server.require_editor
 def api_add_photos(person_id):
@@ -41,16 +53,17 @@ def api_add_photos(person_id):
     if not person:
         return jsonify({"error": "person not found", "code": "not_found"}), 404
 
-    merged = list(person.photo_paths)
+    # Write straight to person_photos (the authoritative store). Idempotent:
+    # paths already linked to this person are skipped.
+    existing = {r["file_path"]: r for r in repo.photos_for_person(person_id)}
+    max_order = max((r.get("display_order", 0) for r in existing.values()), default=-1)
     for p in new_paths:
-        if not isinstance(p, str) or not p:
+        if not isinstance(p, str) or not p or p in existing:
             continue
-        if p not in merged:
-            merged.append(p)
+        max_order += 1
+        repo.assign_photo_to_person(person_id, repo.get_or_create_photo(p), display_order=max_order)
 
-    person.photo_paths = merged
-    repo.save_person(person)
-    return jsonify({"photo_paths": merged})
+    return jsonify({"photo_paths": _person_photo_paths(repo, person_id)})
 
 
 @photos_bp.route("/api/people/<person_id>/photos", methods=["DELETE"])
@@ -70,22 +83,14 @@ def api_remove_photo(person_id):
     if not person:
         return jsonify({"error": "person not found", "code": "not_found"}), 404
 
-    updated = [p for p in person.photo_paths if p != photo_path]
-    # Also drop any caption associated with the removed photo.
-    captions = dict(person.photo_captions)
-    captions.pop(photo_path, None)
-
-    person.photo_paths = updated
-    person.photo_captions = captions
-    repo.save_person(person)
-    # save_person's photo sync is additive-only, so the link must be removed
-    # from person_photos (the authoritative store) explicitly.
+    # Remove the link from person_photos (the authoritative store); the caption
+    # lives on that row, so it's dropped with it.
     match = next(
         (ph for ph in repo.photos_for_person(person_id) if ph["file_path"] == photo_path), None
     )
     if match:
         repo.unassign_photo_from_person(person_id, match["id"])
-    return jsonify({"photo_paths": updated})
+    return jsonify({"photo_paths": _person_photo_paths(repo, person_id)})
 
 
 @photos_bp.route("/api/photos/upload", methods=["POST"])
@@ -206,7 +211,7 @@ def api_import_google_photos(person_id):
     if not person:
         return jsonify({"error": "person not found", "code": "not_found"}), 404
 
-    merged = list(person.photo_paths)
+    existing = {r["file_path"] for r in repo.photos_for_person(person_id)}
     downloaded = 0
     errors = []
 
@@ -274,17 +279,16 @@ def api_import_google_photos(person_id):
 
             storage.photo_storage.put(safe_name, data)
             photo_path = f"photos/{safe_name}"
-            if photo_path not in merged:
-                merged.append(photo_path)
+            if photo_path not in existing:
+                repo.assign_photo_to_person(person_id, repo.get_or_create_photo(photo_path))
+                existing.add(photo_path)
             downloaded += 1
 
         except (URLError, OSError, TimeoutError) as e:
             errors.append({"filename": filename, "error": str(e)})
             continue
 
-    person.photo_paths = merged
-    repo.save_person(person)
-    result = {"photo_paths": merged, "downloaded": downloaded}
+    result = {"photo_paths": _person_photo_paths(repo, person_id), "downloaded": downloaded}
     if errors:
         result["errors"] = errors
     return jsonify(result)
@@ -312,15 +316,9 @@ def api_set_photo_caption(person_id):
     if not person:
         return jsonify({"error": "person not found", "code": "not_found"}), 404
 
-    captions = dict(person.photo_captions)
-    if caption:
-        captions[photo_path] = caption
-    else:
-        captions.pop(photo_path, None)
-
-    person.photo_captions = captions
-    repo.save_person(person)
-    return jsonify({"photo_captions": captions})
+    # Caption lives on the person_photos link (empty string clears it).
+    repo.set_photo_caption_new(person_id, repo.get_or_create_photo(photo_path), caption)
+    return jsonify({"photo_captions": _person_photo_captions(repo, person_id)})
 
 
 # ── Photo Metadata & Tagging ───────────────────────────────────────
@@ -487,16 +485,6 @@ def api_set_profile_photo(person_id):
         return jsonify({"error": "person not found", "code": "not_found"}), 404
 
     repo.set_profile_photo(person_id, int(photo_id))
-
-    # Also sync the old photo_paths array so the profile photo is first
-    photo = repo.get_photo(int(photo_id))
-    if photo and photo["file_path"] in person.photo_paths:
-        paths = list(person.photo_paths)
-        paths.remove(photo["file_path"])
-        paths.insert(0, photo["file_path"])
-        person.photo_paths = paths
-        repo.save_person(person)
-
     return jsonify({"ok": True, "photo_id": photo_id})
 
 
@@ -522,12 +510,6 @@ def api_tag_person_in_photo(photo_id):
     max_order = max((p.get("display_order", 0) for p in existing), default=-1)
 
     repo.assign_photo_to_person(person_id, photo_id, display_order=max_order + 1)
-
-    # Also add to old photo_paths for backward compat
-    if photo["file_path"] not in person.photo_paths:
-        person.photo_paths = list(person.photo_paths) + [photo["file_path"]]
-        repo.save_person(person)
-
     return jsonify({"ok": True}), 201
 
 
@@ -537,17 +519,6 @@ def api_untag_person_from_photo(photo_id, person_id):
     """Remove a person's tag from a photo."""
     repo = TreeRepository()
     repo.unassign_photo_from_person(person_id, photo_id)
-
-    # Also remove from old photo_paths for backward compat
-    photo = repo.get_photo(photo_id)
-    person = repo.get_person(person_id)
-    if photo and person and photo["file_path"] in person.photo_paths:
-        person.photo_paths = [p for p in person.photo_paths if p != photo["file_path"]]
-        captions = dict(person.photo_captions)
-        captions.pop(photo["file_path"], None)
-        person.photo_captions = captions
-        repo.save_person(person)
-
     return ("", 204)
 
 
@@ -597,10 +568,6 @@ def api_save_face_region(photo_id):
     if person_id not in already_tagged:
         max_order = max((p.get("display_order", 0) for p in existing_people), default=-1)
         repo.assign_photo_to_person(person_id, photo_id, display_order=max_order + 1)
-        # Also add to old photo_paths for backward compat
-        if photo["file_path"] not in person.photo_paths:
-            person.photo_paths = list(person.photo_paths) + [photo["file_path"]]
-            repo.save_person(person)
 
     return jsonify(
         {

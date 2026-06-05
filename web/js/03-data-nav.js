@@ -109,7 +109,7 @@ export async function loadData() {
           if (profilePath) break;
         }
       }
-      person._profilePhotoPath = profilePath || (person.photo_paths || [])[0] || null;
+      person._profilePhotoPath = profilePath || null;
       // Compute _profileCrop from the matching tagged_people entry
       person._profileCrop = null;
       if (person._profilePhotoPath && S.DATA.photos) {
@@ -125,7 +125,7 @@ export async function loadData() {
   } else {
     for (const p of S.DATA.people) {
       const person = S.PEOPLE_MAP[p.id];
-      if (person) person._profilePhotoPath = (person.photo_paths || [])[0] || null;
+      if (person) person._profilePhotoPath = null;
     }
   }
 }

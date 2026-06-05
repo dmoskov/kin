@@ -321,7 +321,8 @@ def cmd_import(args: argparse.Namespace) -> None:
 def cmd_export(args: argparse.Namespace) -> None:
     repo = TreeRepository()
     tree = repo.load_tree()
-    save_tree(tree, args.file)
+    photos = repo.list_all_photos()
+    save_tree(tree, args.file, photos=photos)
     print(f"Exported to {args.file}")
 
 
