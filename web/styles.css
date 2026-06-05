@@ -5000,6 +5000,17 @@ main {
 .tnow-name { font-size: 14px; font-weight: 600; }
 .tnow-name .person-link { color: var(--text); }
 .tnow-meta { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+/* "Where they are now" grouped by current location. */
+.tnow-location-group { margin-top: 16px; }
+.tnow-location-group:first-of-type { margin-top: 0; }
+.tnow-location {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.2px;
+}
+.tnow-location--unknown { color: var(--text-muted); font-style: italic; }
+.tnow-location-group .tnow-grid { margin-top: 8px; }
 
 /* ── Cropped Thumbnails ─────────────────────────────────────── */
 
