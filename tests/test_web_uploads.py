@@ -232,6 +232,16 @@ class TestPhotoUpload:
 # ── Photo association (the production PG regression fix) ─────────────────
 
 
+def _pp_paths(repo, person_id):
+    """A person's photo paths from the authoritative person_photos store."""
+    return [r["file_path"] for r in repo.photos_for_person(person_id)]
+
+
+def _pp_captions(repo, person_id):
+    """A person's {path: caption} map from person_photos (non-empty only)."""
+    return {r["file_path"]: r["caption"] for r in repo.photos_for_person(person_id) if r["caption"]}
+
+
 class TestPhotoAssociation:
     """These endpoints previously used raw SQLite syntax and broke silently
     on PostgreSQL. They now go through TreeRepository. The tests exercise the
@@ -248,7 +258,7 @@ class TestPhotoAssociation:
         assert resp.status_code == 200
         assert resp.get_json()["photo_paths"] == ["photos/a.jpg"]
         # Round-trip through the repository.
-        assert repo.get_person("p1").photo_paths == ["photos/a.jpg"]
+        assert _pp_paths(repo, "p1") == ["photos/a.jpg"]
 
     def test_attach_is_idempotent(self, app_client):
         client, repo, _ = app_client
@@ -259,7 +269,7 @@ class TestPhotoAssociation:
         )
         assert resp.status_code == 200
         assert resp.get_json()["photo_paths"] == ["photos/a.jpg", "photos/b.jpg"]
-        assert repo.get_person("p1").photo_paths == ["photos/a.jpg", "photos/b.jpg"]
+        assert _pp_paths(repo, "p1") == ["photos/a.jpg", "photos/b.jpg"]
 
     def test_attach_unknown_person_returns_404(self, app_client):
         client, _, _ = app_client
@@ -285,7 +295,7 @@ class TestPhotoAssociation:
         resp = client.delete("/api/people/p1/photos", json={"photo_path": "photos/a.jpg"})
         assert resp.status_code == 200
         assert resp.get_json()["photo_paths"] == ["photos/b.jpg"]
-        assert repo.get_person("p1").photo_paths == ["photos/b.jpg"]
+        assert _pp_paths(repo, "p1") == ["photos/b.jpg"]
 
     def test_detach_drops_caption(self, app_client):
         client, repo, _ = app_client
@@ -294,10 +304,10 @@ class TestPhotoAssociation:
             "/api/people/p1/photo-caption",
             json={"photo_path": "photos/a.jpg", "caption": "Easter 1987"},
         )
-        assert repo.get_person("p1").photo_captions == {"photos/a.jpg": "Easter 1987"}
+        assert _pp_captions(repo, "p1") == {"photos/a.jpg": "Easter 1987"}
         client.delete("/api/people/p1/photos", json={"photo_path": "photos/a.jpg"})
         # Caption should be cleaned up along with the photo.
-        assert repo.get_person("p1").photo_captions == {}
+        assert _pp_captions(repo, "p1") == {}
 
     def test_detach_unknown_person(self, app_client):
         client, _, _ = app_client
@@ -320,7 +330,7 @@ class TestPhotoAssociation:
         assert resp.status_code == 200
         # Trimmed.
         assert resp.get_json()["photo_captions"] == {"photos/a.jpg": "Easter 1987"}
-        assert repo.get_person("p1").photo_captions == {"photos/a.jpg": "Easter 1987"}
+        assert _pp_captions(repo, "p1") == {"photos/a.jpg": "Easter 1987"}
 
     def test_empty_caption_clears(self, app_client):
         client, repo, _ = app_client
@@ -335,7 +345,7 @@ class TestPhotoAssociation:
         )
         assert resp.status_code == 200
         assert resp.get_json()["photo_captions"] == {}
-        assert repo.get_person("p1").photo_captions == {}
+        assert _pp_captions(repo, "p1") == {}
 
     def test_caption_unknown_person(self, app_client):
         client, _, _ = app_client

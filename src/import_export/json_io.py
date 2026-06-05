@@ -120,7 +120,9 @@ def load_tree(path: str) -> FamilyTree:
     return tree
 
 
-def _person_to_dict(p: Person, *, include_email: bool = False) -> dict[str, Any]:
+def _person_to_dict(
+    p: Person, *, include_email: bool = False, photo_override: dict[str, Any] | None = None
+) -> dict[str, Any]:
     d: dict[str, Any] = {
         "id": p.id,
         "given_name": p.given_name,
@@ -141,10 +143,14 @@ def _person_to_dict(p: Person, *, include_email: bool = False) -> dict[str, Any]
         d["nicknames"] = p.nicknames
     if p.notes:
         d["notes"] = p.notes
-    if p.photo_paths:
-        d["photo_paths"] = p.photo_paths
-    if p.photo_captions:
-        d["photo_captions"] = p.photo_captions
+    # Photos come from person_photos (the authoritative store) when an override
+    # is supplied; otherwise fall back to the legacy person columns.
+    photo_paths = photo_override["paths"] if photo_override is not None else p.photo_paths
+    photo_captions = photo_override["captions"] if photo_override is not None else p.photo_captions
+    if photo_paths:
+        d["photo_paths"] = photo_paths
+    if photo_captions:
+        d["photo_captions"] = photo_captions
     if include_email:
         if p.email:
             d["email"] = p.email
@@ -243,6 +249,28 @@ def _article_to_dict(a: NewsArticle, person_ids: list[str] | None = None) -> dic
     return d
 
 
+def _photo_overrides_from_photos(photos: list[dict] | None) -> dict[str, dict[str, Any]]:
+    """Build {person_id: {"paths": [...], "captions": {...}}} from the photos
+    table's tagged_people, ordered by display_order — so an export reflects
+    person_photos rather than the legacy per-person columns."""
+    if not photos:
+        return {}
+    rows: dict[str, list[tuple]] = {}
+    for ph in photos:
+        for tp in ph.get("tagged_people", []):
+            rows.setdefault(tp["person_id"], []).append(
+                (tp.get("display_order", 0), ph["file_path"], tp.get("caption", ""))
+            )
+    out: dict[str, dict[str, Any]] = {}
+    for pid, entries in rows.items():
+        entries.sort(key=lambda e: (e[0], e[1]))
+        out[pid] = {
+            "paths": [fp for _, fp, _ in entries],
+            "captions": {fp: cap for _, fp, cap in entries if cap},
+        }
+    return out
+
+
 def save_tree(tree: FamilyTree, path: str, photos: list[dict] | None = None) -> None:
     """Serialize a FamilyTree to the JSON format."""
     article_person_map: dict[str, list[str]] = {}
@@ -250,8 +278,20 @@ def save_tree(tree: FamilyTree, path: str, photos: list[dict] | None = None) -> 
         for aid in aids:
             article_person_map.setdefault(aid, []).append(pid)
 
+    # When photos are supplied, person_photos is authoritative for every person
+    # (absent → no photos), so don't fall back to the legacy columns.
+    empty: dict[str, Any] = {"paths": [], "captions": {}}
+    photo_overrides = _photo_overrides_from_photos(photos)
+    use_overrides = photos is not None
     data = {
-        "people": [_person_to_dict(p, include_email=True) for p in tree.people.values()],
+        "people": [
+            _person_to_dict(
+                p,
+                include_email=True,
+                photo_override=photo_overrides.get(p.id, empty) if use_overrides else None,
+            )
+            for p in tree.people.values()
+        ],
         "relationships": [_rel_to_dict(r) for r in tree.relationships],
         "unions": [_union_to_dict(u) for u in tree.unions],
         "events": [_event_to_dict(e) for e in tree.events],

@@ -366,7 +366,8 @@ export function _openFaceTagSearch(container, photoData, x, y, w, h, mouseEvent,
             dropdown.remove();
             renderCb();
 
-            // If the backend auto-tagged this person in the photo, update local state
+            // If the backend auto-tagged this person in the photo, update the
+            // person_photos client cache (S.DATA.photos / S.PHOTOS_MAP).
             if (region.auto_tagged && person) {
               photoData.tagged_people = photoData.tagged_people || [];
               if (!photoData.tagged_people.some(tp => tp.person_id === personId)) {
@@ -374,12 +375,10 @@ export function _openFaceTagSearch(container, photoData, x, y, w, h, mouseEvent,
                   person_id: personId,
                   is_profile: false,
                   caption: "",
+                  display_order: 0,
                   given_name: person.given_name || "",
                   surname: person.surname || "",
                 });
-              }
-              if (!person.photo_paths?.includes(photoData.file_path)) {
-                person.photo_paths = [...(person.photo_paths || []), photoData.file_path];
               }
             }
             showToast(`Face tagged: ${person?.fullName || personId}`);
