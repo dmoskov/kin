@@ -1,7 +1,7 @@
 """People domain mixin for TreeRepository."""
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from models.person import Gender, Person
 
@@ -13,9 +13,14 @@ class PeopleRepoMixin:
 
     def _conn(self) -> Any: ...  # provided by TreeRepository
 
-    def _sync_person_photos(
-        self, conn: Any, person: "Person"
-    ) -> None: ...  # provided by PhotosRepoMixin
+    # _sync_person_photos lives in PhotosRepoMixin. Declare it for the type
+    # checker ONLY: a real stub here would shadow the implementation at runtime,
+    # because PeopleRepoMixin is first in TreeRepository's MRO (it once did,
+    # silently no-op'ing the sync). Under TYPE_CHECKING it doesn't exist at
+    # runtime, so the MRO resolves the real method.
+    if TYPE_CHECKING:
+
+        def _sync_person_photos(self, conn: Any, person: "Person") -> None: ...
 
     def _do_save_person(self, conn: Any, person: Person) -> None:
         params = (
@@ -30,8 +35,6 @@ class PeopleRepoMixin:
             person.maiden_name or None,
             json.dumps(person.nicknames),
             person.notes,
-            json.dumps(person.photo_paths),
-            json.dumps(person.photo_captions),
             person.email or None,
         )
         _upsert(
@@ -49,8 +52,6 @@ class PeopleRepoMixin:
                 "maiden_name",
                 "nicknames",
                 "notes",
-                "photo_paths",
-                "photo_captions",
                 "email",
             ],
             params,
@@ -58,10 +59,10 @@ class PeopleRepoMixin:
             extra_columns=["updated_at"],
             extra_values=[_now()],
         )
-        # Dual-write the normalized photos/person_photos tables. Let failures
-        # propagate so the surrounding transaction rolls back rather than
-        # committing a half-written person (and, on PostgreSQL, to avoid
-        # committing an already-aborted transaction).
+        # person_photos is the source of truth. The legacy people.photo_paths /
+        # photo_captions columns are gone (schema v20). This additive sync still
+        # populates person_photos from person.photo_paths when it is set on the
+        # in-memory object (e.g. by JSON/GEDCOM import); it never deletes.
         self._sync_person_photos(conn, person)
 
     # ── People ──────────────────────────────────────────────────────────
@@ -164,7 +165,8 @@ class PeopleRepoMixin:
             maiden_name=row["maiden_name"] or None,
             nicknames=json.loads(row["nicknames"] or "[]"),
             notes=row["notes"] or "",
-            photo_paths=json.loads(row["photo_paths"] or "[]"),
-            photo_captions=json.loads(row.get("photo_captions") or "{}"),
+            # photo_paths / photo_captions columns were dropped in schema v20;
+            # photos now live in person_photos. The Person fields stay (default
+            # empty) so import can still set them and round-trip through sync.
             email=row.get("email") or None,
         )

@@ -149,11 +149,18 @@ def _migrate_photos_data(conn: Any, is_pg: bool) -> None:
             conn.rollback()
         return
 
+    # The legacy photo columns were dropped in schema v20; this one-time V7-era
+    # backfill is obsolete once they're gone. Bail cleanly if they don't exist.
     try:
         cur = conn.cursor()
         cur.execute("SELECT id, photo_paths, photo_captions FROM people")
         rows = cur.fetchall()
+    except Exception:
+        if is_pg:
+            conn.rollback()
+        return
 
+    try:
         for row in rows:
             if isinstance(row, dict):
                 person_id = row["id"]
