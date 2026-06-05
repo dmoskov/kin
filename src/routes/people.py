@@ -3,13 +3,13 @@
 import json
 import logging
 import os
-import re
 import uuid
 
 from flask import Blueprint, jsonify, request
 
 import web_server
 from database.repository import TreeRepository, _fetchall, _fetchone, _ph
+from dates import normalize_date
 from import_export.json_io import _event_to_dict, _person_to_dict
 from models.person import Gender, Person
 
@@ -97,12 +97,14 @@ def _coerce_person_payload(body: dict, *, partial: bool) -> tuple[dict, str | No
         if not gn and not sn:
             return {}, "given_name or surname is required", 400
 
-    # Basic date sanity check — we accept partial dates (YYYY or YYYY-MM)
-    # and full ISO dates, but nothing else.
+    # Normalize + validate dates to canonical ISO (partials allowed, circa
+    # markers stripped); normalize_date raises on impossible dates.
     for date_field in ("birth_date", "death_date"):
-        v = out.get(date_field)
-        if v and not re.match(r"^\d{4}(-\d{2}(-\d{2})?)?$", v):
-            return {}, f"{date_field} must be YYYY, YYYY-MM, or YYYY-MM-DD", 400
+        if date_field in out:
+            try:
+                out[date_field] = normalize_date(out.get(date_field))
+            except ValueError as e:
+                return {}, f"{date_field}: {e}", 400
 
     return out, None, 0
 

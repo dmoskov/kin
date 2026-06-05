@@ -3,7 +3,7 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { S } from "../../web/js/00-state.js";
-import { rankPeople, searchPeopleLocal } from "../../web/js/03-data-nav.js";
+import { rankPeople, searchPeopleLocal, dateYear, dateSortKey } from "../../web/js/03-data-nav.js";
 import { computeFogDistance, buildButterflyLayout } from "../../web/js/04-tree.js";
 import { calculateRelationship } from "../../web/js/07-relationship.js";
 import { autoComputeLanes, assignLane, buildLaneCache } from "../../web/js/02-lanes.js";
@@ -612,5 +612,41 @@ describe("_personPhotos", () => {
 
   it("returns an empty list for a person with no tagged photos", () => {
     expect(_personPhotos("Z")).toEqual([]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// dateYear / dateSortKey — centralized date parsing
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("dateYear", () => {
+  it("extracts the year from ISO dates of any precision", () => {
+    expect(dateYear("1845")).toBe(1845);
+    expect(dateYear("1845-06")).toBe(1845);
+    expect(dateYear("1845-06-01")).toBe(1845);
+  });
+  it("returns null for empty/missing", () => {
+    expect(dateYear(null)).toBe(null);
+    expect(dateYear(undefined)).toBe(null);
+    expect(dateYear("")).toBe(null);
+  });
+  it("tolerates a stray non-ISO prefix instead of returning NaN", () => {
+    expect(dateYear("~1622")).toBe(1622);
+    expect(dateYear("c. 1845")).toBe(1845);
+  });
+});
+
+describe("dateSortKey", () => {
+  it("sorts ISO dates chronologically, mixed precision included", () => {
+    const dates = ["1846", "1845-06-01", "1845", "1845-06"];
+    const sorted = [...dates].sort((a, b) => dateSortKey(a).localeCompare(dateSortKey(b)));
+    expect(sorted).toEqual(["1845", "1845-06", "1845-06-01", "1846"]);
+  });
+  it("undated sorts last by default, first when placeEmptyFirst", () => {
+    expect(dateSortKey("").localeCompare(dateSortKey("1845")) > 0).toBe(true);
+    expect(dateSortKey("", true).localeCompare(dateSortKey("1845", true)) < 0).toBe(true);
+  });
+  it("extracts the ISO core from a noisy value so it still sorts by year", () => {
+    expect(dateSortKey("~1622")).toBe("1622");
   });
 });

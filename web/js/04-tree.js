@@ -1224,8 +1224,8 @@ export function renderTree() {
     .text((d) => {
       const p = d.person;
       if (p.birth_date) {
-        const y = p.birth_date.substring(0, 4);
-        return p.death_date ? `${y} \u2013 ${p.death_date.substring(0, 4)}` : `b. ${y}`;
+        const y = dateYear(p.birth_date);
+        return p.death_date ? `${y} \u2013 ${dateYear(p.death_date)}` : `b. ${y}`;
       }
       return "";
     });

@@ -150,7 +150,7 @@ export function getFilteredPhotos() {
     // Date range filter
     if (GALLERY_YEAR_FROM !== null || GALLERY_YEAR_TO !== null) {
       if (!photo.date) return false;
-      const photoYear = parseInt(photo.date.substring(0, 4));
+      const photoYear = dateYear(photo.date);
       if (isNaN(photoYear)) return false;
       if (GALLERY_YEAR_FROM !== null && photoYear < GALLERY_YEAR_FROM) return false;
       if (GALLERY_YEAR_TO !== null && photoYear > GALLERY_YEAR_TO) return false;
@@ -1237,7 +1237,7 @@ export function populateViewingAsDropdown(selectId) {
     opt.value = p.id;
     const name = `${p.given_name || ""} ${p.surname || ""}`.trim();
     if (nameCounts[name] > 1 && p.birth_date) {
-      opt.textContent = `${name} (b. ${p.birth_date.substring(0, 4)})`;
+      opt.textContent = `${name} (b. ${dateYear(p.birth_date)})`;
     } else {
       opt.textContent = name;
     }

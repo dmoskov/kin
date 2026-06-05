@@ -143,6 +143,29 @@ export function escapeHtml(str) {
     .replace(/'/g, "&#39;");
 }
 
+// ── Dates ───────────────────────────────────────────────────────────────
+// Dates are stored as ISO strings at three precisions (YYYY, YYYY-MM,
+// YYYY-MM-DD). These are the single place the frontend turns one into a year or
+// a sort key, so a stray non-ISO value can't silently break timeline placement,
+// age math, or ordering across the ~30 call sites that used to inline this.
+
+// Integer year from an ISO-ish date, or null. Tolerates leading noise so a
+// stray "~1622" still yields 1622 rather than NaN.
+export function dateYear(d) {
+  if (!d) return null;
+  const m = /(\d{4})/.exec(String(d));
+  return m ? parseInt(m[1], 10) : null;
+}
+
+// A lexicographically-sortable key for an ISO-ish date. Undated sorts last by
+// default (pass placeEmptyFirst=true for the few ascending lists that want
+// blanks at the top). Extracts the ISO core so non-ISO junk still sorts by year.
+export function dateSortKey(d, placeEmptyFirst = false) {
+  if (!d) return placeEmptyFirst ? "" : "9999";
+  const m = /(\d{4}(?:-\d{2}(?:-\d{2})?)?)/.exec(String(d));
+  return m ? m[1] : placeEmptyFirst ? "" : "9999";
+}
+
 // Returns an HTML-escaped display name (safe to interpolate into markup). All
 // current callers render the result as HTML.
 export function personName(id) {
