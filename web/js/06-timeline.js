@@ -269,10 +269,37 @@ export function gatherTimelineEntries() {
     }
   }
 
+  // Index unions by each partner so we can suppress redundant marriage EVENTS:
+  // many marriages are recorded BOTH as a union and as a marriage-type event,
+  // which would draw two cards for the same wedding. The union is canonical, so
+  // a marriage event is dropped when a union covers the same couple (matched by
+  // the other partner's name appearing in the description, or a ~same year).
+  const unionsByPartner = {};
+  for (const u of S.DATA.unions) {
+    for (const pid of [u.partner1_id, u.partner2_id]) {
+      (unionsByPartner[pid] || (unionsByPartner[pid] = [])).push(u);
+    }
+  }
+  function marriageEventIsRedundant(e) {
+    const us = unionsByPartner[e.person_id];
+    if (!us) return false;
+    const ey = e.date ? dateYear(e.date) : null;
+    const desc = (e.description || "").toLowerCase();
+    return us.some((u) => {
+      const otherId = u.partner1_id === e.person_id ? u.partner2_id : u.partner1_id;
+      const otherGiven = (S.PEOPLE_MAP[otherId]?.given_name || "").toLowerCase();
+      const nameHit = otherGiven && desc.includes(otherGiven);
+      const uy = u.union_date ? dateYear(u.union_date) : null;
+      const yearHit = ey != null && uy != null && Math.abs(ey - uy) <= 1;
+      return nameHit || yearHit;
+    });
+  }
+
   // Life events
   for (const e of S.DATA.events) {
     if (e.event_type === "birth" || e.event_type === "death") continue;
     if (isArchivalNote(e)) continue;
+    if (e.event_type === "marriage" && marriageEventIsRedundant(e)) continue;
     entries.push({
       date: e.date || "",
       year: e.date ? dateYear(e.date) : null,
