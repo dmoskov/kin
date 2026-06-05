@@ -140,11 +140,14 @@ class TestPersonCrud:
         loaded = repo.get_person("alice")
         assert loaded.nicknames == ["Ali", "A"]
 
-    def test_photo_paths_round_trip(self, repo):
+    def test_photo_paths_sync_to_person_photos(self, repo):
+        # The legacy people.photo_paths column was dropped (schema v20); setting
+        # photo_paths on a saved Person now flows into person_photos via the
+        # additive sync (this is the path JSON/GEDCOM import relies on).
         person = self._make_person(photo_paths=["photos/alice1.jpg"])
         repo.save_person(person)
-        loaded = repo.get_person("alice")
-        assert loaded.photo_paths == ["photos/alice1.jpg"]
+        linked = {p["file_path"] for p in repo.photos_for_person("alice")}
+        assert "photos/alice1.jpg" in linked
 
     def test_save_person_preserves_directly_assigned_photos(self, repo):
         """Regression: a photo linked via assign_photo_to_person (so it lives in

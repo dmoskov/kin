@@ -5,7 +5,7 @@ The schema mirrors the domain models in models/ and is designed for
 efficient querying.
 """
 
-SCHEMA_VERSION = 19
+SCHEMA_VERSION = 20
 
 # ═══════════════════════════════════════════════════════════════════════
 # SQLite schema (local dev / tests)
@@ -330,6 +330,16 @@ CREATE TABLE IF NOT EXISTS person_wikipedia (
 );
 """
 
+# Drop the legacy per-person photo columns: person_photos is now the sole source
+# of truth (see the photo source-of-truth migration). A backup table preserves
+# the dropped values so the change is reversible.
+SCHEMA_V20 = """
+CREATE TABLE IF NOT EXISTS people_photo_columns_backup AS
+    SELECT id, photo_paths, photo_captions FROM people;
+ALTER TABLE people DROP COLUMN photo_paths;
+ALTER TABLE people DROP COLUMN photo_captions;
+"""
+
 SCHEMA_SQL = (
     SCHEMA_V1
     + SCHEMA_V2
@@ -348,6 +358,7 @@ SCHEMA_SQL = (
     + SCHEMA_V16
     + SCHEMA_V17
     + SCHEMA_V19
+    + SCHEMA_V20
 )
 
 MIGRATIONS = {
@@ -369,6 +380,7 @@ MIGRATIONS = {
     17: SCHEMA_V17,
     18: SCHEMA_V18,
     19: SCHEMA_V19,
+    20: SCHEMA_V20,
 }
 
 
@@ -671,6 +683,15 @@ CREATE TABLE IF NOT EXISTS person_wikipedia (
 );
 """
 
+# Drop the legacy per-person photo columns (person_photos is authoritative).
+# A backup table preserves the dropped values so the change is reversible.
+PG_SCHEMA_V20 = """
+CREATE TABLE IF NOT EXISTS people_photo_columns_backup AS
+    SELECT id, photo_paths, photo_captions FROM people;
+ALTER TABLE people DROP COLUMN IF EXISTS photo_paths;
+ALTER TABLE people DROP COLUMN IF EXISTS photo_captions;
+"""
+
 PG_SCHEMA_SQL = (
     PG_SCHEMA_V1
     + PG_SCHEMA_V2
@@ -689,6 +710,7 @@ PG_SCHEMA_SQL = (
     + PG_SCHEMA_V16
     + PG_SCHEMA_V17
     + PG_SCHEMA_V19
+    + PG_SCHEMA_V20
 )
 
 PG_MIGRATIONS = {
@@ -710,4 +732,5 @@ PG_MIGRATIONS = {
     17: PG_SCHEMA_V17,
     18: PG_SCHEMA_V18,
     19: PG_SCHEMA_V19,
+    20: PG_SCHEMA_V20,
 }
