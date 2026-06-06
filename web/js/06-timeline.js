@@ -325,7 +325,11 @@ export function gatherTimelineEntries() {
       const parents = parentsByChild[childId];
       if (parents.has(p1) && parents.has(p2)) {
         const person = S.PEOPLE_MAP[childId];
-        kids.push({ id: childId, year: person?.birth_date ? dateYear(person.birth_date) : null });
+        kids.push({
+          id: childId,
+          year: person?.birth_date ? dateYear(person.birth_date) : null,
+          place: person?.birth_place || null,
+        });
       }
     }
     kids.sort((a, b) => (a.year ?? 99999) - (b.year ?? 99999));
@@ -337,25 +341,53 @@ export function gatherTimelineEntries() {
   // the card's mini-timeline (suppressed from the everyone-stream to save space).
   const absorbedBirthIds = new Set();
   for (const u of S.DATA.unions) {
-    if (u.union_date) {
-      const lane1 = assignLane(u.partner1_id);
-      const lane2 = assignLane(u.partner2_id);
-      const kids = coupleChildren(u.partner1_id, u.partner2_id);
-      for (const k of kids) absorbedBirthIds.add(k.id);
-      entries.push({
-        date: u.union_date,
-        year: dateYear(u.union_date),
-        type: "marriage",
-        personId: u.partner1_id,
-        partner2Id: u.partner2_id,
-        title: `${personLink(u.partner1_id)} & ${personLink(u.partner2_id)}`,
-        desc: u.notes || "",
-        place: u.union_place,
-        children: kids,
-        lane: lane1,
-        crossLane: lane1 !== lane2 ? lane2 : null,
-      });
+    const kids = coupleChildren(u.partner1_id, u.partner2_id);
+    let year = dateYear(u.union_date);
+    let dateDisplay = null;
+    let approxDate = false;
+    let place = u.union_place;
+    if (!year) {
+      // Undated marriage: approximate so it still becomes a family card. Anchor
+      // to ~a year before the first child, else the partners' likely marrying age.
+      const childYears = kids.map((k) => k.year).filter((y) => y != null);
+      if (childYears.length) {
+        year = Math.min(...childYears) - 1;
+      } else {
+        const pby = [u.partner1_id, u.partner2_id]
+          .map((id) => (S.PEOPLE_MAP[id]?.birth_date ? dateYear(S.PEOPLE_MAP[id].birth_date) : null))
+          .filter((y) => y != null);
+        if (pby.length) year = Math.max(...pby) + 25;
+      }
+      if (!year) continue; // nothing to anchor it in time → leave it off the timeline
+      dateDisplay = `c. ${year}`;
+      approxDate = true;
+      // Approximate location: where the children were born, else a partner's birthplace.
+      if (!place) {
+        place =
+          kids.map((k) => k.place).find(Boolean) ||
+          S.PEOPLE_MAP[u.partner1_id]?.birth_place ||
+          S.PEOPLE_MAP[u.partner2_id]?.birth_place ||
+          null;
+      }
     }
+    const lane1 = assignLane(u.partner1_id);
+    const lane2 = assignLane(u.partner2_id);
+    for (const k of kids) absorbedBirthIds.add(k.id);
+    entries.push({
+      date: u.union_date || String(year),
+      year,
+      type: "marriage",
+      personId: u.partner1_id,
+      partner2Id: u.partner2_id,
+      title: `${personLink(u.partner1_id)} & ${personLink(u.partner2_id)}`,
+      desc: u.notes || "",
+      place,
+      dateDisplay,
+      approxDate,
+      children: kids,
+      lane: lane1,
+      crossLane: lane1 !== lane2 ? lane2 : null,
+    });
   }
   // Mark birth entries shown inside a family card so the everyone-stream can
   // drop them (single-person views keep them — see renderTimeline).
@@ -414,6 +446,8 @@ export function gatherTimelineEntries() {
 // Small "age at event" chip — "married at 24 & 22", "age 18", etc.
 function ageChipHtml(e) {
   if (e.type === "marriage") {
+    // No ages on an approximate (undated) marriage — the year is a guess.
+    if (e.approxDate) return "";
     // Casually omit ages when the partners' gap is large (> 15 years).
     if (e.age && e.partner2Age && Math.abs(e.age - e.partner2Age) > 15) return "";
     if (e.age && e.partner2Age) return `<span class="tstream-age">married at ${e.age} & ${e.partner2Age}</span>`;
