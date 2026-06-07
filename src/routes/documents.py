@@ -249,6 +249,74 @@ def api_list_documents():
     return jsonify(docs)
 
 
+def _fetch_url_text(url: str) -> tuple[str | None, str | None]:
+    """Fetch a URL (browser UA) and strip it to readable text. Returns (text, error)."""
+    import re
+    import urllib.request
+    from html import unescape
+
+    ua = (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+    )
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": ua})
+        with urllib.request.urlopen(req, timeout=25) as resp:
+            raw = resp.read(3_000_000).decode("utf-8", "ignore")
+    except Exception as e:
+        return None, f"Couldn't fetch the link: {e}"
+    raw = re.sub(r"<(script|style|noscript|svg)[^>]*>.*?</\1>", " ", raw, flags=re.S | re.I)
+    txt = re.sub(r"<[^>]+>", " ", raw)
+    txt = unescape(re.sub(r"[ \t ]+", " ", txt))
+    txt = re.sub(r"\n\s*\n+", "\n", txt).strip()
+    return txt, None
+
+
+@documents_bp.route("/api/documents/from-url", methods=["POST"])
+@web_server.require_editor
+def api_document_from_url():
+    """Fetch a link (e.g. an obituary), AI-extract family data, and stage it for
+    the same review/apply flow as an uploaded document. Returns {id, proposed_changes}."""
+    import json as _json
+    import uuid
+
+    from intelligence.document_parser import parse_text
+
+    body = request.get_json(silent=True) or {}
+    url = (body.get("url") or "").strip()
+    if not url.lower().startswith(("http://", "https://")):
+        return jsonify({"error": "Enter a valid http(s) link."}), 400
+
+    text, err = _fetch_url_text(url)
+    if err:
+        return jsonify({"error": err, "code": "fetch_failed"}), 502
+    if not text or len(text) < 40:
+        return jsonify(
+            {
+                "error": "Couldn't extract readable text from that page. Try pasting the text instead."
+            }
+        ), 422
+
+    result = parse_text(text[:30000], _get_existing_people(), url)
+    if "error" in result:
+        return jsonify(result), 502
+
+    doc_id = uuid.uuid4().hex[:12]
+    uploaded_by = session.get("person_id")
+    conn = get_connection()
+    try:
+        _execute(
+            conn,
+            f"INSERT INTO documents (id, filename, file_path, file_type, uploaded_by, status, parsed_data) "
+            f"VALUES ({_ph(7)})",
+            (doc_id, url, url, "link", uploaded_by, "parsed", _json.dumps(result)),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({"id": doc_id, "proposed_changes": result})
+
+
 @documents_bp.route("/api/import/gedcom", methods=["POST"])
 @web_server.require_editor
 def api_import_gedcom():
@@ -756,9 +824,11 @@ def api_apply_document(doc_id):
         except Exception as e:
             logger.warning("Could not save relationship %s→%s: %s", parent_id, child_id, e)
 
-    # Apply events
+    # Apply events. Link-sourced docs carry the URL itself as the event source
+    # (so it renders as a clickable provenance link), not an opaque doc id.
     from models.event import EventType, LifeEvent
 
+    event_source = row["filename"] if row.get("file_type") == "link" else f"doc-{doc_id}"
     for e_data in changes.get("events", []):
         person_id = e_data.get("person_id", "")
         if not person_id:
@@ -774,7 +844,7 @@ def api_apply_document(doc_id):
             end_date=e_data.get("end_date"),
             place=e_data.get("place"),
             description=e_data.get("description", ""),
-            source=f"doc-{doc_id}",
+            source=event_source,
         )
         try:
             repo.save_event(event)

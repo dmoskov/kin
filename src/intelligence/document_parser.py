@@ -277,6 +277,57 @@ Extract all people, relationships, dates, places, and events. Match people to ex
         return {"error": str(e)}
 
 
+def parse_text(
+    text: str, existing_people: list[dict], source_label: str = "pasted text"
+) -> dict[str, Any]:
+    """Extract family-tree data from plain text (e.g. an obituary fetched from a
+    link). Same schema/prompt as parse_document, text-only input."""
+    client = _get_client()
+    people_context = _build_existing_people_context(existing_people)
+    user_prompt = f"""Analyze this document and extract all family tree information.
+
+Document source: {source_label}
+
+{people_context}
+
+Extract all people, relationships, dates, places, and events. Match people to existing records where possible (set their existing id; don't create duplicates). Return ONLY valid JSON.
+
+Document text:
+{text}"""
+    content = [{"type": "text", "text": user_prompt}]
+    try:
+        response_text = ""
+        stop_reason = None
+        with client.messages.stream(
+            model="claude-sonnet-4-6",
+            max_tokens=65536,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": content}],
+        ) as stream:
+            for chunk in stream.text_stream:
+                response_text += chunk
+            stop_reason = stream.get_final_message().stop_reason
+        json_text = response_text
+        if "```json" in json_text:
+            json_text = json_text.split("```json")[1].split("```")[0]
+        elif "```" in json_text:
+            json_text = json_text.split("```")[1].split("```")[0]
+        return json.loads(json_text.strip())
+    except json.JSONDecodeError as e:
+        truncated = stop_reason == "max_tokens"
+        return {
+            "error": (
+                "AI response was truncated — too much text. Try a shorter excerpt."
+                if truncated
+                else f"AI returned invalid JSON: {e}"
+            ),
+            "raw_response": response_text[:2000],
+        }
+    except Exception as e:
+        logger.error("Text parsing failed: %s", e)
+        return {"error": str(e)}
+
+
 # ── Chunked PDF Processing ──────────────────────────────────────────────
 
 TEXT_CHAR_THRESHOLD = 50

@@ -42,6 +42,22 @@ const _EVENT_TYPE_LABELS = {
   residence: "Residence", religion: "Religion", medical: "Medical", custom: "Other",
 };
 
+// Provenance chip — shows where a fact came from: a clickable link for URLs
+// (📖 for Wikipedia), or a labeled citation chip for documents/named sources.
+function _sourceChip(src) {
+  if (!src) return "";
+  const s = String(src);
+  if (/^https?:\/\//i.test(s)) {
+    let host = "source";
+    try { host = new URL(s).hostname.replace(/^www\./, ""); } catch { /* keep default */ }
+    const icon = /wikipedia\.org/i.test(s) ? "📖" : "🔗";
+    return ` <a class="src-chip" href="${escapeHtml(s)}" target="_blank" rel="noopener" title="Source: ${escapeHtml(s)}">${icon} ${escapeHtml(host)}</a>`;
+  }
+  if (s.startsWith("doc-")) return ` <span class="src-chip" title="From an uploaded document">📄 document</span>`;
+  if (/wikipedia/i.test(s)) return ` <span class="src-chip" title="Source: Wikipedia">📖 Wikipedia</span>`;
+  return ` <span class="src-chip" title="Source: ${escapeHtml(s)}">📄 ${escapeHtml(s)}</span>`;
+}
+
 function _formatEventDate(date, endDate, circa) {
   if (!date) return "?";
   const prefix = circa ? "c. " : "";
@@ -319,7 +335,7 @@ export function showPersonPanel(personId) {
           </div>
           <div class="panel-event-body">
             <span class="panel-event-date">${date}</span>
-            <span class="panel-event-desc">${escapeHtml(e.description || (e.kind === "event" ? (_EVENT_TYPE_LABELS[e.event_type] || e.event_type) : ""))}${e.place ? " · <span class='panel-event-place'>" + escapeHtml(e.place) + "</span>" : ""}${e.source && e.source.startsWith("http") ? ` · <a class="panel-event-source" href="${escapeHtml(e.source)}" target="_blank" rel="noopener">source</a>` : ""}</span>
+            <span class="panel-event-desc">${escapeHtml(e.description || (e.kind === "event" ? (_EVENT_TYPE_LABELS[e.event_type] || e.event_type) : ""))}${e.place ? " · <span class='panel-event-place'>" + escapeHtml(e.place) + "</span>" : ""}${e.kind === "event" ? _sourceChip(e.source) : ""}</span>
             ${photoThumb}
             ${editActions}
           </div>
@@ -1023,7 +1039,7 @@ function _buildPlacesSection(personId, person, events) {
           <div class="panel-place-name">${escapeHtml(e.place || e.description || typeLabel)}</div>
           <div class="panel-place-dates">
             <span class="panel-place-type-pill ${typeClass}">${typeLabel}</span>
-            ${dateStr !== "?" ? " " + dateStr : ""}
+            ${dateStr !== "?" ? " " + dateStr : ""}${_sourceChip(e.source)}
           </div>
           ${e.description && e.place ? `<div class="panel-place-desc">${escapeHtml(e.description)}</div>` : ""}
           ${canEdit && e.id ? `<span class="panel-event-actions"><button class="panel-event-edit-btn" onclick="openEditEventForm(${e.id}, '${personId}')" title="Edit">✎</button><button class="panel-event-del-btn" onclick="deleteEvent(${e.id}, '${personId}')" title="Delete">×</button></span>` : ""}
