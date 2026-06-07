@@ -145,6 +145,41 @@ let _reviewModalTrap = null;
     fileInput.value = "";
   });
 
+  // Paste-a-link: fetch + AI-extract server-side, then reuse the review/apply UI.
+  const urlInput = document.getElementById("doc-url-input");
+  const urlBtn = document.getElementById("doc-url-btn");
+  const urlStatus = document.getElementById("doc-url-status");
+  async function handleUrl() {
+    const url = (urlInput?.value || "").trim();
+    if (!url) return;
+    if (urlStatus) urlStatus.textContent = "Reading link…";
+    if (urlBtn) urlBtn.disabled = true;
+    try {
+      const resp = await fetch("/api/documents/from-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        if (urlStatus) urlStatus.textContent = data.error || "Couldn't read that link.";
+        return;
+      }
+      CURRENT_DOC_ID = data.id;
+      CURRENT_PROPOSED = data.proposed_changes;
+      if (urlStatus) urlStatus.textContent = "";
+      if (urlInput) urlInput.value = "";
+      closeModal();
+      openReviewModal(data.proposed_changes, url, false);
+    } catch {
+      if (urlStatus) urlStatus.textContent = "Network error.";
+    } finally {
+      if (urlBtn) urlBtn.disabled = false;
+    }
+  }
+  urlBtn?.addEventListener("click", handleUrl);
+  urlInput?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); handleUrl(); } });
+
   retryBtn.addEventListener("click", () => {
     resetDocUI();
     dropZone.style.display = "";

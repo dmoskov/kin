@@ -855,6 +855,24 @@ main {
 .panel-event-source:hover {
   opacity: 1;
 }
+/* Provenance chip — where a fact came from (link / Wikipedia / document / citation) */
+.src-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  padding: 0 6px;
+  margin-left: 4px;
+  border-radius: 8px;
+  white-space: nowrap;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--text-muted) 12%, transparent);
+  text-decoration: none;
+  vertical-align: 1px;
+}
+a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
 .panel-event-photo {
   display: block;
   max-width: 120px;
@@ -3003,6 +3021,42 @@ main {
   padding: 24px;
   width: min(480px, 90vw);
 }
+/* "or paste a link" row in the document modal */
+.doc-url-row { margin-top: 14px; }
+.doc-url-or {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+  margin-bottom: 8px;
+}
+.doc-url-input-group { display: flex; gap: 8px; }
+.doc-url-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+}
+.doc-url-btn {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.doc-url-btn:hover { background: var(--accent-hover); }
+.doc-url-btn:disabled { opacity: 0.6; cursor: default; }
+.doc-url-status { display: block; font-size: 12px; color: var(--text-muted); margin-top: 6px; min-height: 16px; }
 .doc-drop-zone {
   border: 2px dashed var(--border);
   border-radius: var(--radius);
