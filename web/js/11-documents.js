@@ -149,16 +149,23 @@ let _reviewModalTrap = null;
   const urlInput = document.getElementById("doc-url-input");
   const urlBtn = document.getElementById("doc-url-btn");
   const urlStatus = document.getElementById("doc-url-status");
+  const urlText = document.getElementById("doc-url-text");
+  const pasteToggle = document.getElementById("doc-url-paste-toggle");
+  pasteToggle?.addEventListener("click", () => {
+    urlText?.classList.toggle("hidden");
+    if (urlText && !urlText.classList.contains("hidden")) urlText.focus();
+  });
   async function handleUrl() {
     const url = (urlInput?.value || "").trim();
-    if (!url) return;
-    if (urlStatus) urlStatus.textContent = "Reading link…";
+    const text = urlText && !urlText.classList.contains("hidden") ? (urlText.value || "").trim() : "";
+    if (!url && !text) return;
+    if (urlStatus) urlStatus.textContent = text ? "Extracting…" : "Reading link…";
     if (urlBtn) urlBtn.disabled = true;
     try {
       const resp = await fetch("/api/documents/from-url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url, text }),
       });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) {
@@ -169,6 +176,7 @@ let _reviewModalTrap = null;
       CURRENT_PROPOSED = data.proposed_changes;
       if (urlStatus) urlStatus.textContent = "";
       if (urlInput) urlInput.value = "";
+      if (urlText) { urlText.value = ""; urlText.classList.add("hidden"); }
       closeModal();
       openReviewModal(data.proposed_changes, url, false);
     } catch {

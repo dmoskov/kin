@@ -259,12 +259,20 @@ def _fetch_url_text(url: str) -> tuple[str | None, str | None]:
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
     )
+    headers = {
+        "User-Agent": ua,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": ua})
+        req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=25) as resp:
             raw = resp.read(3_000_000).decode("utf-8", "ignore")
     except Exception as e:
-        return None, f"Couldn't fetch the link: {e}"
+        return (
+            None,
+            f"Couldn't fetch the link ({e}). Some sites block automated access — paste the text instead.",
+        )
     raw = re.sub(r"<(script|style|noscript|svg)[^>]*>.*?</\1>", " ", raw, flags=re.S | re.I)
     txt = re.sub(r"<[^>]+>", " ", raw)
     txt = unescape(re.sub(r"[ \t ]+", " ", txt))
@@ -284,32 +292,43 @@ def api_document_from_url():
 
     body = request.get_json(silent=True) or {}
     url = (body.get("url") or "").strip()
-    if not url.lower().startswith(("http://", "https://")):
-        return jsonify({"error": "Enter a valid http(s) link."}), 400
+    pasted = (body.get("text") or "").strip()
 
-    text, err = _fetch_url_text(url)
-    if err:
-        return jsonify({"error": err, "code": "fetch_failed"}), 502
-    if not text or len(text) < 40:
-        return jsonify(
-            {
-                "error": "Couldn't extract readable text from that page. Try pasting the text instead."
-            }
-        ), 422
+    if pasted:
+        # Paste-text path: use the text directly (fallback for anti-bot sites).
+        if len(pasted) < 40:
+            return jsonify({"error": "That text is too short to extract anything useful."}), 422
+        text = pasted
+        label = url if url.lower().startswith(("http://", "https://")) else "pasted text"
+    else:
+        if not url.lower().startswith(("http://", "https://")):
+            return jsonify({"error": "Enter a valid http(s) link (or paste the text)."}), 400
+        text, err = _fetch_url_text(url)
+        if err:
+            return jsonify({"error": err, "code": "fetch_failed"}), 502
+        if not text or len(text) < 40:
+            return jsonify(
+                {
+                    "error": "Couldn't extract readable text from that page. Paste the text instead.",
+                    "code": "fetch_failed",
+                }
+            ), 422
+        label = url
 
-    result = parse_text(text[:30000], _get_existing_people(), url)
+    result = parse_text(text[:30000], _get_existing_people(), label)
     if "error" in result:
         return jsonify(result), 502
 
     doc_id = uuid.uuid4().hex[:12]
     uploaded_by = session.get("person_id")
+    doc_name = url if url.lower().startswith(("http://", "https://")) else "Pasted text"
     conn = get_connection()
     try:
         _execute(
             conn,
             f"INSERT INTO documents (id, filename, file_path, file_type, uploaded_by, status, parsed_data) "
             f"VALUES ({_ph(7)})",
-            (doc_id, url, url, "link", uploaded_by, "parsed", _json.dumps(result)),
+            (doc_id, doc_name, doc_name, "link", uploaded_by, "parsed", _json.dumps(result)),
         )
         conn.commit()
     finally:

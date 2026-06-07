@@ -3057,6 +3057,32 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
 .doc-url-btn:hover { background: var(--accent-hover); }
 .doc-url-btn:disabled { opacity: 0.6; cursor: default; }
 .doc-url-status { display: block; font-size: 12px; color: var(--text-muted); margin-top: 6px; min-height: 16px; }
+.doc-url-paste-toggle {
+  display: block;
+  margin-top: 8px;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.doc-url-paste-toggle:hover { color: var(--accent); }
+.doc-url-text {
+  width: 100%;
+  margin-top: 8px;
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  resize: vertical;
+  box-sizing: border-box;
+}
 .doc-drop-zone {
   border: 2px dashed var(--border);
   border-radius: var(--radius);
