@@ -3,6 +3,10 @@
 Covers:
   - POST /api/relationships — create parent-child relationship (happy path,
     missing fields, 404 for unknown parent or child).
+  - PATCH /api/relationships — edit rel_type/visibility (happy path, persist,
+    missing ids, 404, invalid value, nothing-to-update).
+  - DELETE /api/relationships — remove a link (happy path, persist, missing
+    ids, 404).
   - POST /api/unions — create partnership (happy path, missing fields, 404
     for unknown partner).
   - PATCH /api/people/<id> — edit person details from the panel (name, gender,
@@ -135,6 +139,119 @@ class TestCreateRelationship:
         )
         assert resp.status_code == 400
         assert resp.get_json()["code"] == "bad_request"
+
+
+# ── PATCH /api/relationships ─────────────────────────────────────────────
+
+
+class TestUpdateRelationship:
+    def _create(self, client):
+        client.post("/api/relationships", json={"parent_id": "parent1", "child_id": "child1"})
+
+    def test_happy_path(self, app_client):
+        client, _, _ = app_client
+        self._create(client)
+        resp = client.patch(
+            "/api/relationships",
+            json={
+                "parent_id": "parent1",
+                "child_id": "child1",
+                "rel_type": "adoptive",
+                "visibility": "extended",
+            },
+        )
+        assert resp.status_code == 200, resp.get_data(as_text=True)
+
+    def test_update_persists_in_api_data(self, app_client):
+        client, _, _ = app_client
+        self._create(client)
+        client.patch(
+            "/api/relationships",
+            json={
+                "parent_id": "parent1",
+                "child_id": "child1",
+                "rel_type": "adoptive",
+                "visibility": "extended",
+            },
+        )
+        rels = client.get("/api/data").get_json()["relationships"]
+        rel = next(r for r in rels if r["parent_id"] == "parent1" and r["child_id"] == "child1")
+        assert rel["rel_type"] == "adoptive"
+        assert rel["visibility"] == "extended"
+
+    def test_missing_ids(self, app_client):
+        client, _, _ = app_client
+        resp = client.patch("/api/relationships", json={"rel_type": "step"})
+        assert resp.status_code == 400
+        assert resp.get_json()["code"] == "bad_request"
+
+    def test_unknown_relationship_returns_404(self, app_client):
+        client, _, _ = app_client
+        resp = client.patch(
+            "/api/relationships",
+            json={"parent_id": "parent1", "child_id": "child1", "rel_type": "step"},
+        )
+        assert resp.status_code == 404
+        assert resp.get_json()["code"] == "not_found"
+
+    def test_invalid_rel_type_rejected(self, app_client):
+        client, _, _ = app_client
+        self._create(client)
+        resp = client.patch(
+            "/api/relationships",
+            json={"parent_id": "parent1", "child_id": "child1", "rel_type": "bogus"},
+        )
+        assert resp.status_code == 400
+        assert resp.get_json()["code"] == "bad_request"
+
+    def test_nothing_to_update_rejected(self, app_client):
+        client, _, _ = app_client
+        self._create(client)
+        resp = client.patch(
+            "/api/relationships",
+            json={"parent_id": "parent1", "child_id": "child1"},
+        )
+        assert resp.status_code == 400
+        assert resp.get_json()["code"] == "bad_request"
+
+
+# ── DELETE /api/relationships ────────────────────────────────────────────
+
+
+class TestDeleteRelationship:
+    def _create(self, client):
+        client.post("/api/relationships", json={"parent_id": "parent1", "child_id": "child1"})
+
+    def test_happy_path(self, app_client):
+        client, _, _ = app_client
+        self._create(client)
+        resp = client.delete(
+            "/api/relationships",
+            json={"parent_id": "parent1", "child_id": "child1"},
+        )
+        assert resp.status_code == 204, resp.get_data(as_text=True)
+
+    def test_delete_removes_from_api_data(self, app_client):
+        client, _, _ = app_client
+        self._create(client)
+        client.delete("/api/relationships", json={"parent_id": "parent1", "child_id": "child1"})
+        rels = client.get("/api/data").get_json()["relationships"]
+        assert not any(r["parent_id"] == "parent1" and r["child_id"] == "child1" for r in rels)
+
+    def test_missing_ids(self, app_client):
+        client, _, _ = app_client
+        resp = client.delete("/api/relationships", json={"parent_id": "parent1"})
+        assert resp.status_code == 400
+        assert resp.get_json()["code"] == "bad_request"
+
+    def test_unknown_relationship_returns_404(self, app_client):
+        client, _, _ = app_client
+        resp = client.delete(
+            "/api/relationships",
+            json={"parent_id": "parent1", "child_id": "child1"},
+        )
+        assert resp.status_code == 404
+        assert resp.get_json()["code"] == "not_found"
 
 
 # ── POST /api/unions ─────────────────────────────────────────────────────
