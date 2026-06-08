@@ -425,38 +425,10 @@ export function gatherTimelineEntries() {
     }
   }
 
-  // Life-stage context: age of the subject at each event ("married at 24",
-  // "immigrated at 18"). Births are age 0 (skipped); marriage also gets the
-  // second partner's age.
-  const birthYear = {};
-  for (const p of S.DATA.people) if (p.birth_date) birthYear[p.id] = dateYear(p.birth_date);
-  for (const e of entries) {
-    if (!e.year) continue;
-    const by = birthYear[e.personId];
-    if (by != null) { const a = e.year - by; if (a >= 0 && a <= 119) e.age = a; }
-    if (e.type === "marriage" && e.partner2Id && birthYear[e.partner2Id] != null) {
-      const a2 = e.year - birthYear[e.partner2Id];
-      if (a2 >= 0 && a2 <= 119) e.partner2Age = a2;
-    }
-  }
-
   return clusterPhotoEntries(entries).filter((e) => e.date && e.year);
 }
 
-// Small "age at event" chip — "married at 24 & 22", "age 18", etc.
-function ageChipHtml(e) {
-  if (e.type === "marriage") {
-    // No ages on an approximate (undated) marriage — the year is a guess.
-    if (e.approxDate) return "";
-    // Casually omit ages when the partners' gap is large (> 15 years).
-    if (e.age && e.partner2Age && Math.abs(e.age - e.partner2Age) > 15) return "";
-    if (e.age && e.partner2Age) return `<span class="tstream-age">married at ${e.age} & ${e.partner2Age}</span>`;
-    if (e.age) return `<span class="tstream-age">married at ${e.age}</span>`;
-    return "";
-  }
-  if (e.type === "birth" || !e.age) return "";
-  return `<span class="tstream-age">age ${e.age}</span>`;
-}
+function ageChipHtml() { return ""; }
 
 // ── Photo clustering (same-event grouping with collage safety) ───
 // Groups multiple photo entries that share a lane + date + place into a
@@ -599,7 +571,7 @@ function buildLivingNowHtml() {
   }
   // Group by current location (latest residence, else birthplace). Eldest first
   // within each location, and groups ordered by their eldest member; whereabouts
-  // unknown goes last. Ages are intentionally not shown here.
+  // unknown goes last.
   const groups = {};
   for (const item of living) {
     const loc = ((res[item.p.id] && res[item.p.id].place) || item.p.birth_place || "").trim();
