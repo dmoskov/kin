@@ -516,11 +516,15 @@ main {
   margin-top: 6px;
   letter-spacing: 0.2px;
 }
-.panel-hero-edit-btn {
+.panel-hero-actions {
   position: absolute;
   top: 12px;
   right: 12px;
   z-index: 2;
+  display: flex;
+  gap: 6px;
+}
+.panel-hero-edit-btn {
   background: rgba(0, 0, 0, 0.45);
   border: 1px solid rgba(255, 255, 255, 0.35);
   color: #fff;
@@ -535,6 +539,10 @@ main {
 .panel-hero-edit-btn:hover {
   background: rgba(0, 0, 0, 0.65);
   border-color: #fff;
+}
+.panel-hero-delete-btn:hover {
+  background: rgba(150, 30, 30, 0.7);
+  border-color: #ff8a8a;
 }
 
 .panel-name {
