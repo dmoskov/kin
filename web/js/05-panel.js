@@ -785,6 +785,12 @@ export async function submitAddRelative(personId, relationship) {
 // Edit Person Form
 // ═══════════════════════════════════════════════════════════════
 
+const _GENDER_OPTIONS = [
+  { value: "unknown", label: "Gender" },
+  { value: "male", label: "Male" },
+  { value: "female", label: "Female" },
+];
+
 export function openEditPersonForm(personId) {
   const form = document.getElementById("edit-person-form");
   if (!form) return;
@@ -792,91 +798,24 @@ export function openEditPersonForm(personId) {
   const person = S.PEOPLE_MAP[personId];
   if (!person) return;
 
-  const esc = escapeHtml;
-
-  form.innerHTML = `
-    <div class="add-relative-form-inner">
-      <div class="add-relative-row">
-        <input id="epf-given" type="text" placeholder="First name" class="add-relative-input" value="${esc(person.given_name)}" />
-        <input id="epf-surname" type="text" placeholder="Last name" class="add-relative-input" value="${esc(person.surname)}" />
-      </div>
-      <div class="add-relative-row">
-        <select id="epf-gender" class="add-relative-input">
-          <option value="unknown" ${person.gender === "unknown" ? "selected" : ""}>Gender</option>
-          <option value="male" ${person.gender === "male" ? "selected" : ""}>Male</option>
-          <option value="female" ${person.gender === "female" ? "selected" : ""}>Female</option>
-        </select>
-      </div>
-      <div class="add-relative-row">
-        <input id="epf-birth" type="text" placeholder="Birth date (e.g. 1987 or 1987-05-12)" class="add-relative-input" value="${esc(person.birth_date)}" />
-        <input id="epf-birth-place" type="text" placeholder="Birth place (optional)" class="add-relative-input" value="${esc(person.birth_place)}" />
-      </div>
-      <div class="add-relative-row">
-        <input id="epf-death" type="text" placeholder="Death date (optional)" class="add-relative-input" value="${esc(person.death_date)}" />
-        <input id="epf-death-place" type="text" placeholder="Death place (optional)" class="add-relative-input" value="${esc(person.death_place)}" />
-      </div>
-      <div class="add-relative-row">
-        <input id="epf-email" type="email" placeholder="Email (optional)" class="add-relative-input" value="${esc(person.email)}" />
-      </div>
-      <div class="add-relative-actions">
-        <button class="add-relative-submit" onclick="submitEditPerson('${personId}')">Save</button>
-        <button class="add-relative-cancel" onclick="document.getElementById('edit-person-form').classList.add('hidden')">Cancel</button>
-      </div>
-      <div id="epf-error" class="add-relative-error hidden"></div>
-    </div>
-  `;
-  form.classList.remove("hidden");
-  document.getElementById("epf-given").focus();
-}
-
-export async function submitEditPerson(personId) {
-  const givenName = document.getElementById("epf-given").value.trim();
-  const surname = document.getElementById("epf-surname").value.trim();
-  const gender = document.getElementById("epf-gender").value;
-  const birthDate = document.getElementById("epf-birth").value.trim();
-  const birthPlace = document.getElementById("epf-birth-place").value.trim();
-  const deathDate = document.getElementById("epf-death").value.trim();
-  const deathPlace = document.getElementById("epf-death-place").value.trim();
-  const emailVal = document.getElementById("epf-email").value.trim();
-  const errorEl = document.getElementById("epf-error");
-
-  if (!givenName && !surname) {
-    errorEl.textContent = "Enter at least a first or last name.";
-    errorEl.classList.remove("hidden");
-    return;
-  }
-
-  try {
-    const res = await fetch(`/api/people/${personId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        given_name: givenName,
-        surname,
-        gender,
-        birth_date: birthDate || null,
-        birth_place: birthPlace || null,
-        death_date: deathDate || null,
-        death_place: deathPlace || null,
-        email: emailVal || null,
-      }),
-    });
-    if (!res.ok) {
-      const data = await res.json();
-      errorEl.textContent = data.error || "Failed to save.";
-      errorEl.classList.remove("hidden");
-      return;
-    }
-  } catch {
-    errorEl.textContent = "Network error. Please try again.";
-    errorEl.classList.remove("hidden");
-    return;
-  }
-
-  await loadData();
-  autoComputeLanes(S.CENTER_ID_A, S.CENTER_ID_B);
-  refreshAllViews();
-  showPersonPanel(personId);
+  EditForm.open({
+    mount: { el: form, mode: "toggle" },
+    values: person,
+    fields: [
+      { key: "given_name", type: "text", label: "First name", placeholder: "First name", half: true, keepEmpty: true },
+      { key: "surname", type: "text", label: "Last name", placeholder: "Last name", half: true, keepEmpty: true },
+      { key: "gender", type: "enum", label: "Gender", options: _GENDER_OPTIONS },
+      { key: "birth_date", type: "date", label: "Birth date", placeholder: "Birth date (e.g. 1987 or 1987-05-12)", half: true },
+      { key: "birth_place", type: "place", label: "Birth place", placeholder: "Birth place (optional)", half: true },
+      { key: "death_date", type: "date", label: "Death date", placeholder: "Death date (optional)", half: true },
+      { key: "death_place", type: "place", label: "Death place", placeholder: "Death place (optional)", half: true },
+      { key: "email", type: "email", label: "Email", placeholder: "Email (optional)" },
+    ],
+    validate: (p) =>
+      !p.given_name && !p.surname ? "Enter at least a first or last name." : null,
+    onSave: (p) => api.patch(`/api/people/${personId}`, p),
+    onSuccess: () => afterMutate(personId),
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1255,97 +1194,39 @@ export function openEditEventForm(eventId, personId) {
     panel.appendChild(container);
   }
 
-  const esc = escapeHtml;
-  container.innerHTML = `
-    <div class="add-relative-form-inner">
-      <h3 style="margin:0 0 10px">Edit Event</h3>
-      <div class="add-relative-row">
-        <select id="eef-type" class="add-relative-input">
-          ${Object.entries(_EVENT_TYPE_LABELS).filter(([k]) => k !== "birth" && k !== "death" && k !== "marriage" && k !== "divorce").map(([k, v]) =>
-            `<option value="${k}" ${event.event_type === k ? "selected" : ""}>${v}</option>`
-          ).join("")}
-        </select>
-      </div>
-      <div class="add-relative-row">
-        <input id="eef-place" type="text" placeholder="Place" class="add-relative-input" value="${esc(event.place || "")}" />
-      </div>
-      <div class="add-relative-row">
-        <input id="eef-date" type="text" placeholder="Start date" class="add-relative-input" value="${esc(event.date || "")}" />
-        <input id="eef-end-date" type="text" placeholder="End date" class="add-relative-input" value="${esc(event.end_date || "")}" />
-      </div>
-      <div class="add-relative-row">
-        <label class="apf-circa-label"><input id="eef-circa" type="checkbox" ${event.date_circa ? "checked" : ""} /> Approximate date</label>
-      </div>
-      <div class="add-relative-row">
-        <input id="eef-desc" type="text" placeholder="Description" class="add-relative-input" value="${esc(event.description || "")}" />
-      </div>
-      <div class="add-relative-actions">
-        <button class="add-relative-submit" onclick="submitEditEvent(${eventId}, '${personId}')">Save</button>
-        <button class="add-relative-cancel" onclick="document.getElementById('edit-event-overlay')?.remove()">Cancel</button>
-      </div>
-      <div id="eef-error" class="add-relative-error hidden"></div>
-    </div>
-  `;
-  container.classList.remove("hidden");
-  document.getElementById("eef-place")?.focus();
-}
+  // Birth/death/marriage/divorce are managed via the person/union forms.
+  const typeOptions = Object.entries(_EVENT_TYPE_LABELS)
+    .filter(([k]) => k !== "birth" && k !== "death" && k !== "marriage" && k !== "divorce")
+    .map(([value, label]) => ({ value, label }));
 
-export async function submitEditEvent(eventId, personId) {
-  const eventType = document.getElementById("eef-type").value;
-  const place = document.getElementById("eef-place").value.trim();
-  const date = document.getElementById("eef-date").value.trim();
-  const endDate = document.getElementById("eef-end-date").value.trim();
-  const circa = document.getElementById("eef-circa").checked;
-  const desc = document.getElementById("eef-desc").value.trim();
-  const errorEl = document.getElementById("eef-error");
-
-  try {
-    const body = {
-      event_type: eventType,
-      place: place || null,
-      date: date || null,
-      end_date: endDate || null,
-      date_circa: circa,
-      description: desc || null,
-    };
-
-    const res = await fetch(`/api/events/${eventId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const data = await res.json();
-      errorEl.textContent = data.error || "Failed to save.";
-      errorEl.classList.remove("hidden");
-      return;
-    }
-  } catch {
-    errorEl.textContent = "Network error.";
-    errorEl.classList.remove("hidden");
-    return;
-  }
-
-  await loadData();
-  autoComputeLanes(S.CENTER_ID_A, S.CENTER_ID_B);
-  refreshAllViews();
-  showPersonPanel(personId);
+  EditForm.open({
+    mount: { el: container, mode: "remove" },
+    title: "Edit Event",
+    values: event,
+    fields: [
+      { key: "event_type", type: "enum", label: "Type", options: typeOptions },
+      { key: "place", type: "place", label: "Place", placeholder: "Place" },
+      { key: "date", type: "date", label: "Start date", placeholder: "Start date", half: true },
+      { key: "end_date", type: "date", label: "End date", placeholder: "End date", half: true },
+      { key: "date_circa", type: "checkbox", label: "Approximate date" },
+      { key: "description", type: "text", label: "Description", placeholder: "Description" },
+    ],
+    onSave: (p) => api.patch(`/api/events/${eventId}`, p),
+    onSuccess: () => afterMutate(personId),
+  });
 }
 
 export async function deleteEvent(eventId, personId) {
   if (!confirm("Delete this event?")) return;
 
   try {
-    const res = await fetch(`/api/events/${eventId}`, { method: "DELETE" });
+    const res = await api.del(`/api/events/${eventId}`);
     if (!res.ok) return;
   } catch {
     return;
   }
 
-  await loadData();
-  autoComputeLanes(S.CENTER_ID_A, S.CENTER_ID_B);
-  refreshAllViews();
-  showPersonPanel(personId);
+  await afterMutate(personId);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1371,78 +1252,38 @@ export function openEditUnionForm(personId, partnerId) {
     panel.appendChild(container);
   }
 
-  const esc = escapeHtml;
   const partnerName = personName(partnerId);
-  container.innerHTML = `
-    <div class="add-relative-form-inner">
-      <h3 style="margin:0 0 10px">Marriage with ${esc(partnerName)}</h3>
-      <div class="add-relative-row">
-        <input id="euf-date" type="text" placeholder="Married (e.g. 1958 or 1958-06)" class="add-relative-input" value="${esc(union.union_date || "")}" />
-        <input id="euf-place" type="text" placeholder="Place (optional)" class="add-relative-input" value="${esc(union.union_place || "")}" />
-      </div>
-      <div class="add-relative-row">
-        <input id="euf-end-date" type="text" placeholder="Ended (e.g. 1972) — leave blank if still together" class="add-relative-input" value="${esc(union.end_date || "")}" />
-        <select id="euf-end-reason" class="add-relative-input">
-          ${["", "divorce", "death", "separation"]
-            .map(
-              (r) =>
-                `<option value="${r}" ${(union.end_reason || "") === r ? "selected" : ""}>${r ? r[0].toUpperCase() + r.slice(1) : "Reason…"}</option>`
-            )
-            .join("")}
-        </select>
-      </div>
-      <div class="add-relative-row">
-        <input id="euf-notes" type="text" placeholder="Notes (optional)" class="add-relative-input" value="${esc(union.notes || "")}" />
-      </div>
-      <div class="add-relative-actions">
-        <button class="add-relative-submit" onclick="submitEditUnion('${personId}', '${partnerId}')">Save</button>
-        <button class="add-relative-cancel" onclick="document.getElementById('edit-union-overlay')?.remove()">Cancel</button>
-      </div>
-      <div id="euf-error" class="add-relative-error hidden"></div>
-    </div>
-  `;
-  container.classList.remove("hidden");
-  document.getElementById("euf-date")?.focus();
-}
+  const endReasonOptions = [
+    { value: "", label: "Reason…" },
+    { value: "divorce", label: "Divorce" },
+    { value: "death", label: "Death" },
+    { value: "separation", label: "Separation" },
+  ];
 
-export async function submitEditUnion(personId, partnerId) {
-  const errorEl = document.getElementById("euf-error");
-  const endDate = document.getElementById("euf-end-date").value.trim();
-  const endReason = document.getElementById("euf-end-reason").value;
-  const body = {
-    partner1_id: personId,
-    partner2_id: partnerId,
-    union_date: document.getElementById("euf-date").value.trim() || null,
-    union_place: document.getElementById("euf-place").value.trim() || null,
-    end_date: endDate || null,
-    // Only meaningful when the marriage ended; clear it otherwise.
-    end_reason: endDate ? endReason || null : null,
-    notes: document.getElementById("euf-notes").value.trim() || null,
-  };
-
-  try {
-    const res = await fetch("/api/unions", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      errorEl.textContent = data.error || "Failed to save.";
-      errorEl.classList.remove("hidden");
-      return;
-    }
-  } catch {
-    errorEl.textContent = "Network error.";
-    errorEl.classList.remove("hidden");
-    return;
-  }
-
-  document.getElementById("edit-union-overlay")?.remove();
-  await loadData();
-  autoComputeLanes(S.CENTER_ID_A, S.CENTER_ID_B);
-  refreshAllViews();
-  showPersonPanel(personId);
+  EditForm.open({
+    mount: { el: container, mode: "remove" },
+    title: `Marriage with ${partnerName}`,
+    values: union,
+    fields: [
+      { key: "union_date", type: "date", label: "Married", placeholder: "Married (e.g. 1958 or 1958-06)", half: true },
+      { key: "union_place", type: "place", label: "Place", placeholder: "Place (optional)", half: true },
+      { key: "end_date", type: "date", label: "Ended", placeholder: "Ended (e.g. 1972) — leave blank if still together", half: true },
+      { key: "end_reason", type: "enum", label: "Reason", options: endReasonOptions, half: true },
+      { key: "notes", type: "text", label: "Notes", placeholder: "Notes (optional)" },
+    ],
+    onSave: (p) =>
+      api.patch("/api/unions", {
+        partner1_id: personId,
+        partner2_id: partnerId,
+        union_date: p.union_date,
+        union_place: p.union_place,
+        end_date: p.end_date,
+        // end_reason is only meaningful when the marriage ended; clear it otherwise.
+        end_reason: p.end_date ? p.end_reason || null : null,
+        notes: p.notes,
+      }),
+    onSuccess: () => afterMutate(personId),
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════
