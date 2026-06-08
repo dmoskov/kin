@@ -102,7 +102,10 @@ export function showPersonPanel(personId) {
 
   const canEdit = !S.CONFIG?.editorsEnabled || S.AUTH_USER?.is_editor;
   const editBtn = canEdit
-    ? `<button class="panel-hero-edit-btn" onclick="openEditPersonForm('${personId}')" title="Edit person">Edit</button>`
+    ? `<div class="panel-hero-actions">` +
+      `<button class="panel-hero-edit-btn" onclick="openEditPersonForm('${personId}')" title="Edit person">Edit</button>` +
+      `<button class="panel-hero-edit-btn panel-hero-delete-btn" onclick="deletePerson('${personId}')" title="Delete person">Delete</button>` +
+      `</div>`
     : "";
 
   // Full-bleed hero. When the profile photo has a face-crop (e.g. a face within
@@ -217,11 +220,18 @@ export function showPersonPanel(personId) {
     return `<span class="panel-visibility-badge">${label}</span>`;
   }
 
+  // Edit (type/visibility) + remove affordances on a parent-child link.
+  const _relEditBtns = (parentId, childId) =>
+    canEdit
+      ? ` <button class="panel-event-edit-btn" onclick="openEditRelationshipForm('${parentId}','${childId}','${personId}')" title="Edit relationship">✎</button>` +
+        `<button class="panel-event-edit-btn" onclick="deleteRelationship('${parentId}','${childId}','${personId}')" title="Remove relationship">✕</button>`
+      : "";
+
   // Family
   if (familyParentRels.length || children.length || partners.length || exPartners.length || siblings.length) {
     html += `<div class="panel-section"><h3>Family</h3><ul class="panel-family-list">`;
     for (const rel of familyParentRels) {
-      html += `<li><a class="person-link" data-person-id="${rel.parent_id}" href="javascript:void(0)">${personThumb(rel.parent_id, 28)} ${personName(rel.parent_id)}</a> ${_relTypePill(rel)}${_visibilityBadge(rel)}</li>`;
+      html += `<li><a class="person-link" data-person-id="${rel.parent_id}" href="javascript:void(0)">${personThumb(rel.parent_id, 28)} ${personName(rel.parent_id)}</a> ${_relTypePill(rel)}${_visibilityBadge(rel)}${_relEditBtns(rel.parent_id, personId)}</li>`;
     }
     for (const pid of siblings) {
       html += `<li><a class="person-link" data-person-id="${pid}" href="javascript:void(0)">${personThumb(pid, 28)} ${personName(pid)}</a> <span class="panel-rel-pill panel-rel-sibling">sibling</span></li>`;
@@ -238,7 +248,7 @@ export function showPersonPanel(personId) {
       html += `<li><a class="person-link" data-person-id="${pid}" href="javascript:void(0)">${personThumb(pid, 28)} ${personName(pid)}</a> <span class="panel-rel-pill panel-rel-ex">ex</span>${_unionEditBtn(pid)}</li>`;
     }
     for (const cid of children) {
-      html += `<li><a class="person-link" data-person-id="${cid}" href="javascript:void(0)">${personThumb(cid, 28)} ${personName(cid)}</a> <span class="panel-rel-pill panel-rel-child">child</span></li>`;
+      html += `<li><a class="person-link" data-person-id="${cid}" href="javascript:void(0)">${personThumb(cid, 28)} ${personName(cid)}</a> <span class="panel-rel-pill panel-rel-child">child</span>${_relEditBtns(personId, cid)}</li>`;
     }
     html += `</ul></div>`;
   }
@@ -247,7 +257,7 @@ export function showPersonPanel(personId) {
   if (birthParentRels.length) {
     html += `<div class="panel-section panel-birth-family"><h3>Birth Family</h3><ul class="panel-family-list">`;
     for (const rel of birthParentRels) {
-      html += `<li><a class="person-link" data-person-id="${rel.parent_id}" href="javascript:void(0)">${personThumb(rel.parent_id, 28)} ${personName(rel.parent_id)}</a> <span class="panel-rel-pill panel-rel-birth">birth parent</span>${_visibilityBadge(rel)}</li>`;
+      html += `<li><a class="person-link" data-person-id="${rel.parent_id}" href="javascript:void(0)">${personThumb(rel.parent_id, 28)} ${personName(rel.parent_id)}</a> <span class="panel-rel-pill panel-rel-birth">birth parent</span>${_visibilityBadge(rel)}${_relEditBtns(rel.parent_id, personId)}</li>`;
     }
     html += `</ul></div>`;
   }
@@ -1210,6 +1220,7 @@ export function openEditEventForm(eventId, personId) {
       { key: "end_date", type: "date", label: "End date", placeholder: "End date", half: true },
       { key: "date_circa", type: "checkbox", label: "Approximate date" },
       { key: "description", type: "text", label: "Description", placeholder: "Description" },
+      { key: "source", type: "text", label: "Source", placeholder: "Source (e.g. obituary, census, oral history)" },
     ],
     onSave: (p) => api.patch(`/api/events/${eventId}`, p),
     onSuccess: () => afterMutate(personId),
@@ -1284,6 +1295,95 @@ export function openEditUnionForm(personId, partnerId) {
       }),
     onSuccess: () => afterMutate(personId),
   });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Edit / Remove Parent-Child Relationship
+// ═══════════════════════════════════════════════════════════════
+
+const _REL_TYPE_OPTIONS = [
+  { value: "biological", label: "Biological" },
+  { value: "adoptive", label: "Adoptive" },
+  { value: "step", label: "Step" },
+  { value: "foster", label: "Foster" },
+];
+const _VISIBILITY_OPTIONS = [
+  { value: "everyone", label: "Everyone" },
+  { value: "extended", label: "Extended family" },
+  { value: "self_and_children", label: "Close family only" },
+];
+
+export function openEditRelationshipForm(parentId, childId, focusId) {
+  const rel = (S.DATA.relationships || []).find(
+    (r) => r.parent_id === parentId && r.child_id === childId
+  );
+  if (!rel) return;
+
+  const panel = document.getElementById("panel-content");
+  if (!panel) return;
+
+  let container = document.getElementById("edit-rel-overlay");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "edit-rel-overlay";
+    container.className = "edit-event-overlay";
+    panel.appendChild(container);
+  }
+
+  EditForm.open({
+    mount: { el: container, mode: "remove" },
+    title: `${personName(parentId)} → ${personName(childId)}`,
+    values: { rel_type: rel.rel_type || "biological", visibility: rel.visibility || "everyone" },
+    fields: [
+      { key: "rel_type", type: "enum", label: "Type", options: _REL_TYPE_OPTIONS },
+      { key: "visibility", type: "enum", label: "Who can see this link?", options: _VISIBILITY_OPTIONS },
+    ],
+    onSave: (p) =>
+      api.patch("/api/relationships", {
+        parent_id: parentId,
+        child_id: childId,
+        rel_type: p.rel_type,
+        visibility: p.visibility,
+      }),
+    onSuccess: () => afterMutate(focusId),
+  });
+}
+
+export async function deleteRelationship(parentId, childId, focusId) {
+  if (!confirm(`Remove the link between ${personName(parentId)} and ${personName(childId)}?`)) return;
+  try {
+    const res = await fetch("/api/relationships", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ parent_id: parentId, child_id: childId }),
+    });
+    if (!res.ok) return;
+  } catch {
+    return;
+  }
+  await afterMutate(focusId);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Delete Person
+// ═══════════════════════════════════════════════════════════════
+
+export async function deletePerson(personId) {
+  const p = S.PEOPLE_MAP[personId];
+  const name = (p && (p.fullName || `${p.given_name || ""} ${p.surname || ""}`).trim()) || "this person";
+  if (!confirm(`Delete ${name}? This also removes their relationships, marriages, and events. You can undo this from the Undo button.`)) return;
+  try {
+    const res = await fetch(`/api/people/${personId}`, { method: "DELETE" });
+    if (!res.ok) return;
+  } catch {
+    return;
+  }
+  // The person no longer exists, so close the panel rather than reshow it.
+  closePersonPanel();
+  await loadData();
+  autoComputeLanes(S.CENTER_ID_A, S.CENTER_ID_B);
+  refreshAllViews();
+  if (typeof refreshUndoStatus === "function") refreshUndoStatus();
 }
 
 // ═══════════════════════════════════════════════════════════════

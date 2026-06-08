@@ -60,6 +60,70 @@ class RelationshipsRepoMixin:
         finally:
             conn.close()
 
+    def get_relationship(self, parent_id: str, child_id: str) -> dict | None:
+        """Look up a single parent-child relationship row."""
+        conn = self._conn()
+        try:
+            p = _ph()
+            row = _fetchone(
+                conn,
+                f"SELECT * FROM relationships WHERE parent_id = {p} AND child_id = {p} LIMIT 1",
+                (parent_id, child_id),
+            )
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
+    def update_relationship(
+        self,
+        parent_id: str,
+        child_id: str,
+        *,
+        rel_type: str | None = _UNSET,
+        visibility: str | None = _UNSET,
+    ) -> bool:
+        """Update rel_type/visibility on an existing relationship.
+
+        Returns True if a row was updated.
+        """
+        sets = []
+        params: list = []
+        for col, val in [("rel_type", rel_type), ("visibility", visibility)]:
+            if val is not _UNSET:
+                sets.append(f"{col} = {_ph()}")
+                params.append(val)
+        if not sets:
+            return False
+
+        p = _ph()
+        params.extend([parent_id, child_id])
+        conn = self._conn()
+        try:
+            cur = _execute(
+                conn,
+                f"UPDATE relationships SET {', '.join(sets)} WHERE parent_id = {p} AND child_id = {p}",
+                tuple(params),
+            )
+            conn.commit()
+            return (getattr(cur, "rowcount", 0) or 0) > 0
+        finally:
+            conn.close()
+
+    def delete_relationship(self, parent_id: str, child_id: str) -> bool:
+        """Delete a parent-child relationship. Returns True if a row was removed."""
+        p = _ph()
+        conn = self._conn()
+        try:
+            cur = _execute(
+                conn,
+                f"DELETE FROM relationships WHERE parent_id = {p} AND child_id = {p}",
+                (parent_id, child_id),
+            )
+            conn.commit()
+            return (getattr(cur, "rowcount", 0) or 0) > 0
+        finally:
+            conn.close()
+
     def auto_link_siblings(self) -> int:
         """Ensure all children of a union share both parents.
 

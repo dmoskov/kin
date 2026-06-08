@@ -962,7 +962,7 @@ export function plotMigrationArcs(events) {
     for (const e of personEvents) {
       const key = e.latlng.join(",");
       if (waypoints.length === 0 || waypoints[waypoints.length - 1].key !== key) {
-        waypoints.push({ latlng: e.latlng, key, year: e.year, date: e.date, place: e.place, ship: e.ship });
+        waypoints.push({ latlng: e.latlng, key, year: e.year, date: e.date, place: e.place, ship: e.ship, circa: e.circa });
       }
     }
 
@@ -974,7 +974,10 @@ export function plotMigrationArcs(events) {
       const to = waypoints[i + 1];
       const ratio = recencyRatio(to.year, MAX_YEAR);
       const arcColor = brightenColor(baseColor, ratio);
-      const arcOpacity = lerp(BRIGHTNESS_FLOOR, 0.8, ratio);
+      // An approximate hop (either endpoint's date is "c.") reads as a fainter,
+      // sparser dotted line — honest that the timing/route is uncertain.
+      const approx = !!(from.circa || to.circa);
+      const arcOpacity = lerp(BRIGHTNESS_FLOOR, 0.8, ratio) * (approx ? 0.55 : 1);
       const arcWeight = lerp(WEIGHT_FLOOR, WEIGHT_CEIL, ratio);
 
       // Draw a curved line with an arrowhead
@@ -993,7 +996,7 @@ export function plotMigrationArcs(events) {
         color: arcColor,
         weight: arcWeight,
         opacity: arcOpacity,
-        dashArray: "6,4",
+        dashArray: approx ? "1,7" : "6,4",
         interactive: false,
       }).addTo(S.MAP);
 

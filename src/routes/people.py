@@ -434,6 +434,72 @@ def api_create_relationship():
     return jsonify({"parent_id": parent_id, "child_id": child_id}), 201
 
 
+@people_bp.route("/api/relationships", methods=["PATCH"])
+@web_server.require_editor
+def api_update_relationship():
+    """Update a parent-child relationship's type/visibility.
+
+    Body: {"parent_id": "...", "child_id": "...", "rel_type"?, "visibility"?}
+
+    Returns 200 on success, 400 for missing/invalid fields, 404 if the
+    relationship doesn't exist.
+    """
+    from models.relationship import RelationshipType, Visibility
+
+    body = request.get_json(silent=True) or {}
+    parent_id = (body.get("parent_id") or "").strip()
+    child_id = (body.get("child_id") or "").strip()
+    if not parent_id or not child_id:
+        return jsonify({"error": "parent_id and child_id are required", "code": "bad_request"}), 400
+
+    repo = TreeRepository()
+    if repo.get_relationship(parent_id, child_id) is None:
+        return jsonify({"error": "relationship not found", "code": "not_found"}), 404
+
+    kwargs = {}
+    if "rel_type" in body:
+        try:
+            kwargs["rel_type"] = RelationshipType(body["rel_type"]).value
+        except ValueError:
+            return jsonify(
+                {"error": f"invalid rel_type: {body['rel_type']}", "code": "bad_request"}
+            ), 400
+    if "visibility" in body:
+        try:
+            kwargs["visibility"] = Visibility(body["visibility"]).value
+        except ValueError:
+            return jsonify(
+                {"error": f"invalid visibility: {body['visibility']}", "code": "bad_request"}
+            ), 400
+
+    if not kwargs:
+        return jsonify({"error": "nothing to update", "code": "bad_request"}), 400
+
+    repo.update_relationship(parent_id, child_id, **kwargs)
+    return jsonify({"parent_id": parent_id, "child_id": child_id}), 200
+
+
+@people_bp.route("/api/relationships", methods=["DELETE"])
+@web_server.require_editor
+def api_delete_relationship():
+    """Delete a parent-child relationship.
+
+    Body: {"parent_id": "...", "child_id": "..."}
+
+    Returns 204 on success, 400 for missing fields, 404 if not found.
+    """
+    body = request.get_json(silent=True) or {}
+    parent_id = (body.get("parent_id") or "").strip()
+    child_id = (body.get("child_id") or "").strip()
+    if not parent_id or not child_id:
+        return jsonify({"error": "parent_id and child_id are required", "code": "bad_request"}), 400
+
+    repo = TreeRepository()
+    if not repo.delete_relationship(parent_id, child_id):
+        return jsonify({"error": "relationship not found", "code": "not_found"}), 404
+    return ("", 204)
+
+
 @people_bp.route("/api/unions", methods=["POST"])
 @web_server.require_editor
 def api_create_union():
