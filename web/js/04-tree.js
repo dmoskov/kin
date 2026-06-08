@@ -1225,7 +1225,9 @@ export function renderTree() {
       const p = d.person;
       if (p.birth_date) {
         const y = dateYear(p.birth_date);
-        return p.death_date ? `${y} \u2013 ${dateYear(p.death_date)}` : `b. ${y}`;
+        if (!p.death_date) return `b. ${y}`;
+        const dy = dateYear(p.death_date);
+        return `${y} \u2013 ${dy || "?"}`;
       }
       return "";
     });

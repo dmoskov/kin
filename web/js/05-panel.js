@@ -105,7 +105,8 @@ export function showPersonPanel(personId) {
   if (person.birth_date || person.death_date) {
     const parts = [];
     if (person.birth_date) parts.push(escapeHtml(person.birth_date));
-    if (person.death_date) parts.push(escapeHtml(person.death_date));
+    if (person.death_date)
+      parts.push(dateYear(person.death_date) ? escapeHtml(person.death_date) : "date unknown");
     else if (person.birth_date) parts.push("present");
     const age = _calcAge(person.birth_date, person.death_date);
     const ageStr = age !== null ? ` · age ${age}` : "";
@@ -186,7 +187,7 @@ export function showPersonPanel(personId) {
       html += `<div class="panel-detail-item"><span class="panel-detail-icon">&#9679;</span><div class="panel-detail-body"><span class="panel-detail-label">Born</span><span class="panel-detail-value">${escapeHtml(person.birth_date)}${person.birth_place ? " · " + escapeHtml(person.birth_place) : ""}</span></div></div>`;
     }
     if (person.death_date) {
-      html += `<div class="panel-detail-item"><span class="panel-detail-icon" style="color:var(--text-muted)">&#9679;</span><div class="panel-detail-body"><span class="panel-detail-label">Died</span><span class="panel-detail-value">${escapeHtml(person.death_date)}${person.death_place ? " · " + escapeHtml(person.death_place) : ""}</span></div></div>`;
+      html += `<div class="panel-detail-item"><span class="panel-detail-icon" style="color:var(--text-muted)">&#9679;</span><div class="panel-detail-body"><span class="panel-detail-label">Died</span><span class="panel-detail-value">${dateYear(person.death_date) ? escapeHtml(person.death_date) : "date unknown"}${person.death_place ? " · " + escapeHtml(person.death_place) : ""}</span></div></div>`;
     }
     if (person.maiden_name) {
       html += `<div class="panel-detail-item"><span class="panel-detail-icon" style="color:var(--text-muted)">&#9679;</span><div class="panel-detail-body"><span class="panel-detail-label">Maiden name</span><span class="panel-detail-value">${escapeHtml(person.maiden_name)}</span></div></div>`;
