@@ -4513,6 +4513,29 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   padding: 20px 0;
   position: relative;
 }
+/* Stream feed uses flex so the decade nav can be a sticky sidebar */
+.tstream.tstream-feed {
+  display: flex;
+  max-width: 740px;
+  gap: 0;
+}
+.tstream-stream-col {
+  flex: 1;
+  min-width: 0;
+  max-width: 640px;
+  position: relative;
+}
+/* Move the vertical rail line onto the content column in stream mode */
+.tstream.tstream-feed::before { display: none; }
+.tstream-stream-col::before {
+  content: "";
+  position: absolute;
+  left: 18px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
+}
 .tstream::before {
   content: "";
   position: absolute;
@@ -4857,20 +4880,12 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
 @media (max-width: 600px) {
   .tstream { padding-left: 4px; }
   .tstream::before { left: 14px; }
+  .tstream-stream-col::before { left: 14px; }
 }
 
 /* ── Timeline Stream FEED (default full-width mode) ───────────── */
-/* .tstream-feed widens the centered feed and leaves room on the right for
-   the decade minimap. Decade entries live in .tstream-decade-group sections. */
-.tstream-feed {
-  max-width: 720px;
-  /* leave gutter for the right-edge decade minimap */
-  padding-right: 64px;
-}
-@media (max-width: 600px) {
-  .tstream-feed { padding-right: 0; }
-}
-
+/* .tstream-feed layout set above (flex + max-width via .tstream.tstream-feed).
+   Decade entries live in .tstream-decade-group sections. */
 .tstream-decade-group {
   position: relative;
 }
@@ -4953,17 +4968,27 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   opacity: 1;
 }
 
-/* ── Right-edge decade minimap ───────────────────────────────── */
+/* ── Right-edge decade minimap (sticky sidebar with activity indicators) ── */
 .tstream-decade-nav {
-  position: absolute;
-  top: 0;
-  right: 0;
+  position: sticky;
+  top: 16px;
+  align-self: flex-start;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   z-index: 2;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: 4px 0;
 }
+.tstream-decade-nav::-webkit-scrollbar { display: none; }
 .tstream-nav-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 3px;
   font-family: inherit;
   font-size: 11px;
   font-weight: 600;
@@ -4976,20 +5001,61 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   text-align: right;
   transition: color 0.15s, border-color 0.15s;
   white-space: nowrap;
+  overflow: hidden;
 }
 .tstream-nav-btn:hover { color: var(--text); }
 .tstream-nav-btn.active {
   color: var(--accent);
   border-right-color: var(--accent);
 }
+/* Volume bar — subtle fill behind the button, width set inline */
+.tstream-nav-bar {
+  position: absolute;
+  left: 0;
+  top: 1px;
+  bottom: 1px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.tstream-nav-btn.active .tstream-nav-bar {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.tstream-nav-label {
+  position: relative;
+  z-index: 1;
+}
+/* Activity-type pips — tiny dots showing what happened in a decade */
+.tstream-nav-pips {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  gap: 2px;
+  margin-left: 1px;
+}
+.tstream-pip {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.tstream-pip--birth    { background: var(--event-birth); }
+.tstream-pip--marriage { background: var(--event-marriage); }
+.tstream-pip--death    { background: var(--text-muted); opacity: 0.7; }
+.tstream-pip--photo    { background: var(--male); }
 /* Condense when there are many decades */
 .tstream-decade-nav-condensed .tstream-nav-btn {
   font-size: 10px;
-  padding: 1px 6px;
+  padding: 1px 6px 1px 4px;
 }
-.tstream-nav-now { color: var(--accent); }
+.tstream-decade-nav-condensed .tstream-pip {
+  width: 3px;
+  height: 3px;
+}
+.tstream-nav-now .tstream-nav-label { color: var(--accent); }
 @media (max-width: 600px) {
   .tstream-decade-nav { display: none; }
+  .tstream.tstream-feed { max-width: 640px; }
 }
 
 /* Historical-context inserts woven into the stream */

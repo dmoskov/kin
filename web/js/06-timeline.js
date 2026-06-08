@@ -543,11 +543,12 @@ export function renderTimeline(filterPersonId = "all", mode = TIMELINE_MODE) {
 
 // ── Full-width chronological stream (default mode) ──────────────
 // Markup contract (W2/W4 build on this):
-//   #timeline-entries.tstream.tstream-feed
-//     .tstream-decade-nav            (right-edge minimap; one button per decade)
-//     section.tstream-decade-group#tl-decade-{D}[data-decade="{D}"]
-//       .tstream-decade              (sticky pill, "{D}s")
-//       <buildStreamCellHtml(...)>   (one .tstream-entry per event, UNCHANGED)
+//   #timeline-entries.tstream.tstream-feed  (flex: content-col + sticky nav)
+//     .tstream-stream-col                   (scrolling content column)
+//       section.tstream-decade-group#tl-decade-{D}[data-decade="{D}"]
+//         .tstream-decade                   (sticky pill, "{D}s")
+//         <buildStreamCellHtml(...)>        (one .tstream-entry per event)
+//     .tstream-decade-nav                   (sticky sidebar; volume bars + pips)
 // Lane accent: each .tstream-entry carries data-lane="{laneId}" and renders a
 // .tstream-lane-chip. Legend focus adds .lane-focused on .tstream-feed and
 // .lane-match on the chosen branch's entries (non-matches dim via CSS).
@@ -653,16 +654,41 @@ function renderStreamFeed(container, entries, showNow) {
   }
   const decades = Object.keys(byDecade).map(Number).sort((a, b) => a - b);
 
-  // Right-edge decade minimap (condensed if many decades)
+  // Per-decade activity stats for the minimap volume + type indicators
+  const maxCount = Math.max(1, ...decades.map((d) => byDecade[d].length));
+  const decadeStats = {};
+  for (const d of decades) {
+    const evts = byDecade[d];
+    const types = new Set(evts.map((e) => e.type));
+    decadeStats[d] = {
+      pct: Math.round((evts.length / maxCount) * 100),
+      hasBirth: types.has("birth"),
+      hasDeath: types.has("death"),
+      hasMarriage: types.has("marriage"),
+      hasPhoto: types.has("photo"),
+    };
+  }
+
+  // Right-edge decade minimap — sticky, with volume bars + activity pips
   const condensed = decades.length > 12;
   let nav = `<nav class="tstream-decade-nav${condensed ? " tstream-decade-nav-condensed" : ""}" aria-label="Jump to decade">`;
   for (const d of decades) {
-    nav += `<button type="button" class="tstream-nav-btn" data-decade="${d}">${d}s</button>`;
+    const st = decadeStats[d];
+    let pips = "";
+    if (st.hasBirth) pips += `<span class="tstream-pip tstream-pip--birth" title="Births"></span>`;
+    if (st.hasMarriage) pips += `<span class="tstream-pip tstream-pip--marriage" title="Marriages"></span>`;
+    if (st.hasDeath) pips += `<span class="tstream-pip tstream-pip--death" title="Deaths"></span>`;
+    if (st.hasPhoto) pips += `<span class="tstream-pip tstream-pip--photo" title="Photos"></span>`;
+    nav += `<button type="button" class="tstream-nav-btn" data-decade="${d}">` +
+      `<span class="tstream-nav-bar" style="width:${st.pct}%"></span>` +
+      `<span class="tstream-nav-label">${d}s</span>` +
+      (pips ? `<span class="tstream-nav-pips">${pips}</span>` : "") +
+      `</button>`;
   }
-  if (nowHtml) nav += `<button type="button" class="tstream-nav-btn tstream-nav-now" data-decade="now">Now</button>`;
+  if (nowHtml) nav += `<button type="button" class="tstream-nav-btn tstream-nav-now" data-decade="now"><span class="tstream-nav-label">Now</span></button>`;
   nav += `</nav>`;
 
-  let html = `<div class="tstream tstream-feed">${nav}`;
+  let html = `<div class="tstream tstream-feed"><div class="tstream-stream-col">`;
   for (const decade of decades) {
     html += `<section class="tstream-decade-group" id="tl-decade-${decade}" data-decade="${decade}">`;
     html += `<div class="tstream-decade">${decade}s</div>`;
@@ -673,7 +699,7 @@ function renderStreamFeed(container, entries, showNow) {
     html += `</section>`;
   }
   html += nowHtml;
-  html += `</div>`;
+  html += `</div>${nav}</div>`;
   container.innerHTML = html;
 
   // Progressive face-aware framing. Cards render correct (object-fit:contain
