@@ -262,6 +262,9 @@ export const BRIGHTNESS_FLOOR = 0.12;   // opacity for oldest events
 export const BRIGHTNESS_CEIL  = 1.0;    // opacity for newest events
 export const RADIUS_FLOOR     = 4;      // marker radius for oldest
 export const RADIUS_CEIL      = 13;     // marker radius for newest
+// Place/move event types where an end date means time actually spent there —
+// used to grow the marker for long stays ("laying roots").
+export const STAY_TYPES = new Set(["residence", "immigration", "emigration", "naturalization"]);
 export const WEIGHT_FLOOR     = 1;      // arc thickness for oldest
 export const WEIGHT_CEIL      = 3.5;    // arc thickness for newest
 
@@ -383,6 +386,7 @@ export function buildMapEvents() {
   //    Ellis Island" even when the port is mentioned only in the description.
   for (const e of (src.events || [])) {
     const year = e.date ? dateYear(e.date) : null;
+    const endYear = e.end_date ? dateYear(e.end_date) : null;
     const desc = `${personName(e.person_id)} — ${escapeHtml(e.description || e.event_type)}`;
     const ship = extractShip(e.description);
 
@@ -404,6 +408,8 @@ export function buildMapEvents() {
       MAP_ALL_EVENTS.push({
         date: e.date || "",
         year,
+        endYear,
+        circa: !!e.date_circa,
         type: e.event_type,
         personId: e.person_id,
         fogLevel: personFog(e.person_id),
@@ -605,8 +611,17 @@ export function plotMapMarkers(events) {
     const fillColor = brightenColor(baseColor, ratio);
     const fillOpacity = lerp(BRIGHTNESS_FLOOR, BRIGHTNESS_CEIL, ratio);
     const baseRadius = lerp(RADIUS_FLOOR, RADIUS_CEIL, ratio);
-    // Bigger blob = more people at this exact spot.
-    const radius = Math.min(baseRadius + (peopleCount - 1) * 1.6, RADIUS_CEIL + 9);
+    // "Laying roots": a long stay (residence with a start AND end date) grows the
+    // dot — a 40+ year stay reads as a real anchor, a brief stop stays small.
+    const maxStayYears = Math.max(
+      0,
+      ...events
+        .filter((e) => STAY_TYPES.has(e.type) && e.year && e.endYear && e.endYear > e.year)
+        .map((e) => e.endYear - e.year)
+    );
+    const stayBoost = (Math.min(maxStayYears, 40) / 40) * 8;
+    // Bigger blob = more people at this exact spot, and/or longer roots.
+    const radius = Math.min(baseRadius + (peopleCount - 1) * 1.6 + stayBoost, RADIUS_CEIL + 14);
     const era = getEra(newestYear);
 
     const marker = L.circleMarker(latlng, {
@@ -660,7 +675,12 @@ export function plotMapMarkers(events) {
 export function buildPlacePopup(place, events) {
   let html = `<h4>${escapeHtml(place)}</h4>`;
   for (const e of events) {
-    const year = e.year || "?";
+    // "c. 1920" flags an approximate date; "1920 – 1935" shows a stay's span.
+    let year = "?";
+    if (e.year) {
+      const start = e.circa ? `c. ${e.year}` : `${e.year}`;
+      year = e.endYear && e.endYear !== e.year ? `${start} – ${e.endYear}` : start;
+    }
     const dotColor = EVENT_COLORS[e.type] || "#6c7cff";
     const person = S.PEOPLE_MAP[e.personId];
     const profileSrc = person?._profilePhotoPath;

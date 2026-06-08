@@ -300,14 +300,28 @@ export function gatherTimelineEntries() {
     if (e.event_type === "birth" || e.event_type === "death") continue;
     if (isArchivalNote(e)) continue;
     if (e.event_type === "marriage" && marriageEventIsRedundant(e)) continue;
+    const ey = e.date ? dateYear(e.date) : null;
+    const eyEnd = e.end_date ? dateYear(e.end_date) : null;
+    // Surface approximate ("c. 1920") and range ("1920 – 1935") dates so a move
+    // entered with the "Approximate date" checkbox or an end date reads honestly
+    // in the stream — not just in the person panel.
+    let dateDisplay = null;
+    if (ey != null) {
+      const hasRange = eyEnd != null && eyEnd !== ey;
+      const range = hasRange ? `${ey} – ${eyEnd}` : `${ey}`;
+      if (e.date_circa) dateDisplay = `c. ${range}`;
+      else if (hasRange) dateDisplay = range;
+    }
     entries.push({
       date: e.date || "",
-      year: e.date ? dateYear(e.date) : null,
+      year: ey,
       type: e.event_type,
       personId: e.person_id,
       title: `${personLink(e.person_id)} — ${escapeHtml(e.description || humanizeEventType(e.event_type))}`,
       desc: e.description || "",
       place: e.place,
+      dateDisplay,
+      approxDate: !!e.date_circa,
       lane: assignLane(e.person_id),
     });
   }
@@ -454,7 +468,8 @@ function ageChipHtml(e) {
     if (e.age) return `<span class="tstream-age">married at ${e.age}</span>`;
     return "";
   }
-  if (e.type === "birth" || !e.age) return "";
+  // An approximate date makes a precise "age N" a false-precision guess.
+  if (e.type === "birth" || !e.age || e.approxDate) return "";
   return `<span class="tstream-age">age ${e.age}</span>`;
 }
 
