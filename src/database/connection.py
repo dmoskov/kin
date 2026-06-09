@@ -13,6 +13,8 @@ import json
 import logging
 import os
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -100,6 +102,44 @@ def get_connection(db_path: str | None = None) -> Any:
     if _use_postgres():
         return _get_pg_connection()
     return _get_sqlite_connection(db_path)
+
+
+# Constraint-violation exception types for both backends, so callers can
+# catch real exceptions (e.g. duplicate key → 409) instead of matching on
+# backend-specific error message strings.
+try:
+    import psycopg2
+
+    INTEGRITY_ERRORS: tuple[type[Exception], ...] = (
+        sqlite3.IntegrityError,
+        psycopg2.IntegrityError,
+    )
+except ImportError:  # psycopg2 only installed where PostgreSQL is used
+    INTEGRITY_ERRORS = (sqlite3.IntegrityError,)
+
+
+@contextmanager
+def db_transaction(db_path: str | None = None) -> Iterator[Any]:
+    """Open a connection for one unit of work: commit on success, roll back
+    on exception, always close.
+
+    The standard way for route handlers to touch the database directly:
+
+        with db_transaction() as conn:
+            _execute(conn, sql, params)
+
+    Exceptions propagate to the caller after rollback — map the ones that
+    have a meaningful HTTP response (e.g. INTEGRITY_ERRORS → 409) there.
+    """
+    conn = get_connection(db_path)
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def _current_version(conn: Any) -> int:

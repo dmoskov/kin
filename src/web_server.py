@@ -18,11 +18,13 @@ import json
 import logging
 import os
 import re
+import secrets
 import time
 from functools import wraps
 from pathlib import Path
 
 from flask import Flask, Response, abort, jsonify, request, send_from_directory, session
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from database.connection import init_db
 from database.repository import TreeRepository
@@ -46,7 +48,37 @@ WEB_DIR = str(PROJECT_ROOT / "web")
 PRIVATE_DIR = PROJECT_ROOT / "private"
 
 app = Flask(__name__, static_folder=WEB_DIR, static_url_path="")
-app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-in-production")
+
+# Trust X-Forwarded-For / X-Forwarded-Proto from the nginx reverse proxy so
+# request.remote_addr is the real client IP (rate limiting) and Flask knows
+# the request arrived over https (Secure cookies).
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)  # type: ignore[method-assign]
+
+# ── Session security ───────────────────────────────────────────────────
+
+
+def _resolve_secret_key() -> str:
+    """Production (DATABASE_URL set) refuses to start without a real
+    SECRET_KEY; a predictable key would let anyone forge session cookies.
+    Local dev gets an ephemeral key (sessions reset on restart)."""
+    secret = os.environ.get("SECRET_KEY", "")
+    if secret:
+        return secret
+    if os.environ.get("DATABASE_URL"):
+        raise RuntimeError(
+            "SECRET_KEY must be set in production. Generate one with:\n"
+            "  python3 -c 'import secrets; print(secrets.token_hex(32))'\n"
+            "and add it to the .env file."
+        )
+    return secrets.token_hex(32)
+
+
+app.secret_key = _resolve_secret_key()
+
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+# Secure cookies in production (served over https); local dev runs on http.
+app.config["SESSION_COOKIE_SECURE"] = bool(os.environ.get("DATABASE_URL"))
 
 # Upload size limits. MAX_CONTENT_LENGTH is enforced by Flask at the WSGI
 # layer (before we see the request). MAX_PHOTO_BYTES / MAX_DOC_BYTES are
@@ -77,6 +109,13 @@ def _handle_too_large(_err):
     ), 413
 
 
+@app.errorhandler(500)
+def _handle_server_error(_err):
+    """Return JSON (not HTML) for unhandled errors — every API consumer
+    expects JSON. Flask has already logged the traceback."""
+    return jsonify({"error": "Internal server error", "code": "server_error"}), 500
+
+
 @app.before_request
 def _ensure_db():
     """Ensure the database is initialized on first request."""
@@ -93,15 +132,11 @@ def _editors_configured() -> bool:
     if EDITORS:
         return True
     try:
-        from database.connection import get_connection
+        from database.connection import db_transaction
         from database.repository import _fetchone
 
-        conn = get_connection()
-        try:
-            row = _fetchone(conn, "SELECT 1 FROM tree_editors LIMIT 1")
-            return row is not None
-        finally:
-            conn.close()
+        with db_transaction() as conn:
+            return _fetchone(conn, "SELECT 1 FROM tree_editors LIMIT 1") is not None
     except Exception:
         return False
 

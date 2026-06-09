@@ -9,7 +9,7 @@ from pathlib import Path
 from flask import Blueprint, abort, jsonify, request, send_from_directory, session
 
 import web_server
-from database.connection import get_connection
+from database.connection import db_transaction
 from database.repository import TreeRepository, _execute, _fetchone, _ph
 from import_export.gedcom_import import parse_gedcom
 
@@ -74,24 +74,17 @@ def _update_document(
         return
     params.append(doc_id)
     sql = f"UPDATE documents SET {', '.join(sets)} WHERE id = {_ph()}"
-    conn = get_connection()
-    try:
+    with db_transaction() as conn:
         _execute(conn, sql, tuple(params))
-        conn.commit()
-    finally:
-        conn.close()
 
 
 def _get_document(doc_id: str) -> dict | None:
-    conn = get_connection()
-    try:
+    with db_transaction() as conn:
         return _fetchone(
             conn,
             f"SELECT * FROM documents WHERE id = {_ph()}",
             (doc_id,),
         )
-    finally:
-        conn.close()
 
 
 def _get_existing_people() -> list[dict]:
@@ -116,39 +109,30 @@ def _save_chunk_result(doc_id: str, chunk_index: int, chunk: dict, result: dict)
     """Update a pending chunk row with parsed results."""
     status = "error" if "error" in result else "done"
     error_msg = result.get("error") if "error" in result else None
-    conn = get_connection()
-    try:
+    with db_transaction() as conn:
         _execute(
             conn,
             f"UPDATE document_chunks SET status = {_ph()}, parsed_data = {_ph()}, error_message = {_ph()} "
             f"WHERE document_id = {_ph()} AND chunk_index = {_ph()}",
             (status, json.dumps(result), error_msg, doc_id, chunk_index),
         )
-        conn.commit()
-    finally:
-        conn.close()
 
 
 def _update_document_progress(doc_id: str, total: int, done: int) -> None:
     """Update chunk progress columns on the documents table."""
-    conn = get_connection()
-    try:
+    with db_transaction() as conn:
         _execute(
             conn,
             f"UPDATE documents SET total_chunks = {_ph()}, chunks_done = {_ph()} WHERE id = {_ph()}",
             (total, done, doc_id),
         )
-        conn.commit()
-    finally:
-        conn.close()
 
 
 def _load_done_chunks(doc_id: str) -> list[tuple[int, dict]]:
     """Return (chunk_index, parsed_data_dict) for all status='done' chunks."""
     from database.repository import _fetchall
 
-    conn = get_connection()
-    try:
+    with db_transaction() as conn:
         rows = _fetchall(
             conn,
             f"SELECT chunk_index, parsed_data FROM document_chunks "
@@ -156,8 +140,6 @@ def _load_done_chunks(doc_id: str) -> list[tuple[int, dict]]:
             f"ORDER BY chunk_index",
             (doc_id,),
         )
-    finally:
-        conn.close()
     result = []
     for row in rows:
         try:
@@ -216,17 +198,14 @@ def api_list_documents():
     """Return all documents ordered by upload date (newest first)."""
     from database.repository import _fetchall
 
-    conn = get_connection()
-    try:
+    # A query failure must not masquerade as "no documents" — it propagates
+    # to the global handler (logged, JSON 500) so the client sees the failure.
+    with db_transaction() as conn:
         rows = _fetchall(
             conn,
             "SELECT id, filename, file_type, status, uploaded_at, "
             "total_chunks, chunks_done FROM documents ORDER BY uploaded_at DESC",
         )
-    except Exception:
-        return jsonify([])
-    finally:
-        conn.close()
 
     docs = []
     for r in rows:
@@ -322,17 +301,13 @@ def api_document_from_url():
     doc_id = uuid.uuid4().hex[:12]
     uploaded_by = session.get("person_id")
     doc_name = url if url.lower().startswith(("http://", "https://")) else "Pasted text"
-    conn = get_connection()
-    try:
+    with db_transaction() as conn:
         _execute(
             conn,
             f"INSERT INTO documents (id, filename, file_path, file_type, uploaded_by, status, parsed_data) "
             f"VALUES ({_ph(7)})",
             (doc_id, doc_name, doc_name, "link", uploaded_by, "parsed", _json.dumps(result)),
         )
-        conn.commit()
-    finally:
-        conn.close()
     return jsonify({"id": doc_id, "proposed_changes": result})
 
 
@@ -491,33 +466,29 @@ def api_upload_document():
     file_type = "pdf" if is_pdf else "image"
     uploaded_by = session.get("person_id")
 
-    conn = get_connection()
     try:
-        try:
+        with db_transaction() as conn:
             _execute(
                 conn,
                 f"INSERT INTO documents (id, filename, file_path, file_type, uploaded_by) "
                 f"VALUES ({_ph(5)})",
                 (doc_id, f.filename, f"documents/{safe_name}", file_type, uploaded_by),
             )
-            conn.commit()
-        except Exception as e:
-            # Transactional cleanup: if the DB insert fails, don't leave
-            # the file sitting on disk with no tracking row.
-            try:
-                if dest.exists():
-                    dest.unlink()
-            except OSError:
-                pass
-            logger.error("document DB insert failed: %s", e)
-            return jsonify(
-                {
-                    "error": "Could not record document",
-                    "code": "db_error",
-                }
-            ), 500
-    finally:
-        conn.close()
+    except Exception as e:
+        # Transactional cleanup: if the DB insert fails, don't leave
+        # the file sitting on disk with no tracking row.
+        try:
+            if dest.exists():
+                dest.unlink()
+        except OSError:
+            pass
+        logger.error("document DB insert failed: %s", e)
+        return jsonify(
+            {
+                "error": "Could not record document",
+                "code": "db_error",
+            }
+        ), 500
 
     return jsonify(
         {
@@ -573,17 +544,13 @@ def api_parse_document(doc_id):
             total_chunks = max(len(chunks), 1)
 
         # Reset non-done chunks to pending for re-processing
-        conn = get_connection()
-        try:
+        with db_transaction() as conn:
             _execute(
                 conn,
                 f"UPDATE document_chunks SET status = 'pending', error_message = NULL "
                 f"WHERE document_id = {_ph()} AND status != 'done'",
                 (doc_id,),
             )
-            conn.commit()
-        finally:
-            conn.close()
 
         _update_document(doc_id, status="parsing")
         _update_document_progress(doc_id, total_chunks, resume_count)
@@ -624,8 +591,7 @@ def api_parse_document(doc_id):
         if len(chunks) > 1:
             _update_document_progress(doc_id, total_chunks, 0)
 
-            conn = get_connection()
-            try:
+            with db_transaction() as conn:
                 for i, chunk in enumerate(chunks):
                     _execute(
                         conn,
@@ -641,9 +607,6 @@ def api_parse_document(doc_id):
                             "pending",
                         ),
                     )
-                conn.commit()
-            finally:
-                conn.close()
 
     _parse_jobs[doc_id] = {
         "status": "parsing",
@@ -740,7 +703,7 @@ def api_apply_document(doc_id):
         return jsonify({"error": "Document not found", "code": "not_found"}), 404
 
     repo = TreeRepository()
-    applied = {"people": 0, "relationships": 0, "events": 0, "unions": 0}
+    applied: dict = {"people": 0, "relationships": 0, "events": 0, "unions": 0, "failed": []}
 
     # Create a Source for this document
     from models.source import Source, SourceType
@@ -842,6 +805,7 @@ def api_apply_document(doc_id):
             applied["relationships"] += 1
         except Exception as e:
             logger.warning("Could not save relationship %s→%s: %s", parent_id, child_id, e)
+            applied["failed"].append(f"relationship {parent_id}->{child_id}: {e}")
 
     # Apply events. Link-sourced docs carry the URL itself as the event source
     # (so it renders as a clickable provenance link), not an opaque doc id.
@@ -870,6 +834,7 @@ def api_apply_document(doc_id):
             applied["events"] += 1
         except Exception as e:
             logger.warning("Could not save event for %s: %s", person_id, e)
+            applied["failed"].append(f"event for {person_id}: {e}")
 
     # Apply unions
     from models.relationship import Union
@@ -890,14 +855,16 @@ def api_apply_document(doc_id):
             applied["unions"] += 1
         except Exception as e:
             logger.warning("Could not save union %s + %s: %s", p1, p2, e)
+            applied["failed"].append(f"union {p1} + {p2}: {e}")
 
     # Auto-link siblings after applying relationships + unions from document
     try:
         linked = repo.auto_link_siblings()
         if linked:
             applied["auto_linked_siblings"] = linked
-    except Exception:
-        pass
+    except Exception as e:
+        logger.exception("Auto-linking siblings failed after applying document %s", doc_id)
+        applied["failed"].append(f"auto-link siblings: {e}")
 
     # Update document status
     _update_document(doc_id, status="applied")

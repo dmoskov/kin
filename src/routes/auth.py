@@ -3,14 +3,15 @@
 import json
 import logging
 import os
+import time
 from pathlib import Path
-from urllib.error import URLError
-from urllib.request import urlopen
 
 from flask import Blueprint, jsonify, request, session
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token as google_id_token
 
 import web_server
-from database.connection import get_connection
+from database.connection import INTEGRITY_ERRORS, db_transaction
 from database.repository import TreeRepository, _execute, _fetchone, _ph
 
 logger = logging.getLogger(__name__)
@@ -18,33 +19,49 @@ logger = logging.getLogger(__name__)
 auth_bp = Blueprint("auth", __name__)
 
 
-GOOGLE_TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo"
+# ── Rate limiting ─────────────────────────────────────────────────────
+# Fixed-window per-IP limit on sign-in attempts. In-memory, so it's
+# per-gunicorn-worker — good enough to blunt brute force without a
+# shared store.
+
+_AUTH_WINDOW_SECONDS = 60
+_AUTH_MAX_ATTEMPTS = 10
+_auth_attempts: dict[str, tuple[float, int]] = {}
+
+
+def _rate_limited(ip: str) -> bool:
+    now = time.time()
+    window_start, count = _auth_attempts.get(ip, (now, 0))
+    if now - window_start >= _AUTH_WINDOW_SECONDS:
+        window_start, count = now, 0
+    count += 1
+    _auth_attempts[ip] = (window_start, count)
+    if len(_auth_attempts) > 10_000:
+        cutoff = now - _AUTH_WINDOW_SECONDS
+        for stale in [k for k, (s, _) in _auth_attempts.items() if s < cutoff]:
+            del _auth_attempts[stale]
+    return count > _AUTH_MAX_ATTEMPTS
 
 
 def _get_tree_editor(email: str) -> dict | None:
-    conn = get_connection()
     try:
-        row = _fetchone(
-            conn,
-            f"SELECT email, role, name FROM tree_editors WHERE email = {_ph()}",
-            (email,),
-        )
+        with db_transaction() as conn:
+            row = _fetchone(
+                conn,
+                f"SELECT email, role, name FROM tree_editors WHERE email = {_ph()}",
+                (email,),
+            )
         return dict(row) if row else None
     except Exception:
         return None
-    finally:
-        conn.close()
 
 
 def _has_any_tree_editors() -> bool:
-    conn = get_connection()
     try:
-        row = _fetchone(conn, "SELECT 1 FROM tree_editors LIMIT 1")
-        return row is not None
+        with db_transaction() as conn:
+            return _fetchone(conn, "SELECT 1 FROM tree_editors LIMIT 1") is not None
     except Exception:
         return False
-    finally:
-        conn.close()
 
 
 def _get_google_client_id() -> str | None:
@@ -65,19 +82,18 @@ def _get_google_client_id() -> str | None:
 
 
 def _verify_id_token(credential: str) -> dict | None:
-    """Verify a Google ID token via the tokeninfo endpoint.
+    """Verify a Google ID token: signature, expiry, issuer, and (when a
+    client ID is configured) audience — all checked by google-auth against
+    Google's published signing keys.
 
-    Returns the token payload dict on success, or None on failure.
-    Matches the pattern used in the Sutro dashboard.
+    Returns the token claims dict on success, or None on failure.
     """
     try:
-        url = f"{GOOGLE_TOKENINFO_URL}?id_token={credential}"
-        with urlopen(url, timeout=5) as resp:
-            if resp.status != 200:
-                return None
-            return json.loads(resp.read())
-    except (URLError, ValueError, OSError) as e:
-        logger.warning("tokeninfo request failed: %s", e)
+        return google_id_token.verify_oauth2_token(
+            credential, google_requests.Request(), audience=_get_google_client_id()
+        )
+    except (ValueError, OSError) as e:
+        logger.warning("Google token verification failed: %s", e)
         return None
 
 
@@ -88,27 +104,24 @@ def api_auth_google():
     Body: {"credential": "<google id_token>"}
     Returns: {"person_id": "...", "name": "...", "email": "..."}
     """
+    if _rate_limited(request.remote_addr or "unknown"):
+        return jsonify({"error": "Too many sign-in attempts; try again in a minute"}), 429
+
     body = request.get_json(force=True)
     credential = body.get("credential", "")
     if not credential:
         return jsonify({"error": "credential required"}), 400
 
-    # Verify token with Google
+    # Verify token with Google (includes the audience check when a client ID
+    # is configured — see _verify_id_token).
     payload = _verify_id_token(credential)
     if not payload:
         return jsonify({"error": "Invalid Google token"}), 401
 
     email = (payload.get("email") or "").lower()
-    if not email or payload.get("email_verified") != "true":
+    # google-auth returns decoded JWT claims, so email_verified is a bool.
+    if not email or payload.get("email_verified") not in (True, "true"):
         return jsonify({"error": "Email not verified"}), 401
-
-    # Validate audience matches our client ID
-    client_id = _get_google_client_id()
-    if client_id:
-        aud = payload.get("aud", "")
-        if aud != client_id:
-            logger.warning("Token aud %s does not match expected client_id", aud)
-            return jsonify({"error": "Token audience mismatch"}), 401
 
     # Determine editor status and role from three sources:
     # 1. tree_editors table (DB-backed, has explicit role)
@@ -200,17 +213,13 @@ def api_set_email(person_id):
     body = request.get_json(force=True) or {}
     email = body.get("email", "").strip().lower() or None
 
-    conn = get_connection()
-    try:
+    with db_transaction() as conn:
         _execute(
             conn,
             f"UPDATE people SET email = {_ph()} WHERE id = {_ph()}",
             (email, person_id),
         )
-        conn.commit()
-        return jsonify({"email": email, "person_id": person_id})
-    finally:
-        conn.close()
+    return jsonify({"email": email, "person_id": person_id})
 
 
 # ── Editor management ─────────────────────────────────────────────────
@@ -237,27 +246,22 @@ def api_list_editors():
     err = _require_admin()
     if err:
         return err
-    conn = get_connection()
-    try:
-        from database.repository import _fetchall
+    from database.repository import _fetchall
 
+    with db_transaction() as conn:
         rows = _fetchall(conn, "SELECT * FROM tree_editors ORDER BY created_at")
-        return jsonify(
-            [
-                {
-                    "email": r["email"],
-                    "role": r["role"],
-                    "name": r["name"] or "",
-                    "invited_by": r["invited_by"],
-                    "created_at": str(r["created_at"]) if r["created_at"] else None,
-                }
-                for r in rows
-            ]
-        )
-    except Exception:
-        return jsonify([])
-    finally:
-        conn.close()
+    return jsonify(
+        [
+            {
+                "email": r["email"],
+                "role": r["role"],
+                "name": r["name"] or "",
+                "invited_by": r["invited_by"],
+                "created_at": str(r["created_at"]) if r["created_at"] else None,
+            }
+            for r in rows
+        ]
+    )
 
 
 @auth_bp.route("/api/editors", methods=["POST"])
@@ -279,22 +283,16 @@ def api_add_editor():
 
     invited_by = session.get("email", "")
 
-    conn = get_connection()
     try:
-        _execute(
-            conn,
-            f"INSERT INTO tree_editors (email, role, name, invited_by) VALUES ({_ph()}, {_ph()}, {_ph()}, {_ph()})",
-            (email, role, name, invited_by),
-        )
-        conn.commit()
-        return jsonify({"email": email, "role": role, "name": name}), 201
-    except Exception as e:
-        err_str = str(e).lower()
-        if "unique" in err_str or "duplicate" in err_str:
-            return jsonify({"error": "Editor with this email already exists"}), 409
-        raise
-    finally:
-        conn.close()
+        with db_transaction() as conn:
+            _execute(
+                conn,
+                f"INSERT INTO tree_editors (email, role, name, invited_by) VALUES ({_ph()}, {_ph()}, {_ph()}, {_ph()})",
+                (email, role, name, invited_by),
+            )
+    except INTEGRITY_ERRORS:
+        return jsonify({"error": "Editor with this email already exists"}), 409
+    return jsonify({"email": email, "role": role, "name": name}), 201
 
 
 @auth_bp.route("/api/editors/<path:email>", methods=["PATCH"])
@@ -320,8 +318,7 @@ def api_update_editor(email):
     set_clauses = ", ".join(f"{k} = {_ph()}" for k in updates)
     values = list(updates.values()) + [email.lower()]
 
-    conn = get_connection()
-    try:
+    with db_transaction() as conn:
         cur = _execute(
             conn,
             f"UPDATE tree_editors SET {set_clauses} WHERE email = {_ph()}",
@@ -329,10 +326,7 @@ def api_update_editor(email):
         )
         if cur.rowcount == 0:
             return jsonify({"error": "editor not found"}), 404
-        conn.commit()
-        return jsonify({"email": email.lower(), **updates})
-    finally:
-        conn.close()
+    return jsonify({"email": email.lower(), **updates})
 
 
 @auth_bp.route("/api/editors/<path:email>", methods=["DELETE"])
@@ -342,8 +336,7 @@ def api_remove_editor(email):
     if err:
         return err
 
-    conn = get_connection()
-    try:
+    with db_transaction() as conn:
         cur = _execute(
             conn,
             f"DELETE FROM tree_editors WHERE email = {_ph()}",
@@ -351,7 +344,4 @@ def api_remove_editor(email):
         )
         if cur.rowcount == 0:
             return jsonify({"error": "editor not found"}), 404
-        conn.commit()
-        return "", 204
-    finally:
-        conn.close()
+    return "", 204

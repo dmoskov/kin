@@ -9,7 +9,7 @@ from flask import Blueprint, jsonify, request
 
 import storage
 import web_server
-from database.connection import get_connection
+from database.connection import db_transaction
 from database.repository import TreeRepository
 from exif_utils import extract_exif_metadata
 
@@ -435,13 +435,10 @@ def api_reextract_exif():
     from database.repository import _fetchall
 
     repo = TreeRepository()
-    conn = get_connection()
-    try:
+    with db_transaction() as conn:
         rows = _fetchall(
             conn, "SELECT id, file_path FROM photos WHERE lat IS NULL AND date IS NULL"
         )
-    finally:
-        conn.close()
 
     updated = 0
     for row in rows:

@@ -14,7 +14,7 @@ def api_person_wikipedia():
     Cache hits return immediately; misses resolve in a rate-limited background
     thread — call again (pending > 0) to pick up newly resolved people.
     """
-    from database.connection import _use_postgres, get_connection
+    from database.connection import _use_postgres, db_transaction
     from wikipedia import resolve_people
 
     ids = request.get_json(silent=True) or []
@@ -26,16 +26,13 @@ def api_person_wikipedia():
 
     pg = _use_postgres()
     ph = ",".join("%s" if pg else "?" for _ in ids)
-    conn = get_connection()
-    try:
+    with db_transaction() as conn:
         cur = conn.cursor()
         cur.execute(
             f"SELECT id, given_name, surname, birth_date, death_date FROM people WHERE id IN ({ph})",
             ids,
         )
         rows = cur.fetchall()
-    finally:
-        conn.close()
 
     people = []
     for r in rows:
