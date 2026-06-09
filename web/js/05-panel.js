@@ -174,10 +174,12 @@ export function showPersonPanel(personId) {
   if (person.birth_date || person.birth_place || person.maiden_name || person.has_email) {
     html += `<div class="panel-section"><h3>Details</h3><div class="panel-details-grid">`;
     if (person.birth_date) {
-      html += `<div class="panel-detail-item"><span class="panel-detail-icon">&#9679;</span><div class="panel-detail-body"><span class="panel-detail-label">Born</span><span class="panel-detail-value">${escapeHtml(person.birth_date)}${person.birth_place ? " · " + escapeHtml(person.birth_place) : ""}</span></div></div>`;
+      const bornCite = citeHtml("person", personId, { fields: ["birth_date", "birth_place"], addField: "birth_date", focusId: personId });
+      html += `<div class="panel-detail-item"><span class="panel-detail-icon">&#9679;</span><div class="panel-detail-body"><span class="panel-detail-label">Born</span><span class="panel-detail-value">${escapeHtml(person.birth_date)}${person.birth_place ? " · " + escapeHtml(person.birth_place) : ""}${bornCite}</span></div></div>`;
     }
     if (person.death_date) {
-      html += `<div class="panel-detail-item"><span class="panel-detail-icon" style="color:var(--text-muted)">&#9679;</span><div class="panel-detail-body"><span class="panel-detail-label">Died</span><span class="panel-detail-value">${dateYear(person.death_date) ? escapeHtml(person.death_date) : "date unknown"}${person.death_place ? " · " + escapeHtml(person.death_place) : ""}</span></div></div>`;
+      const diedCite = citeHtml("person", personId, { fields: ["death_date", "death_place"], addField: "death_date", focusId: personId });
+      html += `<div class="panel-detail-item"><span class="panel-detail-icon" style="color:var(--text-muted)">&#9679;</span><div class="panel-detail-body"><span class="panel-detail-label">Died</span><span class="panel-detail-value">${dateYear(person.death_date) ? escapeHtml(person.death_date) : "date unknown"}${person.death_place ? " · " + escapeHtml(person.death_place) : ""}${diedCite}</span></div></div>`;
     }
     if (person.maiden_name) {
       html += `<div class="panel-detail-item"><span class="panel-detail-icon" style="color:var(--text-muted)">&#9679;</span><div class="panel-detail-body"><span class="panel-detail-label">Maiden name</span><span class="panel-detail-value">${escapeHtml(person.maiden_name)}</span></div></div>`;
@@ -333,7 +335,7 @@ export function showPersonPanel(personId) {
           </div>
           <div class="panel-event-body">
             <span class="panel-event-date">${date}</span>
-            <span class="panel-event-desc">${escapeHtml(e.description || (e.kind === "event" ? (_EVENT_TYPE_LABELS[e.event_type] || e.event_type) : ""))}${e.place ? " · <span class='panel-event-place'>" + escapeHtml(e.place) + "</span>" : ""}${e.kind === "event" ? _sourceChip(e.source) : ""}</span>
+            <span class="panel-event-desc">${escapeHtml(e.description || (e.kind === "event" ? (_EVENT_TYPE_LABELS[e.event_type] || e.event_type) : ""))}${e.place ? " · <span class='panel-event-place'>" + escapeHtml(e.place) + "</span>" : ""}${e.kind === "event" ? _sourceChip(e.source) : ""}${e.kind === "event" && e.id ? citeHtml("event", e.id, { fields: "*", focusId: personId }) : ""}</span>
             ${photoThumb}
             ${editActions}
           </div>
