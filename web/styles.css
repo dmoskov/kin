@@ -697,6 +697,10 @@ main {
   font-size: 13px;
   color: var(--text);
 }
+.panel-survived-by {
+  line-height: 1.6;
+}
+.panel-survived-by .person-link { white-space: nowrap; }
 
 /* ── AI Summary ───────────────────────────────────────────── */
 
@@ -4869,6 +4873,50 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   line-height: 1;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
+}
+/* ── "Survived by" on death milestone cards ───────────────────── */
+.tstream-survived-by {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--text-muted) 20%, transparent);
+}
+.tstream-survived-heading {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  display: block;
+  margin-bottom: 4px;
+}
+.tstream-survived-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+}
+.tstream-survived-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  min-width: 56px;
+}
+.tstream-survived-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  align-items: center;
+}
+.tstream-survived-member {
+  display: inline-flex;
+  border-radius: 50%;
+  transition: transform 0.1s ease;
+}
+.tstream-survived-member:hover { transform: scale(1.12); }
+.tstream-survived-more {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-left: 2px;
 }
 /* ── Photo-first stream card (the photo IS the card) ──────────────
    NOTE for styles.css merge: classes added below are

@@ -180,6 +180,41 @@ export function showPersonPanel(personId) {
     if (person.death_date) {
       const diedCite = citeHtml("person", personId, { fields: ["death_date", "death_place"], addField: "death_date", focusId: personId });
       html += `<div class="panel-detail-item"><span class="panel-detail-icon" style="color:var(--text-muted)">&#9679;</span><div class="panel-detail-body"><span class="panel-detail-label">Died</span><span class="panel-detail-value">${dateYear(person.death_date) ? escapeHtml(person.death_date) : "date unknown"}${person.death_place ? " · " + escapeHtml(person.death_place) : ""}${diedCite}</span></div></div>`;
+      const dy = dateYear(person.death_date);
+      if (dy) {
+        const _alive = (id) => {
+          const q = S.PEOPLE_MAP[id];
+          if (!q) return false;
+          const born = q.birth_date ? dateYear(q.birth_date) : null;
+          if (born != null && born > dy) return false;
+          const died = q.death_date ? dateYear(q.death_date) : null;
+          if (died != null && died < dy) return false;
+          return true;
+        };
+        const sbSpouses = (S.DATA.unions || [])
+          .filter(u => u.partner1_id === personId || u.partner2_id === personId)
+          .map(u => u.partner1_id === personId ? u.partner2_id : u.partner1_id)
+          .filter(_alive);
+        const sbChildren = children.filter(_alive);
+        const sbParents = parents.filter(_alive);
+        const sbSiblingSet = new Set();
+        for (const pid of parents) {
+          for (const r of S.DATA.relationships.filter(r => r.parent_id === pid && r.child_id !== personId)) {
+            if (_alive(r.child_id)) sbSiblingSet.add(r.child_id);
+          }
+        }
+        const sbSiblings = [...sbSiblingSet];
+        const sbNames = [];
+        const seen = new Set();
+        for (const id of [...sbSpouses, ...sbChildren, ...sbParents, ...sbSiblings]) {
+          if (seen.has(id)) continue;
+          seen.add(id);
+          sbNames.push(personLink(id));
+        }
+        if (sbNames.length) {
+          html += `<div class="panel-detail-item"><span class="panel-detail-icon" style="color:var(--text-muted)">&#9679;</span><div class="panel-detail-body"><span class="panel-detail-label">Survived by</span><span class="panel-detail-value panel-survived-by">${sbNames.join(", ")}</span></div></div>`;
+        }
+      }
     }
     if (person.maiden_name) {
       html += `<div class="panel-detail-item"><span class="panel-detail-icon" style="color:var(--text-muted)">&#9679;</span><div class="panel-detail-body"><span class="panel-detail-label">Maiden name</span><span class="panel-detail-value">${escapeHtml(person.maiden_name)}</span></div></div>`;
