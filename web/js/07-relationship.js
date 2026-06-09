@@ -169,31 +169,48 @@ export function computeRelationship() {
     router.navigate(`/relationships/${idA}/${idB}`, { replace: true });
   }
 
+  result.classList.remove("hidden");
+
+  // The hero: both people, side by side, connected. Shared across all outcomes.
+  const peopleRow = `
+    <div class="rel-people">
+      <a class="rel-person person-link" data-person-id="${idA}" href="javascript:void(0)">${personThumb(idA, 64)}<span>${personName(idA)}</span></a>
+      <span class="rel-connector-arrow" aria-hidden="true">&#8596;</span>
+      <a class="rel-person person-link" data-person-id="${idB}" href="javascript:void(0)">${personThumb(idB, 64)}<span>${personName(idB)}</span></a>
+    </div>`;
+
   if (idA === idB) {
-    result.classList.remove("hidden");
-    result.innerHTML = `<div class="rel-label">Self</div><div class="rel-desc">That's the same person!</div>`;
+    result.innerHTML = `${peopleRow}<p class="rel-statement">That's the same person.</p>`;
     return;
   }
 
   // Client-side relationship calculation (simplified LCA)
   const label = calculateRelationship(idA, idB);
-  result.classList.remove("hidden");
   const path = relationshipPath(idA, idB);
-  const pathBtn = path && path.length > 1
-    ? `<button class="rel-show-path" onclick="showRelationshipPath('${idA}', '${idB}')"
-         style="margin-top:12px;padding:7px 16px;font:inherit;font-size:13px;color:var(--bg);background:var(--accent);border:none;border-radius:var(--radius);cursor:pointer">
-         Show path on tree (${path.length - 1} step${path.length - 1 === 1 ? "" : "s"})
-       </button>`
+  const steps = path && path.length > 1 ? path.length - 1 : 0;
+  const pathBtn = steps
+    ? `<button class="rel-show-path" onclick="showRelationshipPath('${idA}', '${idB}')">Show path on tree · ${steps} step${steps === 1 ? "" : "s"}</button>`
     : "";
-  result.innerHTML = `
-    <div class="rel-label">${label}</div>
-    <div class="rel-people">
-      <div class="rel-person"><a class="person-link" data-person-id="${idA}" href="javascript:void(0)">${personThumb(idA, 48)}<span>${personName(idA)}</span></a></div>
-      <span class="rel-connector">${label}</span>
-      <div class="rel-person"><a class="person-link" data-person-id="${idB}" href="javascript:void(0)">${personThumb(idB, 48)}<span>${personName(idB)}</span></a></div>
-    </div>
-    ${pathBtn}
-  `;
+
+  // The label describes B's relationship to A (gender/role keyed on B), so the
+  // natural-language statement reads "B is A's <label>".
+  const statement = label === "no relation found"
+    ? `<p class="rel-statement">No blood or marriage relation found between <strong>${personName(idA)}</strong> and <strong>${personName(idB)}</strong>.</p>`
+    : `<p class="rel-statement"><strong>${personName(idB)}</strong> is <strong>${personName(idA)}</strong>'s <span class="rel-statement-label">${formatRelLabel(label)}</span></p>`;
+
+  result.innerHTML = `${peopleRow}${statement}${pathBtn}`;
+}
+
+// Collapse a long "great-great-…-grandparent" chain into the genealogy-standard
+// compact form ("7× great-granddaughter") for display. Three or more "great-"s
+// is where spelling it out starts to wrap and lose meaning.
+export function formatRelLabel(label) {
+  const m = label.match(/^((?:great-){3,})grand(father|mother|parent|son|daughter|child)$/i);
+  if (m) {
+    const greats = m[1].match(/great-/gi).length;
+    return `${greats}× great-grand${m[2].toLowerCase()}`;
+  }
+  return label;
 }
 
 // Shortest path between two people over the family graph (parent-child + spouse

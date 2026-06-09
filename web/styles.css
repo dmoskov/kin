@@ -2397,10 +2397,12 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
 }
 
 .rel-result {
-  padding: var(--space-5);
+  padding: var(--space-6) var(--space-5);
   background: var(--surface);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  text-align: center;
 }
 
 .rel-result.hidden { display: none; }
@@ -2471,25 +2473,13 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
 .rel-suggest-chip .person-thumb,
 .rel-suggest-chip .person-thumb-placeholder { flex-shrink: 0; }
 
-.rel-label {
-  font-size: 32px;
-  font-weight: 700;
-  color: var(--accent);
-  margin-bottom: var(--space-2);
-  text-transform: capitalize;
-}
-
-.rel-desc {
-  font-size: 15px;
-  color: var(--text-muted);
-}
-
+/* The two people, side by side and connected — the hero of the result. */
 .rel-people {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  gap: var(--space-5);
-  margin-top: var(--space-4);
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
 }
 
 .rel-person {
@@ -2499,7 +2489,9 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   gap: var(--space-2);
   font-size: 14px;
   font-weight: 600;
+  max-width: 150px;
 }
+.rel-person.person-link,
 .rel-person .person-link {
   display: flex;
   flex-direction: column;
@@ -2508,16 +2500,45 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   border-bottom: none;
 }
 
-.rel-connector {
-  font-size: 13px;
+.rel-connector-arrow {
+  color: var(--accent);
+  font-size: 22px;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 22px; /* vertically centre against the avatars */
+}
+
+/* Natural-language result, e.g. "Kay is Elizabeth's 7× great-granddaughter". */
+.rel-statement {
+  font-size: 17px;
+  line-height: 1.5;
   color: var(--text-muted);
-  padding: 6px 14px;
-  background: var(--bg);
-  border-radius: 20px;
-  border: 1px solid var(--border);
+}
+.rel-statement strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.rel-statement-label {
+  color: var(--accent);
+  font-weight: 700;
   text-transform: capitalize;
   white-space: nowrap;
 }
+
+.rel-show-path {
+  margin-top: var(--space-5);
+  padding: var(--space-2) var(--space-4);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--bg);
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease);
+}
+.rel-show-path:hover { background: var(--accent-hover); }
 
 /* ── Map View ───────────────────────────────────────────────── */
 
