@@ -447,6 +447,38 @@ export function gatherTimelineEntries() {
     }
   }
 
+  // "Later life" photos for death cards: photos from the second half of the
+  // person's life, shown as a carousel on their death milestone card.
+  if (S.DATA.photos) {
+    for (const e of entries) {
+      if (e.type !== "death" || !e.personId) continue;
+      const person = S.PEOPLE_MAP[e.personId];
+      if (!person) continue;
+      const by = person.birth_date ? dateYear(person.birth_date) : null;
+      const dy = person.death_date ? dateYear(person.death_date) : null;
+      if (by == null || dy == null || dy <= by) continue;
+      const midpoint = (by + dy) / 2;
+      const laterPhotos = [];
+      for (const photo of S.DATA.photos) {
+        if (!photo.date) continue;
+        const py = dateYear(photo.date);
+        if (!py || py < midpoint) continue;
+        const tagged = (photo.tagged_people || []).find(t => t.person_id === e.personId);
+        if (!tagged) continue;
+        laterPhotos.push({
+          path: photo.file_path,
+          caption: tagged.caption || "",
+          date: photo.date,
+          dateCirca: photo.date_circa,
+          year: py,
+          place: photo.place,
+        });
+      }
+      laterPhotos.sort((a, b) => a.year - b.year || a.path.localeCompare(b.path));
+      if (laterPhotos.length) e.laterPhotos = laterPhotos;
+    }
+  }
+
   // Photo entries (gated by config)
   if (S.CONFIG?.timelinePhotos !== false && S.DATA.photos) {
     for (const photo of S.DATA.photos) {
@@ -761,6 +793,8 @@ function renderStreamFeed(container, entries, showNow) {
   // aspect is close enough to the 4:5 stage that a crop reads intentionally.
   _wirePhotoFraming(container);
 
+  _wireDeathPhotoCarousels(container);
+
   // Re-apply any active lane focus class
   _applyLaneFocusClass(container);
 
@@ -927,6 +961,31 @@ function _wirePhotoFraming(container) {
       img.addEventListener("load", apply, { once: true });
       img.addEventListener("error", () => { img.style.visibility = "hidden"; }, { once: true });
     }
+  });
+}
+
+function _wireDeathPhotoCarousels(container) {
+  container.querySelectorAll(".tstream-death-photos").forEach((wrap) => {
+    const slides = wrap.querySelectorAll(".tstream-death-slide");
+    if (slides.length < 2) return;
+    const counter = wrap.querySelector(".tstream-death-carousel-cur");
+    let cur = 0;
+    function goTo(idx) {
+      if (idx < 0) idx = slides.length - 1;
+      if (idx >= slides.length) idx = 0;
+      slides[cur].classList.remove("active");
+      cur = idx;
+      slides[cur].classList.add("active");
+      if (counter) counter.textContent = cur + 1;
+    }
+    const prev = wrap.querySelector(".tstream-death-carousel-prev");
+    const next = wrap.querySelector(".tstream-death-carousel-next");
+    if (prev) prev.addEventListener("click", () => goTo(cur - 1));
+    if (next) next.addEventListener("click", () => goTo(cur + 1));
+    let tx = 0, td = 0;
+    wrap.addEventListener("touchstart", (e) => { tx = e.touches[0].clientX; td = 0; }, { passive: true });
+    wrap.addEventListener("touchmove", (e) => { td = e.touches[0].clientX - tx; }, { passive: true });
+    wrap.addEventListener("touchend", () => { if (Math.abs(td) > 40) goTo(td > 0 ? cur - 1 : cur + 1); });
   });
 }
 
@@ -1202,6 +1261,32 @@ function _marriageChildrenHtml(e) {
   return `<div class="tstream-kids"><span class="tstream-kids-label">\u{1F476} ${label}</span><div class="tstream-kids-row tstream-kids-timeline">${chips}</div></div>`;
 }
 
+function _laterPhotosCarouselHtml(e) {
+  const photos = e.laterPhotos;
+  if (!photos || !photos.length) return "";
+  const pid = e.personId;
+  const slides = photos.map((p, i) => {
+    const alt = escapeHtml(p.caption || "");
+    const dateStr = p.dateCirca ? `c. ${p.date}` : p.date;
+    const meta = [dateStr, p.place].filter(Boolean).map(escapeHtml).join(" · ");
+    const listArg = photos.length > 1
+      ? `[${photos.map(ph => `'${ph.path.replace(/'/g, "\\'")}'`).join(",")}]`
+      : "null";
+    const onClick = `openLightbox('/${p.path}', '${alt}', '${p.path.replace(/'/g, "\\'")}', ${listArg})`;
+    return `<div class="tstream-death-slide${i === 0 ? " active" : ""}" data-index="${i}">` +
+      `<img class="tstream-death-slide-img" src="/${p.path}" alt="${alt}" loading="lazy" onclick="${onClick}" />` +
+      (meta ? `<div class="tstream-death-slide-meta">${meta}</div>` : "") +
+      `</div>`;
+  }).join("");
+  const nav = photos.length > 1
+    ? `<button class="tstream-death-carousel-prev" aria-label="Previous">&#8249;</button>` +
+      `<button class="tstream-death-carousel-next" aria-label="Next">&#8250;</button>` +
+      `<div class="tstream-death-carousel-counter"><span class="tstream-death-carousel-cur">1</span> / ${photos.length}</div>`
+    : "";
+  return `<div class="tstream-death-photos" data-person-id="${pid}">` +
+    `<div class="tstream-death-carousel-track">${slides}</div>${nav}</div>`;
+}
+
 function _survivedByHtml(e) {
   const sb = e.survivedBy;
   if (!sb) return "";
@@ -1257,6 +1342,7 @@ function buildMilestoneCellHtml(e, treatment, color, laneAttr, laneChip) {
     // birth / death share structure: thumb + eyebrow + date + title + place.
     const eyebrow = variant === "birth" ? "Born" : "Died";
     const survivedBy = variant === "death" ? _survivedByHtml(e) : "";
+    const laterPhotos = variant === "death" ? _laterPhotosCarouselHtml(e) : "";
     body = `
         ${e.personId ? `<div class="tstream-milestone-thumb">${personThumb(e.personId, 30)}</div>` : ""}
         <div class="tstream-milestone-text">
@@ -1264,6 +1350,7 @@ function buildMilestoneCellHtml(e, treatment, color, laneAttr, laneChip) {
           <div class="tstream-milestone-meta"><span class="tstream-date">${dateText}</span>${ageChipHtml(e)}${laneChip}</div>
           <div class="tstream-title">${e.title}</div>
           ${placeRow}
+          ${laterPhotos}
           ${survivedBy}
         </div>`;
   }
