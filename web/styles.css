@@ -4918,6 +4918,82 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   color: var(--text-muted);
   margin-left: 2px;
 }
+/* ── Later-life photos carousel on death cards ───────────────────── */
+.tstream-death-photos {
+  position: relative;
+  margin-top: 10px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text-muted) 8%, var(--surface));
+}
+.tstream-death-carousel-track {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+}
+.tstream-death-slide {
+  position: absolute;
+  inset: 0;
+  display: none;
+  flex-direction: column;
+}
+.tstream-death-slide.active { display: flex; }
+.tstream-death-slide-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  cursor: pointer;
+  background: color-mix(in srgb, var(--text-muted) 6%, var(--surface));
+}
+.tstream-death-slide-meta {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 3px 8px;
+  font-size: 10px;
+  color: #fff;
+  background: linear-gradient(transparent, rgba(0,0,0,.55));
+  pointer-events: none;
+  text-align: right;
+}
+.tstream-death-carousel-prev,
+.tstream-death-carousel-next {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0,0,0,.35);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity .15s;
+}
+.tstream-death-photos:hover .tstream-death-carousel-prev,
+.tstream-death-photos:hover .tstream-death-carousel-next { opacity: 1; }
+.tstream-death-carousel-prev { left: 4px; }
+.tstream-death-carousel-next { right: 4px; }
+.tstream-death-carousel-counter {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 10px;
+  color: #fff;
+  background: rgba(0,0,0,.4);
+  padding: 1px 6px;
+  border-radius: 8px;
+  z-index: 2;
+  pointer-events: none;
+}
 /* ── Photo-first stream card (the photo IS the card) ──────────────
    NOTE for styles.css merge: classes added below are
    .tstream-photo-stage, .tstream-photo-blurfill, .tstream-photo-img(.is-cover),
