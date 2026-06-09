@@ -409,6 +409,44 @@ export function gatherTimelineEntries() {
     if (e.type === "birth" && absorbedBirthIds.has(e.personId)) e.absorbedBirth = true;
   }
 
+  // "Survived by" for death cards: immediate family alive at time of death.
+  const childrenByParent = {};
+  for (const r of S.DATA.relationships || []) {
+    (childrenByParent[r.parent_id] || (childrenByParent[r.parent_id] = [])).push(r.child_id);
+  }
+  function wasAliveAt(personId, deathYear) {
+    const p = S.PEOPLE_MAP[personId];
+    if (!p) return false;
+    const born = p.birth_date ? dateYear(p.birth_date) : null;
+    if (born != null && born > deathYear) return false;
+    const died = p.death_date ? dateYear(p.death_date) : null;
+    if (died != null && died < deathYear) return false;
+    return true;
+  }
+  for (const e of entries) {
+    if (e.type !== "death" || !e.year) continue;
+    const pid = e.personId;
+    const dy = e.year;
+    const spouses = (S.DATA.unions || [])
+      .filter(u => u.partner1_id === pid || u.partner2_id === pid)
+      .map(u => u.partner1_id === pid ? u.partner2_id : u.partner1_id)
+      .filter(id => wasAliveAt(id, dy));
+    const parents = (parentsByChild[pid] ? [...parentsByChild[pid]] : [])
+      .filter(id => wasAliveAt(id, dy));
+    const children = (childrenByParent[pid] || [])
+      .filter(id => wasAliveAt(id, dy));
+    const siblingSet = new Set();
+    for (const pId of (parentsByChild[pid] || [])) {
+      for (const cId of (childrenByParent[pId] || [])) {
+        if (cId !== pid && wasAliveAt(cId, dy)) siblingSet.add(cId);
+      }
+    }
+    const siblings = [...siblingSet];
+    if (spouses.length || children.length || parents.length || siblings.length) {
+      e.survivedBy = { spouses, children, parents, siblings };
+    }
+  }
+
   // Photo entries (gated by config)
   if (S.CONFIG?.timelinePhotos !== false && S.DATA.photos) {
     for (const photo of S.DATA.photos) {
@@ -1164,6 +1202,38 @@ function _marriageChildrenHtml(e) {
   return `<div class="tstream-kids"><span class="tstream-kids-label">\u{1F476} ${label}</span><div class="tstream-kids-row tstream-kids-timeline">${chips}</div></div>`;
 }
 
+function _survivedByHtml(e) {
+  const sb = e.survivedBy;
+  if (!sb) return "";
+  const groups = [];
+  if (sb.spouses.length) {
+    const label = sb.spouses.length === 1 ? "spouse" : "spouses";
+    groups.push({ label, ids: sb.spouses });
+  }
+  if (sb.children.length) {
+    const label = sb.children.length === 1 ? "child" : "children";
+    groups.push({ label: `${sb.children.length} ${label}`, ids: sb.children });
+  }
+  if (sb.parents.length) {
+    const label = sb.parents.length === 1 ? "parent" : "parents";
+    groups.push({ label, ids: sb.parents });
+  }
+  if (sb.siblings.length) {
+    const label = sb.siblings.length === 1 ? "sibling" : "siblings";
+    groups.push({ label: `${sb.siblings.length} ${label}`, ids: sb.siblings });
+  }
+  const chips = groups.map(g => {
+    const thumbs = g.ids.slice(0, 6).map(id => {
+      const person = S.PEOPLE_MAP[id];
+      const name = person?.fullName || "";
+      return `<a class="person-link tstream-survived-member" data-person-id="${id}" href="javascript:void(0)" title="${escapeHtml(name)}">${personThumb(id, 24)}</a>`;
+    }).join("");
+    const overflow = g.ids.length > 6 ? `<span class="tstream-survived-more">+${g.ids.length - 6}</span>` : "";
+    return `<div class="tstream-survived-group"><span class="tstream-survived-label">${g.label}</span><div class="tstream-survived-row">${thumbs}${overflow}</div></div>`;
+  }).join("");
+  return `<div class="tstream-survived-by"><span class="tstream-survived-heading">Survived by</span>${chips}</div>`;
+}
+
 function buildMilestoneCellHtml(e, treatment, color, laneAttr, laneChip) {
   const variant = treatment.variant;
   const dateText = escapeHtml(e.dateDisplay || e.year);
@@ -1186,6 +1256,7 @@ function buildMilestoneCellHtml(e, treatment, color, laneAttr, laneChip) {
   } else {
     // birth / death share structure: thumb + eyebrow + date + title + place.
     const eyebrow = variant === "birth" ? "Born" : "Died";
+    const survivedBy = variant === "death" ? _survivedByHtml(e) : "";
     body = `
         ${e.personId ? `<div class="tstream-milestone-thumb">${personThumb(e.personId, 30)}</div>` : ""}
         <div class="tstream-milestone-text">
@@ -1193,6 +1264,7 @@ function buildMilestoneCellHtml(e, treatment, color, laneAttr, laneChip) {
           <div class="tstream-milestone-meta"><span class="tstream-date">${dateText}</span>${ageChipHtml(e)}${laneChip}</div>
           <div class="tstream-title">${e.title}</div>
           ${placeRow}
+          ${survivedBy}
         </div>`;
   }
 
