@@ -1352,9 +1352,11 @@ export function renderTree() {
     .style("right", "12px")
     .style("background", "var(--surface)")
     .style("border", "1px solid var(--border)")
-    .style("border-radius", "8px")
-    .style("opacity", "0.85")
+    .style("border-radius", "var(--radius-sm)")
+    .style("box-shadow", "var(--shadow-md)")
+    .style("opacity", "0.96")
     .style("pointer-events", "all")
+    .style("cursor", "pointer")
     .style("z-index", "10");
 
   const mmG = mmSvg.append("g")
@@ -1376,8 +1378,8 @@ export function renderTree() {
   // Viewport indicator rectangle
   const mmViewport = mmSvg.append("rect")
     .attr("class", "minimap-viewport")
-    .attr("fill", "rgba(108, 124, 255, 0.15)")
-    .attr("stroke", "rgba(108, 124, 255, 0.6)")
+    .attr("fill", "rgba(var(--accent-rgb), 0.18)")
+    .attr("stroke", "rgba(var(--accent-rgb), 0.9)")
     .attr("stroke-width", 1.5)
     .attr("rx", 3);
 
