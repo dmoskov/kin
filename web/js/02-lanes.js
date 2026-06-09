@@ -199,11 +199,19 @@ export function autoComputeLanes(centerA, centerB) {
   const lanes = [];
   let colorIdx = 0;
 
+  const fromA = new Set(gpsA);
   for (const gp of [...gpsA, ...gpsB]) {
     if (!gp || seen.has(gp)) continue;
     seen.add(gp);
     const person = S.PEOPLE_MAP[gp];
-    const label = person ? (person.surname || person.given_name || "Unknown") : "Unknown";
+    let label = person ? (person.surname || person.given_name || "") : "";
+    if (!label) {
+      // Nameless lane root: label the branch by which side of the center
+      // couple it belongs to, so chips never read as bare "Unknown".
+      const center = S.PEOPLE_MAP[fromA.has(gp) ? centerA : centerB];
+      const centerName = center && (center.given_name || center.fullName);
+      label = centerName ? `${centerName}'s side` : "Unknown";
+    }
     lanes.push({
       id: `auto-${gp}`,
       label,
@@ -235,8 +243,9 @@ export function _updateHeaderFromLanes() {
   const titleEl = document.getElementById("family-title");
   if (!titleEl) return;
   // Drop placeholder labels so a tree with unnamed grandparents never renders
-  // a serif headline of "Unknown \u00b7 Unknown". Fall back to a calm default.
-  const labels = S.LANES.map(l => l.label).filter(l => l && l !== "Unknown");
+  // a serif headline of "Unknown \u00b7 Unknown" (or "John's side \u00b7 \u2026").
+  // Fall back to a calm default.
+  const labels = S.LANES.map(l => l.label).filter(l => l && l !== "Unknown" && !l.endsWith("'s side"));
   titleEl.textContent = labels.length ? labels.join(" \u00b7 ") : "Family Tree";
 }
 

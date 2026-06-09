@@ -973,16 +973,36 @@ export function initPhotoGalleryFilters() {
   }
 }
 
+// One renderer per view. Re-rendering all five after every edit made the
+// whole app flash for a one-field change; instead the visible view renders
+// immediately and the rest are marked stale — switchTab re-renders a stale
+// view right before showing it (renderViewIfStale).
+const VIEW_RENDERERS = {
+  tree: () => renderTree(),
+  timeline: () => renderTimeline(document.getElementById("timeline-filter")?.value || "all"),
+  map: () => { if (S.MAP) renderMap(); },
+  photos: () => renderPhotoGallery(),
+  relationships: () => prefillRelationshipCalculator(),
+};
+
 export function refreshAllViews() {
   updateStats();
-  renderTree();
-  renderTimeline(document.getElementById("timeline-filter")?.value || "all");
-  // Pre-fill relationship calculator with current viewer
-  prefillRelationshipCalculator();
-  // Re-render map if it was already initialized
-  if (S.MAP) renderMap();
-  // Re-render photo gallery
-  renderPhotoGallery();
+  const active = activeViewName();
+  for (const name of Object.keys(VIEW_RENDERERS)) {
+    if (name === active) {
+      S._STALE_VIEWS.delete(name);
+      VIEW_RENDERERS[name]();
+    } else {
+      S._STALE_VIEWS.add(name);
+    }
+  }
+}
+
+// Called by switchTab just after a view becomes visible.
+export function renderViewIfStale(viewName) {
+  if (!S._STALE_VIEWS.has(viewName)) return;
+  S._STALE_VIEWS.delete(viewName);
+  VIEW_RENDERERS[viewName]?.();
 }
 
 export function prefillRelationshipCalculator() {
@@ -1098,6 +1118,13 @@ export function applyAuth() {
   if (gedcomBtn) {
     gedcomBtn.style.display = isEditor ? "" : "none";
   }
+  const researchBtn = document.getElementById("research-queue-btn");
+  if (researchBtn) {
+    researchBtn.style.display = isEditor ? "" : "none";
+  }
+  // The dashed drop-zone is an upload affordance — editors only.
+  const galleryDropZone = document.getElementById("gallery-drop-zone");
+  if (galleryDropZone) galleryDropZone.classList.toggle("hidden", !isEditor);
 
   if (S.CONFIG?.editorsMisconfigured) {
     showToast("⚠️ EDITORS is set but Google Sign-In is not configured — no one can edit.", "error");

@@ -33,14 +33,39 @@ const FIELD_RENDERERS = {
   textarea(id, value, f) {
     return `<textarea id="${id}" class="add-relative-input" placeholder="${_esc(f.placeholder || f.label || "")}" rows="${f.rows || 3}">${_esc(value)}</textarea>`;
   },
-  // Date is plain text for now (same as today); Phase 4 swaps in a
-  // structured year/month/day input here without touching any caller.
+  // Structured year/month/day input composing an ISO partial (YYYY,
+  // YYYY-MM, or YYYY-MM-DD) into a hidden field, so _readField and every
+  // caller stay unchanged. Approximate dates remain a separate
+  // `date_circa` checkbox field. Non-ISO legacy values fall back to the
+  // plain text input so nothing gets mangled.
   date(id, value, f) {
-    return `<input id="${id}" type="text" class="add-relative-input" placeholder="${_esc(f.placeholder || "e.g. 1987 or 1987-05-12")}" value="${_esc(value)}" />`;
+    const v = String(value ?? "");
+    if (v && !/^\d{4}(-\d{2}(-\d{2})?)?$/.test(v)) {
+      return FIELD_RENDERERS.text(id, value, f);
+    }
+    const [y = "", m = "", d = ""] = v.split("-");
+    const label = f.label || "Date";
+    const monthOpts = ['<option value="">Month</option>']
+      .concat(
+        EF_MONTHS.map((name, i) => {
+          const mm = String(i + 1).padStart(2, "0");
+          return `<option value="${mm}" ${mm === m ? "selected" : ""}>${name}</option>`;
+        })
+      )
+      .join("");
+    return `<span class="ef-date">
+      <input id="${id}" type="hidden" value="${_esc(v)}" />
+      <input type="text" class="add-relative-input ef-date-y" inputmode="numeric" maxlength="4" placeholder="${_esc(f.placeholder || "YYYY")}" value="${_esc(y)}" aria-label="${_esc(label)} year" />
+      <select class="add-relative-input ef-date-m" aria-label="${_esc(label)} month" ${y ? "" : "disabled"}>${monthOpts}</select>
+      <input type="text" class="add-relative-input ef-date-d" inputmode="numeric" maxlength="2" placeholder="DD" value="${_esc(d ? String(parseInt(d, 10)) : "")}" aria-label="${_esc(label)} day" ${m ? "" : "disabled"} />
+    </span>`;
   },
-  // Place is plain text for now; Phase 4 swaps in geocoding autocomplete.
+  // Place input with suggestions from every place already in the tree —
+  // keeps spellings consistent ("Boston, Massachusetts" vs "Boston, MA")
+  // without a network round-trip.
   place(id, value, f) {
-    return `<input id="${id}" type="text" class="add-relative-input" placeholder="${_esc(f.placeholder || f.label || "Place")}" value="${_esc(value)}" />`;
+    _ensurePlaceDatalist();
+    return `<input id="${id}" type="text" list="ef-place-options" autocomplete="off" class="add-relative-input" placeholder="${_esc(f.placeholder || f.label || "Place")}" value="${_esc(value)}" />`;
   },
   enum(id, value, f) {
     const opts = (f.options || [])
@@ -57,6 +82,63 @@ const FIELD_RENDERERS = {
     return `<label class="apf-circa-label"><input id="${id}" type="checkbox" ${value ? "checked" : ""} /> ${_esc(f.label || "")}</label>`;
   },
 };
+
+const EF_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// Keep the hidden ISO value in sync with the year/month/day segments.
+// Month unlocks once a 4-digit year exists; day unlocks once a month is
+// chosen — so a partial date is always a VALID partial (YYYY or YYYY-MM).
+export function _wireDateGroups(root) {
+  root.querySelectorAll(".ef-date").forEach((group) => {
+    const hidden = group.querySelector('input[type="hidden"]');
+    const yEl = group.querySelector(".ef-date-y");
+    const mEl = group.querySelector(".ef-date-m");
+    const dEl = group.querySelector(".ef-date-d");
+    if (!hidden || !yEl || !mEl || !dEl) return;
+    const compose = () => {
+      const y = yEl.value.trim();
+      const m = mEl.value;
+      const d = dEl.value.trim();
+      mEl.disabled = !/^\d{4}$/.test(y);
+      dEl.disabled = mEl.disabled || !m;
+      let iso = "";
+      if (!mEl.disabled) {
+        iso = y;
+        if (m) {
+          iso += `-${m}`;
+          if (/^\d{1,2}$/.test(d) && !dEl.disabled) iso += `-${d.padStart(2, "0")}`;
+        }
+      }
+      hidden.value = iso;
+    };
+    for (const el of [yEl, mEl, dEl]) {
+      el.addEventListener("input", compose);
+      el.addEventListener("change", compose);
+    }
+  });
+}
+
+// Shared <datalist> of every place already used anywhere in the tree.
+// Rebuilt on each form open so fresh edits show up immediately.
+function _ensurePlaceDatalist() {
+  let dl = document.getElementById("ef-place-options");
+  if (!dl) {
+    dl = document.createElement("datalist");
+    dl.id = "ef-place-options";
+    document.body.appendChild(dl);
+  }
+  const places = new Set();
+  for (const p of S.DATA?.people || []) {
+    if (p.birth_place) places.add(p.birth_place);
+    if (p.death_place) places.add(p.death_place);
+  }
+  for (const e of S.DATA?.events || []) if (e.place) places.add(e.place);
+  for (const u of S.DATA?.unions || []) if (u.union_place) places.add(u.union_place);
+  dl.innerHTML = [...places]
+    .sort()
+    .map((p) => `<option value="${_esc(p)}"></option>`)
+    .join("");
+}
 
 // ─── Value collection ─────────────────────────────────────────────
 
@@ -127,6 +209,7 @@ export const EditForm = {
       </div>
     `;
     el.classList.remove("hidden");
+    _wireDateGroups(el);
 
     const errorEl = document.getElementById(`${prefix}-error`);
     const saveBtn = document.getElementById(`${prefix}-save`);

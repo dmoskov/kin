@@ -590,7 +590,7 @@ function buildLivingNowHtml() {
   const groups = {};
   for (const item of living) {
     const loc = ((res[item.p.id] && res[item.p.id].place) || item.p.birth_place || "").trim();
-    const key = loc || " ";
+    const key = loc || "\u0000";
     (groups[key] || (groups[key] = { loc, members: [] })).members.push(item);
   }
   const ordered = Object.values(groups);
@@ -943,7 +943,15 @@ export function renderTimelineLegend() {
   }
   host.style.display = "";
   let html = "";
-  for (const lane of S.LANES) {
+  // Skip lanes that never got a meaningful label — a chip reading "Unknown"
+  // can't be told apart from its neighbor, so it filters nothing useful.
+  const labeled = S.LANES.filter((l) => l.label && l.label !== "Unknown");
+  if (labeled.length === 0) {
+    host.innerHTML = "";
+    host.style.display = "none";
+    return;
+  }
+  for (const lane of labeled) {
     const active = LANE_FOCUS === lane.id;
     html += `<button type="button" class="tstream-legend-chip${active ? " active" : ""}" data-lane="${lane.id}">
       <span class="tstream-legend-dot" style="background:${lane.color}"></span>

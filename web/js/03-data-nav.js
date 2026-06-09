@@ -329,6 +329,9 @@ export function switchTab(viewName) {
   }
   const view = document.getElementById(`view-${viewName}`);
   if (view) view.classList.add("active");
+  // If edits landed while this view was hidden, bring it up to date now
+  // (via the window bridge — 16-gallery loads after this module).
+  if (typeof window.renderViewIfStale === "function") window.renderViewIfStale(viewName);
 }
 
 export function activeViewName() {

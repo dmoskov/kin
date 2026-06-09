@@ -120,6 +120,9 @@ async function initApp() {
   // Show onboarding wizard if tree is empty
   if (typeof window._showOnboardingIfEmpty === "function") window._showOnboardingIfEmpty();
 
+  // Family anniversaries matching today's date (dismissible, once per day).
+  if (typeof window.showOnThisDayCard === "function") window.showOnThisDayCard();
+
   document.getElementById("focus-depth-select")?.addEventListener("change", (e) => {
     if (S.FOCUS_PERSON_ID) {
       S.FOCUS_DEPTH = e.target.value === "all" ? "all" : parseInt(e.target.value, 10);

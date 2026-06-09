@@ -32,4 +32,8 @@ export const S = {
   ALL_PHOTOS: null,
   PHOTO_PICKER_PERSON: null,
   AUTH_USER: null,
+  // Views whose rendered DOM is out of date with S.DATA. refreshAllViews
+  // (16) renders only the active view and marks the rest here; switchTab
+  // (03) drains the flag via renderViewIfStale (16).
+  _STALE_VIEWS: new Set(),
 };

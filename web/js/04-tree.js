@@ -951,8 +951,22 @@ export function renderTree() {
     // the tree up if the couple itself is near the top (few ancestors above),
     // so we never leave more than a small margin of dead space.
     const topMargin = 32;
-    const ty = Math.min(height * 0.35 - focusY * k, topMargin - minY * k);
-    svg.call(zoom.transform, d3.zoomIdentity.translate(width / 2 - focusX * k, ty).scale(k));
+    const tx = width / 2 - focusX * k;
+    let ty = Math.min(height * 0.35 - focusY * k, topMargin - minY * k);
+    // The upper-third bias still assumes some ancestor is visible above the
+    // couple. On phone-width viewports they're often ALL off-screen to the
+    // sides, leaving the band above the couple completely empty — detect
+    // that and pull the couple near the top to reclaim it.
+    const anyVisibleAbove = nodes.some((n) => {
+      const ncx = n.cx != null ? n.cx : n.x + NODE_W / 2;
+      const ncy = n.y + NODE_H / 2;
+      if (ncy >= focusY - NODE_H) return false;
+      const sx = ncx * k + tx;
+      const sy = ncy * k + ty;
+      return sy > 0 && sx > -NODE_W && sx < width + NODE_W;
+    });
+    if (!anyVisibleAbove) ty = height * 0.18 - focusY * k;
+    svg.call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(k));
   } else {
     const ftx = width / 2 - ((minX + maxX) / 2) * fitScale;
     // A wide tree fit-to-width leaves vertical slack. Centering it floats the
