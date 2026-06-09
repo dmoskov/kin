@@ -35,6 +35,7 @@ class Citation:
         excerpt: Relevant quote or description from the source
         confidence: How reliable is this citation
         notes: Additional context
+        id: Database row id (autoincrement). None until persisted.
     """
 
     source_id: str
@@ -44,6 +45,7 @@ class Citation:
     excerpt: str = ""
     confidence: Confidence = Confidence.CONFIRMED
     notes: str = ""
+    id: int | None = None
 
     def __repr__(self) -> str:
         scope = f".{self.field_name}" if self.field_name else ""
