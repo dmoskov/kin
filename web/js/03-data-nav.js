@@ -753,11 +753,10 @@ export async function triggerUndo() {
       _refreshUndoBtn();
       return;
     }
-    // Reload data and refresh all views.
-    await loadData();
-    if (typeof autoComputeLanes === "function") autoComputeLanes();
-    if (typeof renderTree === "function") renderTree();
-    if (typeof refreshAllViews === "function") refreshAllViews();
+    // Standard post-mutation refresh (via the window bridge — 04b loads
+    // after this module). The old inline sequence here called
+    // autoComputeLanes() with no arguments, which wiped S.LANES.
+    await window.afterMutate(null);
     _refreshUndoBtn();
     const name = data.name || data.person_id || "person";
     if (typeof showToast === "function") showToast(`Restored: ${name}`);

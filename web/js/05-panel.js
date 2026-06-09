@@ -721,10 +721,7 @@ export async function linkRelative(personId, relationship, relativeId, errorEl, 
     }
   }
 
-  await loadData();
-  autoComputeLanes(S.CENTER_ID_A, S.CENTER_ID_B);
-  refreshAllViews();
-  showPersonPanel(personId);
+  await afterMutate(personId);
   return true;
 }
 
@@ -907,10 +904,7 @@ export async function submitInviteEmail(personId) {
     return;
   }
 
-  await loadData();
-  autoComputeLanes(S.CENTER_ID_A, S.CENTER_ID_B);
-  refreshAllViews();
-  showPersonPanel(personId);
+  await afterMutate(personId);
 }
 
 export async function copyInviteMessage(personId) {
@@ -1092,10 +1086,7 @@ export async function submitAddPlace(personId) {
     return;
   }
 
-  await loadData();
-  autoComputeLanes(S.CENTER_ID_A, S.CENTER_ID_B);
-  refreshAllViews();
-  showPersonPanel(personId);
+  await afterMutate(personId);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1181,10 +1172,7 @@ export async function submitAddEvent(personId) {
     return;
   }
 
-  await loadData();
-  autoComputeLanes(S.CENTER_ID_A, S.CENTER_ID_B);
-  refreshAllViews();
-  showPersonPanel(personId);
+  await afterMutate(personId);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1376,16 +1364,17 @@ export async function deletePerson(personId) {
   if (!confirm(`Delete ${name}? This also removes their relationships, marriages, and events. You can undo this from the Undo button.`)) return;
   try {
     const res = await fetch(`/api/people/${personId}`, { method: "DELETE" });
-    if (!res.ok) return;
-  } catch {
+    if (!res.ok) {
+      showToast(`Could not delete ${name} (HTTP ${res.status})`, "error");
+      return;
+    }
+  } catch (err) {
+    showToast(`Could not delete ${name}: ${err.message}`, "error");
     return;
   }
   // The person no longer exists, so close the panel rather than reshow it.
   closePersonPanel();
-  await loadData();
-  autoComputeLanes(S.CENTER_ID_A, S.CENTER_ID_B);
-  refreshAllViews();
-  if (typeof refreshUndoStatus === "function") refreshUndoStatus();
+  await afterMutate(null);
 }
 
 // ═══════════════════════════════════════════════════════════════

@@ -227,12 +227,17 @@ export const api = {
   del: (url) => fetch(url, { method: "DELETE" }),
 };
 
-// The standard post-mutation refresh used by every panel edit today:
-// reload data, recompute lanes, refresh all views, reshow the person panel.
-// Centralized here so Phase 5 can swap in optimistic/targeted updates in
-// one place instead of at every call site.
+// THE post-mutation refresh: every server write that changes tree data must
+// end with afterMutate(), never a hand-rolled loadData/lanes/render sequence.
+// It reloads S.DATA, reapplies the viewer visibility filter, recomputes
+// lanes for the current center couple, and refreshes all views — keeping
+// the derived state (S.DATA, S.LANES) consistent in one place, and giving
+// Phase 5 a single seam to swap in optimistic/targeted updates.
 export async function afterMutate(personId) {
   await window.loadData();
+  // loadData replaces S.DATA with the full graph; re-hide links the current
+  // viewer shouldn't see before anything reads it (matches init behavior).
+  window.applyVisibilityFilter();
   window.autoComputeLanes(S.CENTER_ID_A, S.CENTER_ID_B);
   window.refreshAllViews();
   if (personId != null) window.showPersonPanel(personId);

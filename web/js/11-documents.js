@@ -1040,7 +1040,12 @@ document.getElementById("doc-review-apply")?.addEventListener("click", async () 
       if (a.events) parts.push(`${a.events} events`);
       if (a.unions) parts.push(`${a.unions} unions`);
       const msg = parts.join(", ") || "no changes";
-      showToast(`Applied: ${msg}`);
+      const failed = a.failed || [];
+      if (failed.length) {
+        showToast(`Applied: ${msg} — but ${failed.length} item(s) failed: ${failed[0]}`, "error");
+      } else {
+        showToast(`Applied: ${msg}`);
+      }
       _showApplySuccess(`Applied: ${msg}`);
 
       // Refresh data

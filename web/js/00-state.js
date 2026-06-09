@@ -1,6 +1,16 @@
 // Shared mutable application state for the family-tree web app.
 // One object so it can be read AND written across ES modules without the
 // `export let` live-binding restriction. Import as: import { S } from ...
+//
+// Write ownership — everything else treats these as read-only:
+//   S.DATA / S.ORIGINAL_DATA / S.PEOPLE_MAP / S.PHOTOS_MAP
+//       loadData (03) builds them; applyVisibilityFilter (03) and
+//       applyFocus (04) derive S.DATA from S.ORIGINAL_DATA.
+//   S.CENTER_ID_A/B   setCenterPerson (16, viewer change), applyFocus (04,
+//       focus mode), initViewingAs (02) + applyConfig (01) at startup.
+//   S.LANES           autoComputeLanes (02) only.
+// After any server write that changes tree data, call afterMutate (04b) —
+// the single post-mutation refresh — rather than re-deriving these inline.
 
 export const S = {
   DATA: null,
