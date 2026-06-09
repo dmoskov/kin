@@ -223,6 +223,8 @@ def _citation_to_dict(c: Citation) -> dict[str, Any]:
         "entity_type": c.entity_type.value,
         "entity_id": c.entity_id,
     }
+    if c.id is not None:
+        d["id"] = c.id
     if c.field_name:
         d["field_name"] = c.field_name
     if c.excerpt:

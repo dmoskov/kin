@@ -8,6 +8,7 @@ from routes.export import export_bp
 from routes.geocode import geocode_bp
 from routes.people import people_bp
 from routes.photos import photos_bp
+from routes.sources import sources_bp
 from routes.undo import undo_bp
 from routes.wikipedia import wikipedia_bp
 
@@ -20,6 +21,7 @@ ALL_BLUEPRINTS = [
     articles_bp,
     events_bp,
     export_bp,
+    sources_bp,
     undo_bp,
     wikipedia_bp,
 ]
