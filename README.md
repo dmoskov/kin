@@ -344,6 +344,13 @@ This script:
 sudo bash deploy/setup.sh
 ```
 
+### Backups
+
+`setup.sh` installs a systemd timer that runs `deploy/backup.sh` nightly:
+`pg_dump` → S3, with upload verification and 30-day retention. Set
+`BACKUP_S3_BUCKET` in the server's `.env`, and enable S3 versioning on the
+photo bucket. Setup, verification, and restore instructions: [deploy/BACKUPS.md](deploy/BACKUPS.md).
+
 ### Continuous deployment (CI/CD)
 
 Pushes are validated and shipped automatically:

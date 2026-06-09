@@ -1,0 +1,9 @@
+[Unit]
+Description=Family Tree nightly database backup (pg_dump to S3)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ec2-user
+ExecStart=/usr/bin/bash /home/ec2-user/family-tree/deploy/backup.sh

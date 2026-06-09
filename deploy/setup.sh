@@ -10,7 +10,7 @@
 set -euo pipefail
 
 echo "=== Installing system packages ==="
-dnf install -y python3.11 python3.11-pip nginx git
+dnf install -y python3.11 python3.11-pip nginx git postgresql16
 
 echo "=== Setting up application ==="
 cd /home/ec2-user/family-tree
@@ -36,6 +36,14 @@ cp /home/ec2-user/family-tree/deploy/familytree.service /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable familytree
 systemctl restart familytree
+
+echo "=== Configuring nightly database backup ==="
+# pg_dump → S3 every night. Requires BACKUP_S3_BUCKET (or S3_BUCKET) in the
+# .env file. Restore instructions: deploy/BACKUPS.md
+cp /home/ec2-user/family-tree/deploy/familytree-backup.service /etc/systemd/system/
+cp /home/ec2-user/family-tree/deploy/familytree-backup.timer /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now familytree-backup.timer
 
 echo ""
 echo "=== Done! ==="
