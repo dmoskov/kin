@@ -804,7 +804,16 @@ export function fitTreeToScreen() {
   if (cw <= 0 || ch <= 0) return;
   const k = Math.min(_treeDims.width / cw, _treeDims.height / ch, 0.85);
   const tx = _treeDims.width / 2 - ((_treeBounds.minX + _treeBounds.maxX) / 2) * k;
-  const ty = _treeDims.height / 2 - ((_treeBounds.minY + _treeBounds.maxY) / 2) * k;
+  // Match the initial-load framing: top-anchor a width-filling tree so the
+  // oldest generation sits near the top rather than floating mid-canvas;
+  // center small/narrow trees.
+  const topMargin = 32;
+  const scaledWidth = (_treeBounds.maxX - _treeBounds.minX) * k;
+  const scaledHeight = (_treeBounds.maxY - _treeBounds.minY) * k;
+  const topAlign = scaledWidth >= _treeDims.width * 0.9 && scaledHeight + topMargin * 2 < _treeDims.height;
+  const ty = topAlign
+    ? topMargin - _treeBounds.minY * k
+    : _treeDims.height / 2 - ((_treeBounds.minY + _treeBounds.maxY) / 2) * k;
   _treeSvg.transition().duration(450).call(_treeZoom.transform, d3.zoomIdentity.translate(tx, ty).scale(k));
 }
 
@@ -935,10 +944,29 @@ export function renderTree() {
     const focusX = centerNodeB ? (centerNodeA.cx + centerNodeB.cx) / 2 : centerNodeA.cx;
     const focusY = centerNodeA.y + NODE_H / 2;
     const k = 0.7;
-    svg.call(zoom.transform, d3.zoomIdentity.translate(width / 2 - focusX * k, height / 2 - focusY * k).scale(k));
+    // Place the focal couple in the upper third rather than dead-centre: on a
+    // narrow viewport the couple's ancestors fan out horizontally off-screen,
+    // so centring vertically just opens an empty band above. Biasing upward
+    // gives descendants the room and shrinks that band. The clamp still pulls
+    // the tree up if the couple itself is near the top (few ancestors above),
+    // so we never leave more than a small margin of dead space.
+    const topMargin = 32;
+    const ty = Math.min(height * 0.35 - focusY * k, topMargin - minY * k);
+    svg.call(zoom.transform, d3.zoomIdentity.translate(width / 2 - focusX * k, ty).scale(k));
   } else {
     const ftx = width / 2 - ((minX + maxX) / 2) * fitScale;
-    const fty = height / 2 - ((minY + maxY) / 2) * fitScale;
+    // A wide tree fit-to-width leaves vertical slack. Centering it floats the
+    // whole tree in dead space above the oldest generation; instead anchor the
+    // top (oldest gen) near the viewport top and let the slack fall below,
+    // where you'd scroll for descendants anyway. Only do this for trees that
+    // actually fill the width — a small/narrow tree still reads best centered.
+    const topMargin = 32;
+    const scaledWidth = (maxX - minX) * fitScale;
+    const scaledHeight = (maxY - minY) * fitScale;
+    const topAlign = scaledWidth >= width * 0.9 && scaledHeight + topMargin * 2 < height;
+    const fty = topAlign
+      ? topMargin - minY * fitScale
+      : height / 2 - ((minY + maxY) / 2) * fitScale;
     svg.call(zoom.transform, d3.zoomIdentity.translate(ftx, fty).scale(fitScale));
   }
 
