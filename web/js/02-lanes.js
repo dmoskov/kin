@@ -234,6 +234,9 @@ export function _updateHeaderFromLanes() {
   if (S.LANES.length === 0) return;
   const titleEl = document.getElementById("family-title");
   if (!titleEl) return;
-  titleEl.textContent = S.LANES.map(l => l.label).join(" \u00b7 ");
+  // Drop placeholder labels so a tree with unnamed grandparents never renders
+  // a serif headline of "Unknown \u00b7 Unknown". Fall back to a calm default.
+  const labels = S.LANES.map(l => l.label).filter(l => l && l !== "Unknown");
+  titleEl.textContent = labels.length ? labels.join(" \u00b7 ") : "Family Tree";
 }
 

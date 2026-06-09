@@ -24,6 +24,36 @@
   --event-marriage: #d47c8a;
   --event-residence: #6c9cbb;
   --radius: 10px;
+  /* Radius scale (--radius kept as the canonical mid value for back-compat). */
+  --radius-sm: 7px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+  /* Spacing scale (4px base). */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  /* Elevation — 4 tiers, tuned for the dark theme (overridden in light). */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.3);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.4);
+  --shadow-xl: 0 16px 48px rgba(0,0,0,0.5);
+  /* Motion. */
+  --ease: cubic-bezier(.2,.6,.2,1);
+  --dur-fast: 0.12s;
+  --dur-base: 0.2s;
+  /* Type scale. */
+  --fs-xs: 11px;
+  --fs-sm: 13px;
+  --fs-md: 15px;
+  --fs-lg: 18px;
+  --fs-xl: 22px;
+  --fs-2xl: 28px;
   /* Stream display typography (scoped to the timeline stream feed). */
   --font-display-lg: 22px;
   --font-display-sm: 17px;
@@ -63,6 +93,12 @@
   --node-text-faint: rgba(44,36,24,0.45);
   --node-male-bg: #dbe6ee;
   --node-female-bg: #eedbe6;
+  /* Softer, warm-tinted elevation for the parchment theme — pure black
+     drop shadows read harsh on a light heritage surface. */
+  --shadow-sm: 0 1px 3px rgba(60,45,25,0.10);
+  --shadow-md: 0 4px 16px rgba(60,45,25,0.12);
+  --shadow-lg: 0 8px 32px rgba(60,45,25,0.16);
+  --shadow-xl: 0 16px 48px rgba(60,45,25,0.20);
   color-scheme: light;
 }
 
@@ -101,7 +137,7 @@ header {
 .header-logo {
   width: 32px;
   height: 32px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
 
@@ -145,9 +181,9 @@ nav {
   font-size: 13px;
   font-weight: 500;
   padding: 8px 16px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all var(--dur-fast) var(--ease);
 }
 
 .tab:hover { color: var(--text); }
@@ -195,7 +231,7 @@ main {
   border: 1px solid var(--accent);
   border-radius: var(--radius);
   padding: 6px 14px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  box-shadow: var(--shadow-sm);
   font-size: 13px;
   white-space: nowrap;
 }
@@ -221,7 +257,7 @@ main {
   padding: 2px 10px;
   border-radius: var(--radius);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--dur-fast) var(--ease);
 }
 .focus-clear-btn:hover {
   border-color: var(--accent);
@@ -458,7 +494,7 @@ main {
 }
 .panel-hero-face .cropped-thumb {
   border: 3px solid rgba(255, 255, 255, 0.85);
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-md);
 }
 .panel-hero-photo .panel-hero-overlay { z-index: 2; }
 .panel-hero-monogram {
@@ -571,7 +607,7 @@ main {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   margin-bottom: 0;
 }
 .panel-gender.male { background: rgba(74, 144, 217, 0.2); color: var(--male); }
@@ -588,7 +624,7 @@ main {
   cursor: pointer;
   margin-top: 8px;
   display: block;
-  transition: all 0.15s;
+  transition: all var(--dur-fast) var(--ease);
 }
 .panel-focus-btn:hover {
   border-color: var(--accent);
@@ -675,7 +711,7 @@ main {
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 4px 12px;
 }
 .panel-wiki-badge:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); }
@@ -760,7 +796,7 @@ main {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   flex-shrink: 0;
   line-height: 1.4;
 }
@@ -961,7 +997,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   border-radius: var(--radius);
   cursor: pointer;
   margin-top: 8px;
-  transition: all 0.15s;
+  transition: all var(--dur-fast) var(--ease);
   width: 100%;
   text-align: center;
 }
@@ -1114,7 +1150,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   border-radius: var(--radius);
   cursor: pointer;
   margin-top: 8px;
-  transition: all 0.15s;
+  transition: all var(--dur-fast) var(--ease);
 }
 .panel-add-photo-btn:hover {
   border-color: var(--accent);
@@ -1344,7 +1380,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   max-height: 80vh;
   object-fit: contain;
   border-radius: var(--radius);
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-lg);
 }
 .lightbox-caption {
   margin-top: 12px;
@@ -1374,7 +1410,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   align-items: center;
   gap: 6px;
   padding: 3px 10px 3px 3px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.18);
   color: #eee;
@@ -1505,7 +1541,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   padding: 6px 12px;
   border-radius: var(--radius);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--dur-fast) var(--ease);
   white-space: nowrap;
 }
 .timeline-align-btn:hover {
@@ -1787,7 +1823,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 4px 20px rgba(0,0,0,0.18), 0 1px 4px rgba(0,0,0,0.12);
+  box-shadow: var(--shadow-md);
   padding: 12px 14px;
   min-width: 220px;
   max-width: 300px;
@@ -1995,10 +2031,10 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   gap: 8px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 4px 12px 4px 4px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--dur-fast) var(--ease);
   font-family: inherit;
   color: var(--text);
 }
@@ -2037,7 +2073,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  box-shadow: var(--shadow-lg);
   min-width: 240px;
   z-index: 200;
   padding: 8px 0;
@@ -2113,7 +2149,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   cursor: pointer;
   font-family: inherit;
   color: var(--text-muted);
-  transition: all 0.15s;
+  transition: all var(--dur-fast) var(--ease);
   justify-content: flex-start;
 }
 .user-menu-logout:hover {
@@ -2141,7 +2177,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s ease;
+  transition: all var(--dur-fast) var(--ease);
   flex-shrink: 0;
 }
 .tools-btn:hover {
@@ -2155,7 +2191,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  box-shadow: var(--shadow-lg);
   min-width: 200px;
   z-index: 200;
   padding: 6px 0;
@@ -2203,7 +2239,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   align-items: center;
   gap: 6px;
   padding: 5px 12px;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   background: var(--surface);
   border: 1px dashed var(--border);
   color: var(--text-muted);
@@ -2227,7 +2263,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   margin-top: 6px;
   line-height: 1;
   background: rgba(128, 128, 128, 0.15);
@@ -2312,7 +2348,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 8px 28px rgba(0,0,0,0.28);
+  box-shadow: var(--shadow-lg);
   max-height: 280px;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -2327,7 +2363,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   align-items: center;
   gap: 9px;
   padding: 6px 8px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   font-size: 13px;
   color: var(--text);
   cursor: pointer;
@@ -2375,15 +2411,15 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 28px;
-  padding-top: 24px;
+  gap: var(--space-4);
+  padding-top: var(--space-2);
 }
 .rel-empty.hidden { display: none; }
 .rel-empty-mark {
-  width: 96px;
-  height: 96px;
-  border-radius: 22px;
-  opacity: 0.16;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  opacity: 0.22;
   filter: grayscale(0.2);
 }
 .rel-suggestions { width: 100%; }
@@ -2404,20 +2440,22 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
 .rel-suggest-chip {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
+  gap: var(--space-2);
+  padding: 10px var(--space-4);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
   font-family: inherit;
   font-size: 13px;
   color: var(--text);
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
 }
 .rel-suggest-chip:hover {
   border-color: var(--accent);
   background: var(--surface-hover);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
 }
 .rel-suggest-x {
   color: var(--text-muted);
@@ -2554,7 +2592,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: all 0.15s ease;
+  transition: all var(--dur-fast) var(--ease);
 }
 .map-play-btn:hover { border-color: var(--accent); color: var(--accent); }
 .map-play-btn.playing { background: var(--accent); color: white; border-color: var(--accent); }
@@ -2642,7 +2680,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   color: var(--text) !important;
   border-radius: var(--radius) !important;
   border: 1px solid var(--border) !important;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4) !important;
+  box-shadow: var(--shadow-lg) !important;
 }
 .leaflet-popup-tip { background: var(--surface) !important; }
 .leaflet-popup-content { font-family: 'Inter', sans-serif !important; font-size: 13px !important; }
@@ -2679,7 +2717,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s ease;
+  transition: all var(--dur-fast) var(--ease);
   flex-shrink: 0;
 }
 .theme-toggle:hover {
@@ -2713,7 +2751,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   color: var(--text) !important;
   border: 1px solid var(--border) !important;
   border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  box-shadow: var(--shadow-sm);
 }
 .arc-tooltip::before { border-top-color: var(--surface) !important; }
 
@@ -2750,7 +2788,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
 /* ── Leaflet light mode ────────────────────────────────────── */
 
 [data-theme="light"] .leaflet-popup-content-wrapper {
-  box-shadow: 0 4px 16px rgba(0,0,0,0.12) !important;
+  box-shadow: var(--shadow-md) !important;
 }
 
 /* ── Person Thumbnails ──────────────────────────────────────── */
@@ -2794,7 +2832,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 16px 48px rgba(0,0,0,0.4);
+  box-shadow: var(--shadow-xl);
   width: 90vw;
   max-width: 640px;
   max-height: 80vh;
@@ -2876,7 +2914,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--dur-base) var(--ease);
   width: fit-content;
 }
 .google-photos-btn:hover {
@@ -2911,7 +2949,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   padding: 20px;
   text-align: center;
   margin-bottom: 16px;
-  transition: all 0.2s;
+  transition: all var(--dur-base) var(--ease);
   cursor: pointer;
   position: relative;
 }
@@ -2938,7 +2976,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   outline: none;
   border-color: var(--accent);
   background: rgba(108, 124, 255, 0.04);
-  box-shadow: 0 0 0 3px rgba(108, 124, 255, 0.15);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 .upload-paste-hint {
   margin-top: 6px;
@@ -2985,7 +3023,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   font-size: 13px;
   font-weight: 500;
   color: var(--text);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  box-shadow: var(--shadow-md);
   z-index: 300;
   animation: toastIn 0.2s ease;
 }
@@ -3009,7 +3047,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--dur-fast) var(--ease);
 }
 .doc-upload-btn:hover {
   background: var(--accent);
@@ -3622,7 +3660,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   cursor: pointer;
   flex-shrink: 0;
   position: relative;
-  transition: all 0.15s;
+  transition: all var(--dur-fast) var(--ease);
 }
 .review-card .review-toggle:checked {
   background: var(--accent);
@@ -3656,7 +3694,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   font-size: 10px;
   font-weight: 700;
   padding: 1px 6px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   margin-left: 6px;
 }
 .review-card .update-badge {
@@ -3666,7 +3704,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   font-size: 10px;
   font-weight: 700;
   padding: 1px 6px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   margin-left: 6px;
 }
 .review-card input {
@@ -3782,12 +3820,12 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   font-family: inherit;
   font-size: 11px;
   padding: 2px 10px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   margin-top: 0;
   display: inline-flex;
   align-items: center;
-  transition: all 0.15s;
+  transition: all var(--dur-fast) var(--ease);
 }
 
 .panel-edit-btn:hover {
@@ -3810,7 +3848,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   padding: 6px 14px;
   border-radius: var(--radius);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--dur-fast) var(--ease);
 }
 
 .panel-add-relative-btn:hover {
@@ -3903,7 +3941,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   padding: 7px 16px;
   border-radius: var(--radius);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--dur-fast) var(--ease);
 }
 
 .add-relative-cancel:hover {
@@ -4013,7 +4051,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   font-size: 12px;
   padding: 6px 12px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--dur-fast) var(--ease);
 }
 
 .arf-mode-btn + .arf-mode-btn {
@@ -4125,7 +4163,23 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
 }
 
 @media (max-width: 768px) {
-  header { flex-direction: column; gap: 12px; }
+  header { flex-direction: column; align-items: stretch; gap: var(--space-3); padding: var(--space-3) var(--space-4); }
+  /* Keep the brand row tight: smaller title, drop the decorative subtitle. */
+  .header-left { gap: var(--space-2); flex-wrap: wrap; }
+  h1 { font-size: var(--fs-lg); }
+  .family-subtitle { display: none; }
+  .header-actions { flex-wrap: wrap; gap: var(--space-2); }
+  /* Tabs scroll horizontally instead of overflowing/clipping ("Relatio…"). */
+  nav[role="tablist"] {
+    order: -1;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  nav[role="tablist"]::-webkit-scrollbar { display: none; }
+  .tab { white-space: nowrap; flex-shrink: 0; }
+  .header-search { flex: 1; min-width: 160px; }
   .panel { width: 100%; position: absolute; right: 0; top: 0; height: 100%; z-index: 5; transform: translateX(0); }
   .panel-hero-photo { height: 220px; }
   .panel-hero-monogram { font-size: 80px; }
@@ -4140,6 +4194,10 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
 @media (max-width: 600px) {
   .timeline-row { grid-template-columns: 1fr !important; }
   .timeline-cell, .timeline-cell-header { border-right: none; }
+  /* The minimap competes with the floating tree controls on small screens. */
+  #tree-minimap { display: none !important; }
+  /* The stats badge is contextual chrome; reclaim the space on phones. */
+  .badge { display: none; }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -4149,11 +4207,11 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
 .onboarding-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   padding: 40px;
   max-width: 480px;
   width: 90vw;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  box-shadow: var(--shadow-xl);
 }
 
 .onboarding-title {
@@ -4186,7 +4244,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   font-weight: 600;
   background: var(--border);
   color: var(--text-muted);
-  transition: all 0.2s;
+  transition: all var(--dur-base) var(--ease);
 }
 
 .step-dot.active {
@@ -4379,7 +4437,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  box-shadow: var(--shadow-md);
   z-index: 20;
   padding: 6px;
 }
@@ -4625,11 +4683,11 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   flex: 1;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   transition: box-shadow 0.15s;
 }
-.tstream-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
+.tstream-card:hover { box-shadow: var(--shadow-md); }
 .tstream-type-bar {
   height: 4px;
   width: 100%;
@@ -4952,7 +5010,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   color: var(--text-muted);
   background: color-mix(in srgb, var(--text) 5%, transparent);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   padding: 1px 8px;
   white-space: nowrap;
 }
@@ -4983,7 +5041,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   border-radius: 14px;
   padding: 4px 12px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all var(--dur-fast) var(--ease);
 }
 .tstream-legend-chip:hover {
   border-color: var(--accent);
@@ -5107,7 +5165,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   gap: 10px;
   margin: 6px 0 14px;
   padding: 9px 14px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--accent) 9%, var(--surface));
   border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--border));
 }
@@ -5124,7 +5182,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   gap: 11px;
   margin: 6px 0 14px;
   padding: 11px 15px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: var(--surface);
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent);
@@ -5168,7 +5226,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   padding: 8px 10px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
 }
 .tnow-card .person-thumb,
 .tnow-card .person-thumb-placeholder,
@@ -5216,7 +5274,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   max-height: 80vh;
   object-fit: contain;
   border-radius: var(--radius);
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-lg);
   display: block;
 }
 .face-region-overlay {
@@ -5298,7 +5356,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   border-radius: var(--radius);
   padding: 6px;
   min-width: 200px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  box-shadow: var(--shadow-md);
 }
 .face-tag-search-input {
   width: 100%;
@@ -5621,18 +5679,20 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   gap: 8px;
   padding: 5px 8px;
   border: none;
+  border-left: 2px solid transparent;
   background: none;
   border-radius: 6px;
   cursor: pointer;
   font-size: 12px;
   color: var(--text);
   text-align: left;
-  transition: background 0.1s;
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
   width: 100%;
 }
 .facet-option:hover { background: var(--surface); }
 .facet-option.active {
   background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border-left-color: var(--accent);
   font-weight: 600;
 }
 
@@ -5672,14 +5732,20 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   background: var(--border);
   border-radius: 2px;
   overflow: hidden;
+  opacity: 0.6;
+  transition: opacity var(--dur-fast) var(--ease);
 }
+.facet-option:hover .facet-option-bar,
+.facet-option.active .facet-option-bar { opacity: 1; }
 .facet-option-bar span {
   display: block;
   height: 100%;
-  background: var(--accent);
+  background: var(--text-muted);
   border-radius: 2px;
-  transition: width 0.2s;
+  transition: width var(--dur-base) var(--ease), background var(--dur-fast) var(--ease);
 }
+.facet-option:hover .facet-option-bar span,
+.facet-option.active .facet-option-bar span { background: var(--accent); }
 
 /* ── Photo grid ── */
 
@@ -5695,7 +5761,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
 
 .photos-grid-item {
   position: relative;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -5703,7 +5769,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
 }
 .photos-grid-item:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+  box-shadow: var(--shadow-md);
 }
 
 .photos-grid-img {
@@ -5815,7 +5881,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   display: flex;
   align-items: center;
   gap: 10px;
-  box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+  box-shadow: var(--shadow-lg);
   z-index: 1000;
 }
 .bulk-count { font-weight: 600; font-size: 13px; color: var(--text); white-space: nowrap; }
@@ -5846,9 +5912,9 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   z-index: 1000;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   padding: 12px 14px;
-  box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+  box-shadow: var(--shadow-lg);
   min-width: 180px;
 }
 .qyp-header {
@@ -5887,7 +5953,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   right: 6px;
   background: rgba(0,0,0,0.65);
   color: #fff;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   font-size: 11px;
   padding: 2px 7px;
   font-weight: 600;
@@ -6009,7 +6075,7 @@ select.ge-input { padding: 3px 4px; }
   padding: 2px 6px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   font-size: 11px;
   white-space: nowrap;
 }
@@ -6024,7 +6090,7 @@ select.ge-input { padding: 3px 4px; }
 .ge-tag-add {
   background: none;
   border: 1px dashed var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   padding: 2px 8px;
   font-size: 11px;
   color: var(--text-muted);
@@ -6073,7 +6139,7 @@ select.ge-input { padding: 3px 4px; }
   border-radius: 50%;
   border: 3px solid #d4a843;
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
   transition: transform 0.15s;
   transform: scale(var(--photo-zoom-scale, 1));
@@ -6153,7 +6219,7 @@ select.ge-input { padding: 3px 4px; }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-md);
   padding: 12px 16px;
   pointer-events: auto;
   animation: tourCardIn 0.3s ease;
@@ -6213,7 +6279,7 @@ select.ge-input { padding: 3px 4px; }
   font-weight: 700;
   line-height: 16px;
   text-align: center;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-sm);
 }
 .gateway-popup-header { font-weight: 700; font-size: 14px; margin-bottom: 2px; }
 .gateway-popup-sub { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
@@ -6238,8 +6304,8 @@ select.ge-input { padding: 3px 4px; }
   flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
   overflow: hidden;
 }
 .map-roll-call.collapsed { width: auto; }
@@ -6410,10 +6476,10 @@ select.ge-input { padding: 3px 4px; }
   align-items: center;
   gap: 16px;
   padding: 48px 40px;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   background: var(--surface);
   border: 1px solid var(--border);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  box-shadow: var(--shadow-lg);
   max-width: 380px;
   width: 90%;
 }
@@ -6506,7 +6572,7 @@ select.ge-input { padding: 3px 4px; }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 9px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-sm);
   overflow: hidden;
 }
 .tree-ctrl-btn {
@@ -6536,7 +6602,7 @@ select.ge-input { padding: 3px 4px; }
   padding: 5px 8px;
   border-radius: 8px;
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-sm);
   min-width: 0;
   width: auto;
 }
@@ -6568,7 +6634,7 @@ select.ge-input { padding: 3px 4px; }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-md);
 }
 .header-search-results.hidden { display: none; }
 .header-search-item {
@@ -6607,8 +6673,8 @@ select.ge-input { padding: 3px 4px; }
   color: var(--text);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease;
@@ -6677,7 +6743,7 @@ select.ge-input { padding: 3px 4px; }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-md);
   text-align: center;
 }
 .map-empty.hidden { display: none; }
@@ -6692,7 +6758,7 @@ select.ge-input { padding: 3px 4px; }
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   color: var(--bg);
   background: var(--accent);
 }
@@ -6717,7 +6783,7 @@ select.ge-input { padding: 3px 4px; }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-lg);
   padding: 24px;
   width: 480px;
   max-width: 90vw;
