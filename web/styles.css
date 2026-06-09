@@ -881,6 +881,40 @@ main {
   vertical-align: 1px;
 }
 a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+
+/* Inline citation links — a cited fact gets a subtle 🔗 to its source, plus
+   faint in-context link/unlink affordances for editors. */
+.cite-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 5px;
+  vertical-align: 1px;
+}
+.cite-link {
+  font-size: 10px;
+  text-decoration: none;
+  opacity: 0.55;
+  cursor: pointer;
+  transition: opacity 0.12s;
+}
+.cite-link:hover { opacity: 1; }
+.cite-link-nourl { cursor: help; }
+.cite-unlink,
+.cite-add {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0 2px;
+  opacity: 0.5;
+  transition: opacity 0.12s, color 0.12s;
+}
+.cite-unlink { font-size: 12px; line-height: 1; }
+.cite-add { font-size: 10px; }
+.cite-unlink:hover { color: var(--female); opacity: 1; }
+.cite-add:hover { color: var(--accent); opacity: 1; }
 .panel-event-photo {
   display: block;
   max-width: 120px;
