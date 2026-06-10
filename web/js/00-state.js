@@ -27,7 +27,7 @@ export const S = {
   LANES: [],
   MAP: null,
   TREE_DEPTH: parseInt(localStorage.getItem("ft-tree-depth") || "2", 10),
-  MAP_DEPTH: parseInt(localStorage.getItem("ft-map-depth") || "1", 10),
+  MAP_DEPTH: parseInt(localStorage.getItem("ft-map-depth") || "2", 10),
   _geocodeReady: Promise.resolve(),
   ALL_PHOTOS: null,
   PHOTO_PICKER_PERSON: null,

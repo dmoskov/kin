@@ -6746,18 +6746,42 @@ select.ge-input { padding: 3px 4px; }
   border-top: 1px solid var(--border);
 }
 .tree-ctrl-btn:hover { background: var(--surface-hover); }
-.tree-depth-select {
+/* Prominent segmented depth control — sits at top center of tree */
+.tree-depth-bar {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  z-index: 5;
   background: var(--surface);
   border: 1px solid var(--border);
-  color: var(--text);
-  font-family: inherit;
-  font-size: 12px;
-  padding: 5px 8px;
-  border-radius: 8px;
-  cursor: pointer;
+  border-radius: 10px;
   box-shadow: var(--shadow-sm);
-  min-width: 0;
-  width: auto;
+  overflow: hidden;
+}
+.tree-depth-btn {
+  padding: 8px 20px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.tree-depth-btn + .tree-depth-btn {
+  border-left: 1px solid var(--border);
+}
+.tree-depth-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.tree-depth-btn.active {
+  background: var(--accent);
+  color: #fff;
 }
 .tree-container:focus { outline: none; }
 .tree-container:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -6778,7 +6802,14 @@ select.ge-input { padding: 3px 4px; }
     border-top: none;
     border-left: 1px solid var(--border);
   }
-  .tree-depth-select { margin-left: auto; }
+  .tree-depth-bar {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    transform: none;
+    justify-content: center;
+  }
+  .tree-depth-btn { padding: 7px 14px; font-size: 13px; }
 }
 
 

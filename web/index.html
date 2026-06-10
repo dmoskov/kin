@@ -107,6 +107,11 @@
     <!-- Tree View -->
     <section id="view-tree" class="view active" role="tabpanel" aria-labelledby="tab-tree">
       <div class="tree-container" tabindex="0" aria-label="Family tree — use arrow keys to pan, +/- to zoom, F to fit">
+        <div class="tree-depth-bar" role="radiogroup" aria-label="How much of the tree to show">
+          <button class="tree-depth-btn" data-depth="1" role="radio" aria-checked="false">Close family</button>
+          <button class="tree-depth-btn active" data-depth="2" role="radio" aria-checked="true">Extended family</button>
+          <button class="tree-depth-btn" data-depth="4" role="radio" aria-checked="false">Everyone</button>
+        </div>
         <div class="tree-controls" role="group" aria-label="Tree controls">
           <div class="tree-ctrl-group">
             <button class="tree-ctrl-btn" id="tree-zoom-in" aria-label="Zoom in" title="Zoom in">+</button>
@@ -117,11 +122,6 @@
             <button class="tree-ctrl-btn" id="tree-center-me" aria-label="Center on me" title="Center on me">&#9678;</button>
             <button class="tree-ctrl-btn" id="tree-download-svg" aria-label="Download tree as SVG" title="Download tree as SVG">&#11015;</button>
           </div>
-          <select id="tree-depth-select" class="tree-depth-select" title="How much of the tree to show">
-            <option value="1">Close family</option>
-            <option value="2">Extended family</option>
-            <option value="4">Everyone</option>
-          </select>
         </div>
         <div id="focus-banner" class="focus-banner hidden">
           <span class="focus-banner-label">Focused on: <strong id="focus-banner-name"></strong></span>

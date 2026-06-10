@@ -1589,15 +1589,27 @@ document.getElementById("tree-zoom-out")?.addEventListener("click", () => zoomTr
 document.getElementById("tree-fit")?.addEventListener("click", () => fitTreeToScreen());
 document.getElementById("tree-center-me")?.addEventListener("click", () => centerTreeOnMe());
 
-// Tree depth (complexity) control
-const _treeDepthSelect = document.getElementById("tree-depth-select");
-if (_treeDepthSelect) {
-  _treeDepthSelect.value = String(S.TREE_DEPTH);
-  _treeDepthSelect.addEventListener("change", () => {
-    S.TREE_DEPTH = parseInt(_treeDepthSelect.value, 10);
-    localStorage.setItem("ft-tree-depth", String(S.TREE_DEPTH));
-    renderTree();
-  });
+// Tree depth (complexity) segmented control
+const _treeDepthBar = document.querySelector(".tree-depth-bar");
+if (_treeDepthBar) {
+  for (const btn of _treeDepthBar.querySelectorAll(".tree-depth-btn")) {
+    if (parseInt(btn.dataset.depth, 10) === S.TREE_DEPTH) {
+      btn.classList.add("active");
+      btn.setAttribute("aria-checked", "true");
+    } else {
+      btn.classList.remove("active");
+      btn.setAttribute("aria-checked", "false");
+    }
+    btn.addEventListener("click", () => {
+      S.TREE_DEPTH = parseInt(btn.dataset.depth, 10);
+      localStorage.setItem("ft-tree-depth", String(S.TREE_DEPTH));
+      for (const b of _treeDepthBar.querySelectorAll(".tree-depth-btn")) {
+        b.classList.toggle("active", b === btn);
+        b.setAttribute("aria-checked", b === btn ? "true" : "false");
+      }
+      renderTree();
+    });
+  }
 }
 
 const _treeContainerEl = document.querySelector(".tree-container");
