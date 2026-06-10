@@ -1248,6 +1248,10 @@ export function renderTree() {
     const sz = photoSizeFor(d);
     return PHOTO_PAD + sz + 6 + (NODE_W - PHOTO_PAD - sz - 6) / 2;
   }
+  function textAvailW(d) {
+    const sz = photoSizeFor(d);
+    return NODE_W - PHOTO_PAD - sz - 6 - 4;
+  }
 
   nodeGroups
     .append("text")
@@ -1255,7 +1259,15 @@ export function renderTree() {
     .attr("x", textX)
     .attr("y", 20)
     .attr("text-anchor", "middle")
-    .text((d) => d.person.fullName);
+    .text((d) => d.person.fullName)
+    .each(function (d) {
+      const maxW = textAvailW(d);
+      let txt = d.person.fullName;
+      while (this.getComputedTextLength() > maxW && txt.length > 1) {
+        txt = txt.slice(0, -1);
+        d3.select(this).text(txt + "…");
+      }
+    });
 
   nodeGroups
     .append("text")
