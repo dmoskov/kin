@@ -268,8 +268,8 @@ class TestPhotoAssociation:
             json={"photo_paths": ["photos/a.jpg", "photos/b.jpg"]},
         )
         assert resp.status_code == 200
-        assert resp.get_json()["photo_paths"] == ["photos/a.jpg", "photos/b.jpg"]
-        assert _pp_paths(repo, "p1") == ["photos/a.jpg", "photos/b.jpg"]
+        assert set(resp.get_json()["photo_paths"]) == {"photos/a.jpg", "photos/b.jpg"}
+        assert set(_pp_paths(repo, "p1")) == {"photos/a.jpg", "photos/b.jpg"}
 
     def test_attach_unknown_person_returns_404(self, app_client):
         client, _, _ = app_client

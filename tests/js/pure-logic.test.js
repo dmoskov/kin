@@ -579,35 +579,41 @@ describe("_personPhotos", () => {
     S.DATA = {
       photos: [
         {
+          id: 1,
+          file_path: "photos/a.jpg",
+          created_at: "2024-01-01T00:00:00",
+          tagged_people: [
+            { person_id: "X", caption: "first", is_profile: true, display_order: 1 },
+          ],
+        },
+        {
+          id: 2,
           file_path: "photos/b.jpg",
+          created_at: "2024-06-01T00:00:00",
           tagged_people: [
             { person_id: "X", caption: "second", is_profile: false, display_order: 2 },
             { person_id: "Y", caption: "y-pic", is_profile: true, display_order: 0 },
           ],
         },
         {
-          file_path: "photos/a.jpg",
-          tagged_people: [
-            { person_id: "X", caption: "first", is_profile: true, display_order: 1 },
-          ],
-        },
-        {
+          id: 3,
           file_path: "photos/untagged.jpg",
+          created_at: "2024-07-01T00:00:00",
           tagged_people: [],
         },
       ],
     };
   });
 
-  it("returns only photos the person is tagged in, ordered by display_order", () => {
+  it("returns only photos the person is tagged in, sorted newest first", () => {
     const out = _personPhotos("X");
-    expect(out.map((e) => e.path)).toEqual(["photos/a.jpg", "photos/b.jpg"]);
+    expect(out.map((e) => e.path)).toEqual(["photos/b.jpg", "photos/a.jpg"]);
   });
 
   it("surfaces the person's own caption and profile flag, not another tag's", () => {
     const out = _personPhotos("X");
-    expect(out[0]).toMatchObject({ caption: "first", isProfile: true });
-    expect(out[1]).toMatchObject({ caption: "second", isProfile: false });
+    expect(out[0]).toMatchObject({ caption: "second", isProfile: false });
+    expect(out[1]).toMatchObject({ caption: "first", isProfile: true });
   });
 
   it("returns an empty list for a person with no tagged photos", () => {

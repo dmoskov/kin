@@ -446,6 +446,7 @@ def api_data():
                 "photo_type": p.get("photo_type", "photo"),
                 "lat": p.get("lat"),
                 "lng": p.get("lng"),
+                "created_at": p.get("created_at"),
                 "tagged_people": [
                     {
                         "person_id": tp["person_id"],
@@ -515,6 +516,7 @@ def api_photos():
                 "date_circa": bool(p.get("date_circa")),
                 "place": p.get("place"),
                 "photo_type": p.get("photo_type", "photo"),
+                "created_at": p.get("created_at"),
                 "tagged_people": [
                     {
                         "person_id": tp["person_id"],

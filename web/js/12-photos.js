@@ -35,7 +35,12 @@ export function _personPhotos(personId) {
       info: photo,
     });
   }
-  out.sort((a, b) => a.order - b.order || a.path.localeCompare(b.path));
+  out.sort((a, b) => {
+    const aTime = a.info?.created_at || "";
+    const bTime = b.info?.created_at || "";
+    if (aTime !== bTime) return bTime.localeCompare(aTime);
+    return (b.info?.id || 0) - (a.info?.id || 0);
+  });
   return out;
 }
 
