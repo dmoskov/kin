@@ -37,8 +37,12 @@ web/photos/
 *.pdf
 *.zip
 
-# Personal genealogy research notes (contains real family PII)
-docs/
+# Personal genealogy research notes (contains real family PII).
+# Project documentation (TESTING.md, TROUBLESHOOTING.md) is tracked;
+# everything else under docs/ is ignored.
+docs/*
+!docs/TESTING.md
+!docs/TROUBLESHOOTING.md
 
 # Environment
 .env
