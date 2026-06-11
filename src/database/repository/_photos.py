@@ -116,7 +116,7 @@ class PhotosRepoMixin:
                 FROM photos p
                 JOIN person_photos pp ON pp.photo_id = p.id
                 WHERE pp.person_id = {p}
-                ORDER BY pp.display_order
+                ORDER BY p.created_at DESC, p.id DESC
             """,
                 (person_id,),
             )
@@ -219,7 +219,7 @@ class PhotosRepoMixin:
         """Return all photos with their tagged people and face regions."""
         conn = self._conn()
         try:
-            photos = _fetchall(conn, "SELECT * FROM photos ORDER BY id")
+            photos = _fetchall(conn, "SELECT * FROM photos ORDER BY created_at DESC, id DESC")
             p = _ph()
             for photo in photos:
                 people = _fetchall(

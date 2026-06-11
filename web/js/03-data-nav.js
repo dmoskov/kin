@@ -96,20 +96,30 @@ export async function loadData() {
     for (const p of S.DATA.people) {
       const person = S.PEOPLE_MAP[p.id];
       if (!person) continue;
-      // Find their profile photo from the photos data
+      // Find their explicit profile photo, or fall back to the newest photo
       let profilePath = null;
+      let newestPath = null;
+      let newestTime = "";
+      let newestId = -1;
       if (S.DATA.photos) {
         for (const photo of S.DATA.photos) {
           for (const tp of photo.tagged_people || []) {
-            if (tp.person_id === p.id && tp.is_profile) {
+            if (tp.person_id !== p.id) continue;
+            if (tp.is_profile) {
               profilePath = photo.file_path;
-              break;
+            }
+            const t = photo.created_at || "";
+            const pid = photo.id || 0;
+            if (t > newestTime || (t === newestTime && pid > newestId)) {
+              newestTime = t;
+              newestId = pid;
+              newestPath = photo.file_path;
             }
           }
           if (profilePath) break;
         }
       }
-      person._profilePhotoPath = profilePath || null;
+      person._profilePhotoPath = profilePath || newestPath || null;
       // Compute _profileCrop from the matching tagged_people entry
       person._profileCrop = null;
       if (person._profilePhotoPath && S.DATA.photos) {
