@@ -397,6 +397,7 @@ export function showPersonPanel(personId) {
   if (photosSection) {
     _wireCarousel(photosSection, personId);
     _wirePanelPhotoClicks(photosSection, personId);
+    _wireSetProfileButtons(photosSection, personId);
   }
   // Hero photo opens the lightbox (parity with panel photo clicks).
   const heroImg = content.querySelector(".panel-hero-img, .panel-hero-face");
