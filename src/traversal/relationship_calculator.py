@@ -83,11 +83,11 @@ def _direct_ancestor_label(generations: int, ancestor_gender: str) -> str:
     *ancestor_gender* is 'male', 'female', or 'unknown'.
     """
     if generations == 1:
-        return (
-            "parent"
-            if ancestor_gender == "unknown"
-            else ("father" if ancestor_gender == "male" else "mother")
-        )
+        if ancestor_gender == "male":
+            return "father"
+        if ancestor_gender == "female":
+            return "mother"
+        return "parent"
     if generations == 2:
         if ancestor_gender == "male":
             return "grandfather"
@@ -109,11 +109,11 @@ def _direct_descendant_label(generations: int, descendant_gender: str) -> str:
     *generations* is the number of steps from ancestor to descendant.
     """
     if generations == 1:
-        return (
-            "child"
-            if descendant_gender == "unknown"
-            else ("son" if descendant_gender == "male" else "daughter")
-        )
+        if descendant_gender == "male":
+            return "son"
+        if descendant_gender == "female":
+            return "daughter"
+        return "child"
     if generations == 2:
         if descendant_gender == "male":
             return "grandson"

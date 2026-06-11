@@ -689,7 +689,7 @@ export function buildPlacePopup(place, events) {
       thumbHtml = croppedImg(profileSrc, person?.fullName || "", 20, person?._profileCrop, "map-popup-thumb");
     } else if (person) {
       const initial = (person.given_name || "?")[0];
-      thumbHtml = `<span style="display:inline-flex;width:20px;height:20px;border-radius:50%;background:${person.gender === "female" ? "var(--node-female-bg)" : "var(--node-male-bg)"};border:1px solid ${person.gender === "female" ? "var(--female)" : "var(--male)"};align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--text);vertical-align:middle;margin-right:4px">${initial}</span>`;
+      thumbHtml = `<span style="display:inline-flex;width:20px;height:20px;border-radius:50%;background:${person.gender === "female" ? "var(--node-female-bg)" : person.gender === "other" ? "var(--node-other-bg)" : "var(--node-male-bg)"};border:1px solid ${person.gender === "female" ? "var(--female)" : person.gender === "other" ? "var(--other)" : "var(--male)"};align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--text);vertical-align:middle;margin-right:4px">${initial}</span>`;
     }
     let descHtml = e.desc;
     if (person) descHtml = descHtml.replace(person.fullName, personLink(e.personId));
@@ -1278,7 +1278,7 @@ export function buildArcPopup(personId, from, to) {
     thumbHtml = croppedImg(profileSrc, person?.fullName || "", 28, person?._profileCrop, "map-popup-thumb arc-popup-thumb");
   } else if (person) {
     const initial = (person.given_name || "?")[0];
-    thumbHtml = `<span class="arc-popup-avatar" style="background:${person.gender === "female" ? "var(--node-female-bg)" : "var(--node-male-bg)"};border-color:${person.gender === "female" ? "var(--female)" : "var(--male)"}">${initial}</span>`;
+    thumbHtml = `<span class="arc-popup-avatar" style="background:${person.gender === "female" ? "var(--node-female-bg)" : person.gender === "other" ? "var(--node-other-bg)" : "var(--node-male-bg)"};border-color:${person.gender === "female" ? "var(--female)" : person.gender === "other" ? "var(--other)" : "var(--male)"}">${initial}</span>`;
   }
   const nameHtml = person ? personLink(personId) : escapeHtml(personId);
   return `<div class="arc-popup-content">

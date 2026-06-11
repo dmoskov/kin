@@ -122,11 +122,11 @@ export function applyPalette() {
     bg: "--bg", surface: "--surface", surfaceHover: "--surface-hover",
     border: "--border", text: "--text", textMuted: "--text-muted",
     accent: "--accent", accentHover: "--accent-hover",
-    male: "--male", female: "--female", union: "--union",
+    male: "--male", female: "--female", other: "--other", union: "--union",
     eventBirth: "--event-birth", eventCareer: "--event-career",
     eventEdu: "--event-education", eventCustom: "--event-custom",
     eventMarriage: "--event-marriage",
-    nodeMaleBg: "--node-male-bg", nodeFemaleBg: "--node-female-bg",
+    nodeMaleBg: "--node-male-bg", nodeFemaleBg: "--node-female-bg", nodeOtherBg: "--node-other-bg",
     nodeText: "--node-text", nodeTextDim: "--node-text-dim",
     nodeTextFaint: "--node-text-faint",
   };

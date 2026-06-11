@@ -21,6 +21,7 @@
   --accent-rgb: 196,149,106;
   --male: #7ca8c4;
   --female: #c47c9a;
+  --other: #a07cc4;
   --union: #d4a843;
   --event-birth: #6db37a;
   --event-career: #c4956a;
@@ -68,6 +69,7 @@
   --node-text-faint: rgba(236,229,216,0.40);
   --node-male-bg: #1e2a30;
   --node-female-bg: #2a1e28;
+  --node-other-bg: #251e30;
   --header-font: 'Playfair Display', Georgia, serif;
   --body-font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   color-scheme: dark;
@@ -86,6 +88,7 @@
   --accent-rgb: 139,99,64;
   --male: #4a7a9c;
   --female: #9c4a70;
+  --other: #7a4a9c;
   --union: #a0832e;
   --event-birth: #4a8c54;
   --event-career: #8b6340;
@@ -98,6 +101,7 @@
   --node-text-faint: rgba(44,36,24,0.45);
   --node-male-bg: #dbe6ee;
   --node-female-bg: #eedbe6;
+  --node-other-bg: #e6dbee;
   /* Softer, warm-tinted elevation for the parchment theme — pure black
      drop shadows read harsh on a light heritage surface. */
   --shadow-sm: 0 1px 3px rgba(60,45,25,0.10);
@@ -520,6 +524,9 @@ main {
 .panel-hero-monogram.female {
   background: linear-gradient(135deg, var(--female), var(--node-female-bg));
 }
+.panel-hero-monogram.other {
+  background: linear-gradient(135deg, var(--other), var(--node-other-bg));
+}
 .panel-hero-monogram.unknown {
   background: linear-gradient(135deg, var(--accent), var(--surface));
 }
@@ -617,6 +624,7 @@ main {
 }
 .panel-gender.male { background: rgba(74, 144, 217, 0.2); color: var(--male); }
 .panel-gender.female { background: rgba(217, 74, 140, 0.2); color: var(--female); }
+.panel-gender.other { background: rgba(160, 124, 196, 0.2); color: var(--other); }
 
 .panel-focus-btn {
   background: transparent;
@@ -1915,7 +1923,8 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
 }
 .hovercard-avatar.male { background: var(--node-male-bg); color: var(--male); }
 .hovercard-avatar.female { background: var(--node-female-bg); color: var(--female); }
-.hovercard-avatar.unknown, .hovercard-avatar:not(.male):not(.female) {
+.hovercard-avatar.other { background: var(--node-other-bg); color: var(--other); }
+.hovercard-avatar.unknown, .hovercard-avatar:not(.male):not(.female):not(.other) {
   background: var(--surface-hover); color: var(--text-muted);
 }
 .hovercard-info { flex: 1; min-width: 0; }
@@ -1981,6 +1990,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
 }
 .hovercard-badge.male { background: rgba(74, 144, 217, 0.15); color: var(--male); }
 .hovercard-badge.female { background: rgba(217, 74, 140, 0.15); color: var(--female); }
+.hovercard-badge.other { background: rgba(160, 124, 196, 0.15); color: var(--other); }
 .hovercard-family-summary {
   font-size: 11px;
   color: var(--text-muted);
@@ -2844,6 +2854,7 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
 }
 .person-thumb-placeholder.male { background: var(--node-male-bg); border: 1.5px solid var(--male); }
 .person-thumb-placeholder.female { background: var(--node-female-bg); border: 1.5px solid var(--female); }
+.person-thumb-placeholder.other { background: var(--node-other-bg); border: 1.5px solid var(--other); }
 
 /* ── Photo Picker Modal ────────────────────────────────────── */
 

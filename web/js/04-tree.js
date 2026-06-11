@@ -1149,8 +1149,8 @@ export function renderTree() {
     .attr("y", (d) => (_isCenterId(d) ? -CENTER_OVERHANG_Y : 0))
     .attr("width", (d) => NODE_W + (_isCenterId(d) ? CENTER_OVERHANG_X * 2 : 0))
     .attr("height", (d) => NODE_H + (_isCenterId(d) ? CENTER_OVERHANG_Y * 2 : 0))
-    .attr("fill", (d) => d.person.gender === "female" ? "var(--node-female-bg)" : "var(--node-male-bg)")
-    .attr("stroke", (d) => d.person.gender === "female" ? "var(--female)" : "var(--male)");
+    .attr("fill", (d) => d.person.gender === "female" ? "var(--node-female-bg)" : d.person.gender === "other" ? "var(--node-other-bg)" : "var(--node-male-bg)")
+    .attr("stroke", (d) => d.person.gender === "female" ? "var(--female)" : d.person.gender === "other" ? "var(--other)" : "var(--male)");
 
   // Photo thumbnails (circular, clipped)
   const PHOTO_SIZE = 28;
@@ -1223,7 +1223,7 @@ export function renderTree() {
     .attr("cx", (d) => PHOTO_PAD + photoSizeFor(d) / 2)
     .attr("cy", NODE_H / 2)
     .attr("r", (d) => photoSizeFor(d) / 2)
-    .attr("fill", (d) => d.person.gender === "female" ? "var(--female)" : "var(--male)");
+    .attr("fill", (d) => d.person.gender === "female" ? "var(--female)" : d.person.gender === "other" ? "var(--other)" : "var(--male)");
   monoGroups
     .append("text")
     .attr("class", "node-monogram-text")
@@ -1445,7 +1445,7 @@ export function renderTree() {
       .attr("width", NODE_W)
       .attr("height", NODE_H)
       .attr("rx", 3)
-      .attr("fill", n.person.gender === "female" ? "var(--female)" : "var(--male)")
+      .attr("fill", n.person.gender === "female" ? "var(--female)" : n.person.gender === "other" ? "var(--other)" : "var(--male)")
       .attr("opacity", fog >= 3 ? 0.15 : fog >= 1 ? 0.4 : 0.7);
   }
 

@@ -798,6 +798,7 @@ function _genderIcon(g) {
   const gl = g.toLowerCase();
   if (gl === "male" || gl === "m") return `<span class="gender-icon" style="color:var(--male)">&#9794;</span>`;
   if (gl === "female" || gl === "f") return `<span class="gender-icon" style="color:var(--female)">&#9792;</span>`;
+  if (gl === "other") return `<span class="gender-icon" style="color:var(--other)">&#9895;</span>`;
   return "";
 }
 
