@@ -201,6 +201,25 @@ export function computeRelationship() {
   result.innerHTML = `${peopleRow}${statement}${pathBtn}`;
 }
 
+// Viewer-relative relationship text for profile pills / hovercards. Keyed off
+// S.VIEWER_ID (who the user IS), never the tree center — focus mode and layout
+// fallbacks move S.CENTER_ID_A, which used to shift every pill by generations
+// (a daughter labeled "great-granddaughter" relative to a focused ancestor).
+// Says "Your X" only when the viewer is the signed-in person (or an explicit
+// viewing-as choice); otherwise names the reference person to stay honest.
+export function viewerRelationText(personId) {
+  const viewerId = S.VIEWER_ID || S.CENTER_ID_A;
+  if (!viewerId || personId === viewerId) return null;
+  const label = calculateRelationship(viewerId, personId);
+  if (!label || label === "no relation found") return null;
+  const authPid = S.AUTH_USER?.person_id;
+  const isSelf = authPid ? viewerId === authPid : !!S.VIEWER_ID;
+  if (isSelf) return `Your ${formatRelLabel(label)}`;
+  const viewer = S.PEOPLE_MAP[viewerId];
+  const first = (viewer?.given_name || viewer?.fullName || "viewer").split(/\s+/)[0];
+  return `${escapeHtml(first)}'s ${formatRelLabel(label)}`;
+}
+
 // Collapse a long "great-great-…-grandparent" chain into the genealogy-standard
 // compact form ("7× great-granddaughter") for display. Three or more "great-"s
 // is where spelling it out starts to wrap and lose meaning.
@@ -286,6 +305,7 @@ export function calculateRelationship(idA, idB) {
   }
 
   function bloodOnly(fromId, toId) {
+    if (fromId === toId) return null; // same person is not a blood *relation*
     const ancA = ancestorsWithDist(fromId);
     const ancB = ancestorsWithDist(toId);
     const common = [];
@@ -315,31 +335,48 @@ export function calculateRelationship(idA, idB) {
 
   const gA = S.PEOPLE_MAP[idA]?.gender || "unknown";
   const gB = S.PEOPLE_MAP[idB]?.gender || "unknown";
-  const spA = spousesOf[idA] || [];
-  const spB = spousesOf[idB] || [];
+  const unionEnded = (x, y) => {
+    const u = unionLookup[[x, y].sort().join("|")];
+    return !!(u && (u.end_date || u.end_reason));
+  };
+  // Current marriages first: a relation through a standing union should win
+  // over one through a dissolved union when someone has both.
+  const byEnded = (pid) =>
+    [...(spousesOf[pid] || [])].sort((a, b) => unionEnded(pid, a) - unionEnded(pid, b));
+  const spA = byEnded(idA);
+  const spB = byEnded(idB);
 
   // 2. Direct spouse / ex-spouse
   if (spA.includes(idB)) {
-    const uKey = [idA, idB].sort().join("|");
-    const union = unionLookup[uKey];
-    const isEx = union && union.end_date;
-    if (isEx) return gB === "male" ? "ex-husband" : gB === "female" ? "ex-wife" : "ex-spouse";
+    if (unionEnded(idA, idB)) return gB === "male" ? "ex-husband" : gB === "female" ? "ex-wife" : "ex-spouse";
     return gB === "male" ? "husband" : gB === "female" ? "wife" : "spouse";
   }
 
-  // 3. B is A's spouse's blood relative → in-law
+  // 3. B is A's spouse's blood relative → in-law. Through a dissolved union
+  // there is no standing in-law/step relation — describe it instead
+  // ("ex-wife's aunt"), never e.g. "stepson" via a marriage that ended.
   for (const sA of spA) {
     const lbl = bloodOnly(sA, idB);
     if (lbl) {
+      if (unionEnded(idA, sA)) {
+        const gS = S.PEOPLE_MAP[sA]?.gender || "unknown";
+        const sp = gS === "male" ? "ex-husband" : gS === "female" ? "ex-wife" : "ex-spouse";
+        return `${sp}'s ${lbl}`;
+      }
       const inLaw = toInLaw(lbl);
       if (inLaw) return inLaw;
     }
   }
 
-  // 4. A is B's spouse's blood relative → reverse in-law
+  // 4. A is B's spouse's blood relative → reverse in-law; dissolved unions are
+  // described ("father's ex-wife", "sister's ex-husband") rather than mapped.
   for (const sB of spB) {
     const lbl = bloodOnly(idA, sB);
     if (lbl) {
+      if (unionEnded(idB, sB)) {
+        const sp = gB === "male" ? "ex-husband" : gB === "female" ? "ex-wife" : "ex-spouse";
+        return `${lbl}'s ${sp}`;
+      }
       const inLaw = reverseInLaw(lbl, gB);
       if (inLaw) return inLaw;
     }
@@ -348,6 +385,16 @@ export function calculateRelationship(idA, idB) {
   // 5. A's spouse's blood relative is B's spouse → co-in-law (e.g. wife's sister's husband)
   for (const sA of spA) {
     for (const sB of spB) {
+      if (sA === sB) {
+        // Same spouse on both sides (a current wife and an ex-wife of the
+        // same person): "husband's ex-wife", not a bloodOnly self-lookup.
+        const gS = S.PEOPLE_MAP[sA]?.gender || "unknown";
+        const wordS = gS === "male" ? "husband" : gS === "female" ? "wife" : "spouse";
+        const wordB = gB === "male" ? "husband" : gB === "female" ? "wife" : "spouse";
+        const exA = unionEnded(idA, sA) ? "ex-" : "";
+        const exB = unionEnded(idB, sB) ? "ex-" : "";
+        return `${exA}${wordS}'s ${exB}${wordB}`;
+      }
       const lbl = bloodOnly(sA, sB);
       if (lbl) {
         const wA = gA === "male" ? "wife" : gA === "female" ? "husband" : "spouse";
@@ -360,6 +407,7 @@ export function calculateRelationship(idA, idB) {
   return "no relation found";
 }
 
+// B is A's spouse's blood <lbl> → what is B to A?
 export function toInLaw(lbl) {
   const map = {
     "father": "father-in-law", "mother": "mother-in-law", "parent": "parent-in-law",
@@ -367,6 +415,8 @@ export function toInLaw(lbl) {
     "grandfather": "grandfather-in-law", "grandmother": "grandmother-in-law", "grandparent": "grandparent-in-law",
     "uncle": "uncle-in-law", "aunt": "aunt-in-law", "uncle/aunt": "uncle/aunt-in-law",
     "nephew": "nephew-in-law", "niece": "niece-in-law", "niece/nephew": "niece/nephew-in-law",
+    // spouse's child who isn't also A's blood child (blood wins earlier)
+    "son": "stepson", "daughter": "stepdaughter", "child": "stepchild",
   };
   if (map[lbl]) return map[lbl];
   if (lbl.includes("cousin")) return lbl + "-in-law";
@@ -374,13 +424,23 @@ export function toInLaw(lbl) {
   return null;
 }
 
+// A is B's spouse's blood <lbl> → what is B to A? (lbl describes B's spouse
+// relative to A; gB is B's gender.) Blood relations win before this runs, so
+// e.g. "father's wife" here really is a step-mother, not the blood mother.
 export function reverseInLaw(lbl, gB) {
   if (lbl === "son" || lbl === "daughter" || lbl === "child")
     return gB === "male" ? "son-in-law" : gB === "female" ? "daughter-in-law" : "child-in-law";
+  if (lbl === "father" || lbl === "mother" || lbl === "parent")
+    return gB === "male" ? "stepfather" : gB === "female" ? "stepmother" : "step-parent";
   if (lbl === "brother" || lbl === "sister" || lbl === "sibling")
     return gB === "male" ? "brother-in-law" : gB === "female" ? "sister-in-law" : "sibling-in-law";
+  if (lbl === "nephew" || lbl === "niece" || lbl === "niece/nephew")
+    return gB === "male" ? "nephew-in-law" : gB === "female" ? "niece-in-law" : "niece/nephew-in-law";
+  if (lbl === "uncle" || lbl === "aunt" || lbl === "uncle/aunt")
+    return gB === "male" ? "uncle-in-law" : gB === "female" ? "aunt-in-law" : "uncle/aunt-in-law";
   if (lbl === "grandson" || lbl === "granddaughter" || lbl === "grandchild")
     return gB === "male" ? "grandson-in-law" : gB === "female" ? "granddaughter-in-law" : "grandchild-in-law";
+  if (lbl.includes("cousin")) return lbl + "-in-law";
   return null;
 }
 

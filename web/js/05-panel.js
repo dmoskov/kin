@@ -71,11 +71,13 @@ export function showPersonPanel(personId) {
   const children = childRels.map((r) => r.child_id);
   const personUnions = S.DATA.unions
     .filter((u) => u.partner1_id === personId || u.partner2_id === personId);
+  // A union is ended when either field says so — end_reason ("divorce") is
+  // often known when the exact end date isn't.
   const partners = personUnions
-    .filter((u) => !u.end_date)
+    .filter((u) => !u.end_date && !u.end_reason)
     .map((u) => (u.partner1_id === personId ? u.partner2_id : u.partner1_id));
   const exPartners = personUnions
-    .filter((u) => !!u.end_date)
+    .filter((u) => !!u.end_date || !!u.end_reason)
     .map((u) => (u.partner1_id === personId ? u.partner2_id : u.partner1_id));
   const events = S.DATA.events
     .filter((e) => e.person_id === personId)
@@ -83,12 +85,8 @@ export function showPersonPanel(personId) {
 
   // Show viewer-relative relationship if a viewer is set and this isn't the viewer
   let relBadge = "";
-  if (S.CENTER_ID_A && personId !== S.CENTER_ID_A) {
-    const relLabel = calculateRelationship(S.CENTER_ID_A, personId);
-    if (relLabel && relLabel !== "no relation found") {
-      relBadge = `<div class="panel-rel-badge">Your ${relLabel}</div>`;
-    }
-  }
+  const relText = viewerRelationText(personId);
+  if (relText) relBadge = `<div class="panel-rel-badge">${relText}</div>`;
 
   let lifespanHtml = "";
   if (person.birth_date || person.death_date) {

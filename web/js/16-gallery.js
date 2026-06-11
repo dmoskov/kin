@@ -6,6 +6,7 @@ import { S } from "./00-state.js";
 export function setCenterPerson(personId) {
   if (!S.PEOPLE_MAP[personId]) return;
   S.CENTER_ID_A = personId;
+  S.VIEWER_ID = personId;
   // Re-apply the viewer-relative visibility filter before anything reads S.DATA.
   applyVisibilityFilter();
   const union = S.DATA.unions.find(u => u.partner1_id === personId || u.partner2_id === personId);

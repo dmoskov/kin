@@ -32,12 +32,8 @@ export function buildHovercardHtml(personId) {
     : escapeHtml(person.fullName);
 
   let relHtml = "";
-  if (S.CENTER_ID_A && personId !== S.CENTER_ID_A) {
-    const relLabel = calculateRelationship(S.CENTER_ID_A, personId);
-    if (relLabel && relLabel !== "no relation found") {
-      relHtml = `<div class="hovercard-rel">Your ${relLabel}</div>`;
-    }
-  }
+  const relText = viewerRelationText(personId);
+  if (relText) relHtml = `<div class="hovercard-rel">${relText}</div>`;
 
   const heritage = matchHeritage(person.birth_place);
   const heritageHtml = heritage && S.CONFIG?.heritageLabels !== false

@@ -1155,34 +1155,40 @@ export function renderTree() {
   // Photo thumbnails (circular, clipped)
   const PHOTO_SIZE = 28;
   const PHOTO_PAD = 6;
-  // The focal couple gets a larger avatar to draw the eye. The larger image
-  // needs its own clipPath (the 28px circle would wrongly crop a 40px image).
-  const CENTER_PHOTO_SIZE = 40;
+  // Avatar prominence is tiered by generation: the focal couple largest, the
+  // recent generations (grandparents → children, where we actually have
+  // photos) mid-size, deep ancestors compact. Each size needs its own
+  // clipPath (a 28px circle would wrongly crop a larger image).
+  const RECENT_PHOTO_SIZE = 36;
+  const CENTER_PHOTO_SIZE = 44;
   const hasPhoto = (d) => !!d.person._profilePhotoPath;
   const isCenter = (d) => d.id === S.CENTER_ID_A || d.id === S.CENTER_ID_B;
-  const photoSizeFor = (d) => (isCenter(d) ? CENTER_PHOTO_SIZE : PHOTO_SIZE);
+  const isRecent = (d) => !isCenter(d) && (d.gen ?? -99) >= -2;
+  const photoSizeFor = (d) =>
+    isCenter(d) ? CENTER_PHOTO_SIZE : isRecent(d) ? RECENT_PHOTO_SIZE : PHOTO_SIZE;
+  const clipIdFor = (d) =>
+    isCenter(d) ? "photo-clip-lg" : isRecent(d) ? "photo-clip-md" : "photo-clip";
 
-  // Clip path definitions for circular photos (standard + larger center size).
   const defs = g.append("defs");
-  defs.append("clipPath")
-    .attr("id", "photo-clip")
-    .append("circle")
-    .attr("cx", PHOTO_SIZE / 2)
-    .attr("cy", PHOTO_SIZE / 2)
-    .attr("r", PHOTO_SIZE / 2);
-  defs.append("clipPath")
-    .attr("id", "photo-clip-lg")
-    .append("circle")
-    .attr("cx", CENTER_PHOTO_SIZE / 2)
-    .attr("cy", CENTER_PHOTO_SIZE / 2)
-    .attr("r", CENTER_PHOTO_SIZE / 2);
+  for (const [id, sz] of [
+    ["photo-clip", PHOTO_SIZE],
+    ["photo-clip-md", RECENT_PHOTO_SIZE],
+    ["photo-clip-lg", CENTER_PHOTO_SIZE],
+  ]) {
+    defs.append("clipPath")
+      .attr("id", id)
+      .append("circle")
+      .attr("cx", sz / 2)
+      .attr("cy", sz / 2)
+      .attr("r", sz / 2);
+  }
 
   // For cropped photos, use a nested <svg> with viewBox; uncropped use standard behavior
   nodeGroups.filter(hasPhoto).each(function(d) {
     const g = d3.select(this);
     const crop = d.person._profileCrop;
     const sz = photoSizeFor(d);
-    const clipId = isCenter(d) ? "photo-clip-lg" : "photo-clip";
+    const clipId = clipIdFor(d);
     if (crop) {
       const vx = crop.x * 1000;
       const vy = crop.y * 1000;
@@ -1212,6 +1218,14 @@ export function renderTree() {
         .attr("href", "/" + d.person._profilePhotoPath)
         .attr("preserveAspectRatio", "xMidYMid slice");
     }
+    // A thin ring lifts the photo off the card and makes faces read as the
+    // primary element of the node.
+    g.append("circle")
+      .attr("class", "node-photo-ring")
+      .attr("cx", PHOTO_PAD + sz / 2)
+      .attr("cy", NODE_H / 2)
+      .attr("r", sz / 2 + 1)
+      .attr("stroke", d.person.gender === "female" ? "var(--female)" : "var(--male)");
   });
 
   // Monogram fallback for people without a profile photo — a colored initial
@@ -1231,7 +1245,7 @@ export function renderTree() {
     .attr("y", NODE_H / 2)
     .attr("text-anchor", "middle")
     .attr("dominant-baseline", "central")
-    .style("font-size", (d) => (isCenter(d) ? "18px" : null))
+    .style("font-size", (d) => (isCenter(d) ? "18px" : isRecent(d) ? "15px" : null))
     .text((d) => ((d.person.given_name || d.person.fullName || "?").trim()[0] || "?").toUpperCase());
 
   // Photo-count badge: a small accent disc at the avatar's bottom-right for
@@ -1269,16 +1283,29 @@ export function renderTree() {
     return NODE_W - PHOTO_PAD - sz - 6 - 4;
   }
 
+  // The larger recent-gen avatars leave less width for text. Long names drop
+  // their middle names first (the given name is what distinguishes people
+  // within a branch); pixel-measured ellipsis is the last resort. Full name
+  // stays in the aria-label / panel.
   nodeGroups
     .append("text")
-    .attr("class", "node-name")
+    .attr("class", (d) => "node-name" + (isCenter(d) || isRecent(d) ? " node-name-lg" : ""))
     .attr("x", textX)
     .attr("y", 20)
     .attr("text-anchor", "middle")
     .text((d) => d.person.fullName)
     .each(function (d) {
       const maxW = textAvailW(d);
-      let txt = d.person.fullName;
+      let txt = d.person.fullName || "";
+      // Prefer dropping middle names (the given name is what distinguishes
+      // people within a branch) before resorting to ellipsis.
+      if (this.getComputedTextLength() > maxW) {
+        const words = txt.split(/\s+/);
+        if (words.length > 2) {
+          txt = words[0] + " " + words[words.length - 1];
+          d3.select(this).text(txt);
+        }
+      }
       while (this.getComputedTextLength() > maxW && txt.length > 1) {
         txt = txt.slice(0, -1);
         d3.select(this).text(txt + "…");
@@ -1297,7 +1324,12 @@ export function renderTree() {
         const y = dateYear(p.birth_date);
         if (!p.death_date) {
           const age = _computeAge(p.birth_date);
+          // Young kids read best as a plain age; living adults in the recent
+          // generations get year + age ("which cousin is this?").
           if (age !== null && age <= 17) return `Age ${age}`;
+          if ((isRecent(d) || isCenter(d)) && age !== null && age < 110) {
+            return `b. ${y} \u00b7 ${age}`;
+          }
           return `b. ${y}`;
         }
         const dy = dateYear(p.death_date);
@@ -1306,17 +1338,42 @@ export function renderTree() {
       return "";
     });
 
+  // Third line: for recent generations prefer a "hook" \u2014 the person's latest
+  // career/education event \u2014 which orients far better than the (often empty)
+  // birth place. Ancestors keep birth place, which is how you navigate them.
+  const eventsByPerson = {};
+  for (const ev of S.DATA.events || []) {
+    (eventsByPerson[ev.person_id] ||= []).push(ev);
+  }
+  const hookFor = (d) => {
+    if (isRecent(d) || isCenter(d)) {
+      const evs = eventsByPerson[d.person.id] || [];
+      const latest = (type) =>
+        evs
+          .filter((e) => e.event_type === type && e.description)
+          .sort((a, b) => (b.date || "").localeCompare(a.date || ""))[0];
+      const ev = latest("career") || latest("education");
+      if (ev) {
+        // First clause only \u2014 descriptions are full sentences with sources.
+        const clause = ev.description.split(/[;.]/)[0].trim();
+        if (clause) return clause.length > 26 ? clause.substring(0, 25) + "\u2026" : clause;
+      }
+    }
+    const place = d.person.birth_place;
+    if (!place) return "";
+    return place.length > 22 ? place.substring(0, 20) + "\u2026" : place;
+  };
   nodeGroups
     .append("text")
-    .attr("class", "node-place")
+    .attr("class", (d) => {
+      const usedHook = (isRecent(d) || isCenter(d)) && (eventsByPerson[d.person.id] || [])
+        .some((e) => (e.event_type === "career" || e.event_type === "education") && e.description);
+      return usedHook ? "node-place node-hook" : "node-place";
+    })
     .attr("x", textX)
     .attr("y", 44)
     .attr("text-anchor", "middle")
-    .text((d) => {
-      const place = d.person.birth_place;
-      if (!place) return "";
-      return place.length > 22 ? place.substring(0, 20) + "\u2026" : place;
-    });
+    .text(hookFor);
 
   nodeGroups.on("click", (e, d) => {
     e.stopPropagation();

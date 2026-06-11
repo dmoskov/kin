@@ -8,6 +8,9 @@
 //       applyFocus (04) derive S.DATA from S.ORIGINAL_DATA.
 //   S.CENTER_ID_A/B   setCenterPerson (16, viewer change), applyFocus (04,
 //       focus mode), initViewingAs (02) + applyConfig (01) at startup.
+//   S.VIEWER_ID       setCenterPerson (16) only — the person the user is
+//       "viewing as" (their identity). Unlike CENTER_ID_A it is NOT moved
+//       by focus mode or layout fallbacks; relationship pills key off it.
 //   S.LANES           autoComputeLanes (02) only.
 // After any server write that changes tree data, call afterMutate (04b) —
 // the single post-mutation refresh — rather than re-deriving these inline.
@@ -24,6 +27,7 @@ export const S = {
   PHOTOS_MAP: {},
   CENTER_ID_A: null,
   CENTER_ID_B: null,
+  VIEWER_ID: null,
   LANES: [],
   MAP: null,
   TREE_DEPTH: parseInt(localStorage.getItem("ft-tree-depth") || "2", 10),

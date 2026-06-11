@@ -5,7 +5,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { S } from "../../web/js/00-state.js";
 import { rankPeople, searchPeopleLocal, dateYear, dateSortKey } from "../../web/js/03-data-nav.js";
 import { computeFogDistance, buildButterflyLayout } from "../../web/js/04-tree.js";
-import { calculateRelationship } from "../../web/js/07-relationship.js";
+import { calculateRelationship, viewerRelationText } from "../../web/js/07-relationship.js";
 import { autoComputeLanes, assignLane, buildLaneCache } from "../../web/js/02-lanes.js";
 import { _personPhotos } from "../../web/js/12-photos.js";
 
@@ -354,6 +354,95 @@ describe("calculateRelationship", () => {
     S.PEOPLE_MAP["ISO"] = isolated;
     const res = calculateRelationship("Son", "ISO");
     expect(res).toBe("no relation found");
+  });
+
+  it("cousin's spouse is 'first cousin-in-law' (was: no relation)", () => {
+    // Uncle married into the family: Son's first cousin is Cousin, whose
+    // parent Uncle is only related by marriage — but Uncle's own relationship
+    // to Son should resolve via Aunt: Son → Uncle is uncle-in-law.
+    expect(calculateRelationship("Son", "Uncle")).toBe("uncle-in-law");
+    // And the spouse of a blood first cousin:
+    const wife = makePerson("CousinWife", "Wendy", "Jones", { gender: "female" });
+    S.PEOPLE_MAP["CousinWife"] = wife;
+    S.DATA = {
+      ...data,
+      people: [...people, wife],
+      unions: [...data.unions, { partner1_id: "Cousin", partner2_id: "CousinWife" }],
+    };
+    expect(calculateRelationship("Son", "CousinWife")).toBe("first cousin-in-law");
+  });
+
+  it("parent's later spouse is a step-parent", () => {
+    const step = makePerson("StepMom", "Steph", "Smith", { gender: "female" });
+    S.PEOPLE_MAP["StepMom"] = step;
+    S.DATA = {
+      ...data,
+      people: [...people, step],
+      unions: [...data.unions, { partner1_id: "Father", partner2_id: "StepMom" }],
+    };
+    expect(calculateRelationship("Son", "StepMom")).toBe("stepmother");
+    // and the reverse: spouse's blood child is a stepchild
+    expect(calculateRelationship("StepMom", "Son")).toBe("stepson");
+  });
+
+  it("a dissolved union never yields step/in-law labels — it is described instead", () => {
+    // Father's ex-wife (divorced before Son existed) must NOT be "stepmother".
+    const ex = makePerson("ExWife", "Edna", "Smith", { gender: "female" });
+    S.PEOPLE_MAP["ExWife"] = ex;
+    S.DATA = {
+      ...data,
+      people: [...people, ex],
+      unions: [...data.unions,
+        // end_reason alone (no end_date) must also count as ended
+        { partner1_id: "Father", partner2_id: "ExWife", end_reason: "divorce" }],
+    };
+    expect(calculateRelationship("Son", "ExWife")).toBe("father's ex-wife");
+    expect(calculateRelationship("ExWife", "Son")).toBe("ex-husband's son");
+    expect(calculateRelationship("Father", "ExWife")).toBe("ex-wife");
+    // the standing marriage (Mother) still wins over the dissolved one
+    expect(calculateRelationship("Son", "Mother")).toBe("mother");
+    // current wife vs ex-wife of the same man (used to crash on a
+    // bloodOnly self-lookup)
+    expect(calculateRelationship("Mother", "ExWife")).toBe("husband's ex-wife");
+  });
+
+  describe("viewerRelationText", () => {
+    // escapeHtml is window-bridged at runtime (99-main); stub it for tests.
+    globalThis.escapeHtml ??= (s) => String(s ?? "");
+
+    beforeEach(() => {
+      S.AUTH_USER = null;
+      S.VIEWER_ID = null;
+      S.CENTER_ID_A = null;
+    });
+
+    it("uses VIEWER_ID, not the tree center moved by focus mode", () => {
+      // Regression: focusing the tree on a grandparent set CENTER_ID_A=GF,
+      // which relabeled Father's daughter as his "granddaughter".
+      S.VIEWER_ID = "Father";
+      S.CENTER_ID_A = "GF"; // focus mode moved the layout center
+      expect(viewerRelationText("Daughter")).toBe("Your daughter");
+    });
+
+    it("names the reference person when viewing as someone other than the signed-in user", () => {
+      S.AUTH_USER = { person_id: "Father" };
+      S.VIEWER_ID = "GF";
+      S.CENTER_ID_A = "GF";
+      expect(viewerRelationText("Daughter")).toBe("George's granddaughter");
+    });
+
+    it("falls back to the center with a named label when no viewer identity exists", () => {
+      S.CENTER_ID_A = "GF"; // layout fallback picked someone; not "you"
+      expect(viewerRelationText("Daughter")).toBe("George's granddaughter");
+    });
+
+    it("returns null for the viewer themselves and for non-relations", () => {
+      S.VIEWER_ID = "Father";
+      expect(viewerRelationText("Father")).toBeNull();
+      const isolated = makePerson("ISO2", "Iso", "Lated", { gender: "male" });
+      S.PEOPLE_MAP["ISO2"] = isolated;
+      expect(viewerRelationText("ISO2")).toBeNull();
+    });
   });
 });
 
