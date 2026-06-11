@@ -646,7 +646,7 @@ function buildLivingNowHtml() {
     if (p.death_date || !p.birth_date) continue;
     const by = dateYear(p.birth_date);
     if (!by || by < CUR - 105) continue;
-    living.push({ p, by });
+    living.push({ p, by, age: CUR - by });
   }
   if (living.length < 2) return "";
   const res = {};
@@ -654,9 +654,15 @@ function buildLivingNowHtml() {
     if (e.event_type !== "residence" || !e.place) continue;
     if (!res[e.person_id] || (e.date || "") > (res[e.person_id].date || "")) res[e.person_id] = e;
   }
-  // Group by current location (latest residence, else birthplace). Eldest first
-  // within each location, and groups ordered by their eldest member; whereabouts
-  // unknown goes last.
+  // Living spouses (for "with <name>" on cards)
+  const spouseMap = {};
+  for (const u of S.DATA.unions || []) {
+    for (const pid of [u.partner1_id, u.partner2_id]) {
+      const otherId = pid === u.partner1_id ? u.partner2_id : u.partner1_id;
+      const other = S.PEOPLE_MAP[otherId];
+      if (other && !other.death_date) spouseMap[pid] = otherId;
+    }
+  }
   const groups = {};
   for (const item of living) {
     const loc = ((res[item.p.id] && res[item.p.id].place) || item.p.birth_place || "").trim();
@@ -673,20 +679,34 @@ function buildLivingNowHtml() {
   const groupsHtml = ordered
     .map((g) => {
       const cards = g.members
-        .map(
-          ({ p }) =>
-            `<div class="tnow-card">${personThumb(p.id, 46)}<div class="tnow-body">` +
-            `<div class="tnow-name">${personLink(p.id)}</div></div></div>`,
-        )
+        .map(({ p, age }) => {
+          const lane = assignLane(p.id);
+          const lm = S.LANES.find((l) => l.id === lane);
+          const laneColor = lm ? lm.color : "var(--accent)";
+          const spouseId = spouseMap[p.id];
+          const spouseName = spouseId ? (S.PEOPLE_MAP[spouseId]?.given_name || "") : "";
+          const spouseHtml = spouseName
+            ? `<div class="tnow-spouse">with ${personLink(spouseId, spouseName)}</div>`
+            : "";
+          return `<div class="tnow-card" style="--lane-color:${laneColor}">` +
+            `<div class="tnow-photo">${personThumb(p.id, 72)}</div>` +
+            `<div class="tnow-body">` +
+            `<div class="tnow-name">${personLink(p.id)}</div>` +
+            `<div class="tnow-age">Age ${age}</div>` +
+            spouseHtml +
+            `</div></div>`;
+        })
         .join("");
+      const count = g.members.length;
       const header = g.loc
-        ? `<div class="tnow-location">📍 ${escapeHtml(g.loc)}</div>`
-        : `<div class="tnow-location tnow-location--unknown">Whereabouts unknown</div>`;
+        ? `<div class="tnow-location"><span class="tnow-location-pin">📍</span> ${escapeHtml(g.loc)}<span class="tnow-location-count">${count}</span></div>`
+        : `<div class="tnow-location tnow-location--unknown">Whereabouts unknown<span class="tnow-location-count">${count}</span></div>`;
       return `<div class="tnow-location-group">${header}<div class="tnow-grid">${cards}</div></div>`;
     })
     .join("");
+  const totalCount = living.length;
   return `<section class="tstream-now-group" id="tl-now">` +
-    `<div class="tstream-decade tstream-now-pill">Where they are now</div>` +
+    `<div class="tstream-decade tstream-now-pill">Where they are now · ${totalCount} living</div>` +
     groupsHtml + `</section>`;
 }
 
