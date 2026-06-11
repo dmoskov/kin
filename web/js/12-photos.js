@@ -89,9 +89,13 @@ function _buildPhotoSlide(entry, personId, person, index) {
   const capText = entry.caption || person.fullName;
   const isProfile = entry.isProfile;
   const photoInfo = entry.info;
+  const canEdit = !S.CONFIG?.editorsEnabled || S.AUTH_USER?.is_editor;
   let html = `<div class="carousel-slide${index === 0 ? " active" : ""}" data-index="${index}">`;
   html += `<div class="carousel-img-wrap">`;
   if (isProfile) html += `<span class="photo-profile-badge" title="Profile photo">&#9733;</span>`;
+  if (canEdit && !isProfile) {
+    html += `<button class="carousel-set-profile-btn" data-photo-path="${src}" title="Use as profile photo">&#9733; Set as profile</button>`;
+  }
   html += `<img class="carousel-photo" src="/${src}" alt="${escapeHtml(capText)}" loading="lazy" data-photo-path="${src}" data-person-id="${personId}" />`;
   html += `</div>`;
   html += `<div class="carousel-info">`;
@@ -133,9 +137,13 @@ export function buildPanelPhotosInnerHtml(personId) {
     const src = entry.path;
     const capText = entry.caption || person.fullName;
     const photoInfo = entry.info;
+    const canEdit = !S.CONFIG?.editorsEnabled || S.AUTH_USER?.is_editor;
     html += `<div class="panel-photos panel-photos-single">`;
     html += `<div class="panel-photo-wrap">`;
     if (entry.isProfile) html += `<span class="photo-profile-badge" title="Profile photo">&#9733;</span>`;
+    if (canEdit && !entry.isProfile) {
+      html += `<button class="carousel-set-profile-btn" data-photo-path="${src}" title="Use as profile photo">&#9733; Set as profile</button>`;
+    }
     html += `<img class="panel-photo" src="/${src}" alt="${escapeHtml(capText)}" loading="lazy" data-photo-path="${src}" data-person-id="${personId}" />`;
     if (entry.caption) {
       html += `<div class="panel-photo-caption">${escapeHtml(entry.caption)}</div>`;
@@ -186,6 +194,7 @@ export function _renderPanelPhotos(personId) {
   section.innerHTML = buildPanelPhotosInnerHtml(personId);
   _wireCarousel(section, personId);
   _wirePanelPhotoClicks(section, personId);
+  _wireSetProfileButtons(section, personId);
 }
 
 // Targeted update of the panel hero <img> after the profile photo changes via
@@ -256,6 +265,34 @@ export function _wirePanelPhotoClicks(container, personId) {
       const photoPath = img.dataset.photoPath;
       const capText = captionByPath[photoPath] || person.fullName;
       openLightbox("/" + photoPath, capText, photoPath, photos, personId);
+    });
+  });
+}
+
+export function _wireSetProfileButtons(container, personId) {
+  container.querySelectorAll(".carousel-set-profile-btn").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const photoPath = btn.dataset.photoPath;
+      const photoData = S.PHOTOS_MAP[photoPath];
+      if (!photoData) return;
+      try {
+        const resp = await fetch(`/api/people/${personId}/profile-photo`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ photo_id: photoData.id }),
+        });
+        if (resp.ok) {
+          const person = S.PEOPLE_MAP[personId];
+          if (person) person._profilePhotoPath = photoPath;
+          _localSetProfile(personId, photoPath);
+          _renderPanelPhotos(personId);
+          _syncPanelHeroPhoto(personId);
+          showToast("Profile photo updated");
+        }
+      } catch (err) {
+        showToast("Could not set profile photo: " + err.message, "error");
+      }
     });
   });
 }
