@@ -386,6 +386,11 @@ docker run -p 8000:8000 -v $(pwd)/private:/app/private family-tree
 | `ANTHROPIC_API_KEY`| Enables **Parse with AI** for uploaded documents.      | _(parsing disabled)_ |
 | `ADMIN_PERSON_ID`  | Person ID that can assign emails to tree members and manage non-family editors (assistants, researchers) via the UI. | _(feature disabled)_ |
 
+## Documentation
+
+- [Testing](docs/TESTING.md) — test suite organization, how to add tests, CI pipeline
+- [Troubleshooting](docs/TROUBLESHOOTING.md) — common issues and fixes for local dev, CI, and production
+
 ## License
 
 MIT. Family data stored in `private/` is yours and never touches version control.
