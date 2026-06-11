@@ -72,7 +72,7 @@ export function buildHovercardHtml(personId) {
         ${relHtml}
         <div class="hovercard-meta">
           ${dates ? `<span class="hovercard-dates">${dates}</span>` : ""}
-          ${person.gender ? `<span class="hovercard-badge ${person.gender}">${person.gender}</span>` : ""}
+          ${person.gender ? `<span class="hovercard-badge ${person.gender}">${genderLabel(person.gender)}</span>` : ""}
         </div>
         ${person.birth_place ? `<div class="hovercard-place">${escapeHtml(person.birth_place)}</div>` : ""}
         ${heritageHtml}

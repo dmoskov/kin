@@ -143,6 +143,9 @@ export function escapeHtml(str) {
     .replace(/'/g, "&#39;");
 }
 
+const _GENDER_LABELS = { male: "male", female: "female", other: "non-binary", unknown: "unknown" };
+export function genderLabel(g) { return _GENDER_LABELS[g] || g; }
+
 // ── Dates ───────────────────────────────────────────────────────────────
 // Dates are stored as ISO strings at three precisions (YYYY, YYYY-MM,
 // YYYY-MM-DD). These are the single place the frontend turns one into a year or
@@ -202,7 +205,7 @@ export function personThumb(id, size = 24) {
     return croppedImg(src, person.fullName, size, person._profileCrop, "person-thumb");
   }
   const initial = (person.given_name || "?")[0].toUpperCase();
-  const cls = person.gender === "female" ? "female" : "male";
+  const cls = person.gender === "female" ? "female" : person.gender === "other" ? "other" : "male";
   return `<div class="person-thumb-placeholder ${cls}" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.45)}px">${initial}</div>`;
 }
 

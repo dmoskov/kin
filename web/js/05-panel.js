@@ -125,20 +125,20 @@ export function showPersonPanel(personId) {
         ${relBadge}
         <div class="panel-name">${escapeHtml(person.fullName)}</div>
         <div class="panel-hero-meta">
-          <span class="panel-gender ${escapeHtml(person.gender)}">${escapeHtml(person.gender)}</span>
+          <span class="panel-gender ${escapeHtml(person.gender)}">${escapeHtml(genderLabel(person.gender))}</span>
         </div>
         ${lifespanHtml}
       </div>`;
   } else {
     const initial = ((person.given_name || person.fullName || "?").trim()[0] || "?").toUpperCase();
-    const genderClass = person.gender === "female" ? "female" : person.gender === "male" ? "male" : "unknown";
+    const genderClass = person.gender === "female" ? "female" : person.gender === "male" ? "male" : person.gender === "other" ? "other" : "unknown";
     heroInner = `
       <div class="panel-hero-monogram ${genderClass}">${escapeHtml(initial)}</div>
       <div class="panel-hero-overlay">
         ${relBadge}
         <div class="panel-name">${escapeHtml(person.fullName)}</div>
         <div class="panel-hero-meta">
-          <span class="panel-gender ${escapeHtml(person.gender)}">${escapeHtml(person.gender)}</span>
+          <span class="panel-gender ${escapeHtml(person.gender)}">${escapeHtml(genderLabel(person.gender))}</span>
         </div>
         ${lifespanHtml}
       </div>`;
@@ -507,6 +507,7 @@ export function openAddRelativeForm(personId, relationship) {
             <option value="unknown">Gender</option>
             <option value="male">Male</option>
             <option value="female">Female</option>
+            <option value="other">Non-binary</option>
           </select>
           <input id="arf-birth" type="text" placeholder="Birth year (optional)" class="add-relative-input" />
         </div>
@@ -833,6 +834,7 @@ const _GENDER_OPTIONS = [
   { value: "unknown", label: "Gender" },
   { value: "male", label: "Male" },
   { value: "female", label: "Female" },
+  { value: "other", label: "Non-binary" },
 ];
 
 export function openEditPersonForm(personId) {
