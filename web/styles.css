@@ -6568,6 +6568,42 @@ select.ge-input { padding: 3px 4px; }
   border-radius: 3px;
 }
 
+/* Screen-reader-only utility: visually hidden but announced by assistive
+   technology. The :focus-within / :focus variant re-shows the element when it
+   (or a child, e.g. a skip-link) receives keyboard focus. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.sr-only-focusable:focus,
+.sr-only-focusable:active {
+  position: fixed;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 9999;
+  width: auto;
+  height: auto;
+  padding: var(--space-2) var(--space-4);
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  font-size: var(--fs-sm);
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  box-shadow: var(--shadow-md);
+}
+
 /* Respect "reduce motion": neutralize CSS transitions/animations. (The map
    time-lapse is user-initiated via the Play button, so it stays available.) */
 @media (prefers-reduced-motion: reduce) {
