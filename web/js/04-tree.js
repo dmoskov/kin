@@ -5,6 +5,22 @@ import { S } from "./00-state.js";
 import { _resolveCenterIds } from "./02-lanes.js";
 
 
+function _computeAge(birthDateStr) {
+  if (!birthDateStr) return null;
+  const m = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?/.exec(String(birthDateStr));
+  if (!m) return null;
+  const by = parseInt(m[1], 10);
+  const bm = m[2] ? parseInt(m[2], 10) : null;
+  const bd = m[3] ? parseInt(m[3], 10) : null;
+  const now = new Date();
+  let age = now.getFullYear() - by;
+  if (bm !== null) {
+    const nowM = now.getMonth() + 1;
+    if (nowM < bm || (nowM === bm && bd !== null && now.getDate() < bd)) age--;
+  }
+  return age >= 0 ? age : null;
+}
+
 // Layout constants
 export const NODE_W = 160;
 export const NODE_H = 52;
@@ -1279,7 +1295,11 @@ export function renderTree() {
       const p = d.person;
       if (p.birth_date) {
         const y = dateYear(p.birth_date);
-        if (!p.death_date) return `b. ${y}`;
+        if (!p.death_date) {
+          const age = _computeAge(p.birth_date);
+          if (age !== null && age <= 17) return `Age ${age}`;
+          return `b. ${y}`;
+        }
         const dy = dateYear(p.death_date);
         return `${y} \u2013 ${dy || "?"}`;
       }
