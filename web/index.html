@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 <body>
+  <a href="#view-tree" class="sr-only sr-only-focusable">Skip to content</a>
   <!-- Shown until the first data load completes (see init()). -->
   <div id="app-loading" class="app-overlay" role="status" aria-live="polite">
     <div class="app-spinner" aria-hidden="true"></div>
@@ -125,7 +126,7 @@
         </div>
         <div id="focus-banner" class="focus-banner hidden">
           <span class="focus-banner-label">Focused on: <strong id="focus-banner-name"></strong></span>
-          <select id="focus-depth-select" class="focus-depth-select">
+          <select id="focus-depth-select" class="focus-depth-select" aria-label="Focus depth">
             <option value="1">Immediate family</option>
             <option value="2">+ Grandparents &amp; in-laws</option>
             <option value="3">+ Aunts, uncles &amp; cousins</option>
@@ -144,7 +145,7 @@
         <div class="timeline-header">
           <h2>Family Timeline</h2>
           <div class="timeline-controls">
-            <select id="timeline-filter">
+            <select id="timeline-filter" aria-label="Filter timeline by person">
               <option value="all">Everyone</option>
             </select>
             <button id="timeline-view-toggle" class="timeline-align-btn" onclick="toggleTimelineMode()">Branches</button>
@@ -175,19 +176,19 @@
         </div>
         <div class="map-controls">
           <div class="map-filter">
-            <select id="map-depth-select" title="How much of the family to show on the map">
+            <select id="map-depth-select" title="How much of the family to show on the map" aria-label="Map family depth">
               <option value="1">Close family</option>
               <option value="2">Extended family</option>
               <option value="4">Everyone</option>
             </select>
-            <select id="map-person-filter">
+            <select id="map-person-filter" aria-label="Filter map by person">
               <option value="all">Everyone</option>
             </select>
           </div>
           <div class="map-slider">
             <button id="map-play" class="map-play-btn" title="Play animation">&#9654;</button>
             <span class="slider-label" id="slider-year-start">1650</span>
-            <input type="range" id="map-time-slider" min="1650" max="2026" value="2026" step="1">
+            <input type="range" id="map-time-slider" min="1650" max="2026" value="2026" step="1" aria-label="Map time slider">
             <span class="slider-label" id="slider-year-end">2026</span>
           </div>
           <button id="map-tour" class="map-tour-btn" title="Play the family's migration story">&#9654; Story</button>
@@ -229,11 +230,11 @@
           <div class="photos-active-filters" id="photos-active-filters"></div>
         </div>
         <div class="gallery-search-bar" id="gallery-search-bar">
-          <input type="text" id="gallery-text-search" class="gallery-search-input" placeholder="Search captions, places, people..." />
+          <input type="text" id="gallery-text-search" class="gallery-search-input" placeholder="Search captions, places, people..." aria-label="Search photos" />
           <div class="gallery-date-range">
-            <input type="number" id="gallery-year-from" class="gallery-year-input" placeholder="From year" min="1600" max="2099" />
-            <span class="gallery-date-sep">&ndash;</span>
-            <input type="number" id="gallery-year-to" class="gallery-year-input" placeholder="To year" min="1600" max="2099" />
+            <input type="number" id="gallery-year-from" class="gallery-year-input" placeholder="From year" min="1600" max="2099" aria-label="Photos from year" />
+            <span class="gallery-date-sep" aria-hidden="true">&ndash;</span>
+            <input type="number" id="gallery-year-to" class="gallery-year-input" placeholder="To year" min="1600" max="2099" aria-label="Photos to year" />
           </div>
         </div>
         <div class="gallery-drop-zone hidden" id="gallery-drop-zone">
@@ -261,7 +262,7 @@
             </div>
             <div class="facet-section" id="facet-people">
               <h4 class="facet-title">Person</h4>
-              <input type="text" class="facet-search" id="facet-people-search" placeholder="Filter people..." />
+              <input type="text" class="facet-search" id="facet-people-search" placeholder="Filter people..." aria-label="Filter people facet" />
               <div class="facet-options facet-options-scroll" id="facet-people-options"></div>
             </div>
             <div class="facet-section" id="facet-exif">
@@ -281,13 +282,13 @@
         <p class="subtitle">Select two people to see how they're related</p>
         <div class="rel-selectors">
           <div class="person-picker" id="picker-a">
-            <input type="text" class="picker-search" placeholder="Search Person A…" autocomplete="off" spellcheck="false" />
-            <div class="picker-list" id="picker-a-list"></div>
+            <input type="text" class="picker-search" placeholder="Search Person A…" autocomplete="off" spellcheck="false" aria-label="Search Person A" />
+            <div class="picker-list" id="picker-a-list" role="listbox"></div>
           </div>
-          <span class="rel-arrow">&#8596;</span>
+          <span class="rel-arrow" aria-hidden="true">&#8596;</span>
           <div class="person-picker" id="picker-b">
-            <input type="text" class="picker-search" placeholder="Search Person B…" autocomplete="off" spellcheck="false" />
-            <div class="picker-list" id="picker-b-list"></div>
+            <input type="text" class="picker-search" placeholder="Search Person B…" autocomplete="off" spellcheck="false" aria-label="Search Person B" />
+            <div class="picker-list" id="picker-b-list" role="listbox"></div>
           </div>
         </div>
         <div id="rel-result" class="rel-result hidden"></div>
@@ -309,10 +310,10 @@
 
   <!-- Photo Picker Modal -->
   <div id="photo-picker-overlay" class="photo-picker-overlay hidden">
-    <div class="photo-picker">
+    <div class="photo-picker" role="dialog" aria-modal="true" aria-label="Manage Photos">
       <div class="photo-picker-header">
         <h3 id="photo-picker-title">Manage Photos</h3>
-        <button class="photo-picker-close" id="photo-picker-close">&times;</button>
+        <button class="photo-picker-close" id="photo-picker-close" aria-label="Close photo picker">&times;</button>
       </div>
       <div class="photo-upload-zone" id="photo-upload-zone" tabindex="0">
         <div class="upload-zone-content">
@@ -336,14 +337,14 @@
   </div>
 
   <!-- Toast notification -->
-  <div id="toast" class="toast hidden"></div>
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
   <!-- Document Upload Modal -->
   <div id="doc-upload-overlay" class="modal-overlay hidden">
-    <div class="doc-upload-modal">
+    <div class="doc-upload-modal" role="dialog" aria-modal="true" aria-label="Upload Document">
       <div class="modal-header">
         <h3>Upload Document</h3>
-        <button class="modal-close" id="doc-upload-close">&times;</button>
+        <button class="modal-close" id="doc-upload-close" aria-label="Close upload dialog">&times;</button>
       </div>
       <p class="modal-desc">Upload a family document (photo, scan, PDF) and AI will extract family tree information for your review.</p>
       <div class="doc-drop-zone" id="doc-drop-zone">
@@ -363,11 +364,11 @@
       <div class="doc-url-row">
         <span class="doc-url-or">or paste a link</span>
         <div class="doc-url-input-group">
-          <input type="url" id="doc-url-input" class="doc-url-input" placeholder="Obituary, Wikipedia, FindAGrave… URL" />
+          <input type="url" id="doc-url-input" class="doc-url-input" placeholder="Obituary, Wikipedia, FindAGrave… URL" aria-label="Document URL" />
           <button id="doc-url-btn" class="doc-url-btn">Read link</button>
         </div>
         <button type="button" id="doc-url-paste-toggle" class="doc-url-paste-toggle">Some sites block reading — paste the text instead</button>
-        <textarea id="doc-url-text" class="doc-url-text hidden" rows="5" placeholder="Paste the obituary / article text here, then click Read link…"></textarea>
+        <textarea id="doc-url-text" class="doc-url-text hidden" rows="5" placeholder="Paste the obituary / article text here, then click Read link…" aria-label="Document text"></textarea>
         <span class="doc-url-status" id="doc-url-status"></span>
       </div>
       <div id="doc-file-preview" class="doc-file-preview hidden"></div>
@@ -425,10 +426,10 @@
 
   <!-- Document Review Modal -->
   <div id="doc-review-overlay" class="modal-overlay hidden">
-    <div class="doc-review-modal">
+    <div class="doc-review-modal" role="dialog" aria-modal="true" aria-label="Review Extracted Data">
       <div class="modal-header">
         <h3 id="doc-review-title">Review Extracted Data</h3>
-        <button class="modal-close" id="doc-review-close">&times;</button>
+        <button class="modal-close" id="doc-review-close" aria-label="Close review dialog">&times;</button>
       </div>
       <div id="doc-review-stats" class="doc-review-stats"></div>
       <div id="doc-review-summary" class="doc-review-summary"></div>
@@ -442,10 +443,10 @@
 
   <!-- GEDCOM Import Modal -->
   <div id="gedcom-overlay" class="modal-overlay hidden">
-    <div class="doc-upload-modal">
+    <div class="doc-upload-modal" role="dialog" aria-modal="true" aria-label="Import GEDCOM File">
       <div class="modal-header">
         <h3>Import GEDCOM File</h3>
-        <button class="modal-close" id="gedcom-close">&times;</button>
+        <button class="modal-close" id="gedcom-close" aria-label="Close import dialog">&times;</button>
       </div>
       <p class="modal-desc">Upload a .ged file exported from Ancestry, FamilySearch, MyHeritage, Gramps, or other genealogy software.</p>
       <div class="doc-drop-zone" id="gedcom-drop-zone">
@@ -464,7 +465,7 @@
 
   <!-- Onboarding Overlay (shown when tree is empty) -->
   <div id="onboarding-overlay" class="modal-overlay hidden">
-    <div class="onboarding-card">
+    <div class="onboarding-card" role="dialog" aria-modal="true" aria-label="Welcome to your Family Tree">
       <h2 class="onboarding-title">Welcome to your Family Tree</h2>
       <p class="onboarding-subtitle">Let's get started by adding your first family members.</p>
 
@@ -479,14 +480,14 @@
         <div class="onboarding-step active" id="onboard-step-1">
           <h3>Step 1: Add yourself</h3>
           <div class="onboard-form">
-            <input type="text" id="onboard-given" placeholder="First name" required />
-            <input type="text" id="onboard-surname" placeholder="Last name" />
-            <select id="onboard-gender">
+            <input type="text" id="onboard-given" placeholder="First name" required aria-label="Your first name" />
+            <input type="text" id="onboard-surname" placeholder="Last name" aria-label="Your last name" />
+            <select id="onboard-gender" aria-label="Your gender">
               <option value="male">Male</option>
               <option value="female">Female</option>
               <option value="unknown">Other / Prefer not to say</option>
             </select>
-            <input type="text" id="onboard-birth" placeholder="Birth year (e.g. 1990)" />
+            <input type="text" id="onboard-birth" placeholder="Birth year (e.g. 1990)" aria-label="Your birth year" />
           </div>
           <div class="onboard-actions">
             <button class="btn-primary" id="onboard-next-1">Next &rarr;</button>
@@ -497,14 +498,14 @@
         <div class="onboarding-step" id="onboard-step-2">
           <h3>Step 2: Add your partner <span class="onboard-optional">(optional)</span></h3>
           <div class="onboard-form">
-            <input type="text" id="onboard-partner-given" placeholder="First name" />
-            <input type="text" id="onboard-partner-surname" placeholder="Last name" />
-            <select id="onboard-partner-gender">
+            <input type="text" id="onboard-partner-given" placeholder="First name" aria-label="Partner's first name" />
+            <input type="text" id="onboard-partner-surname" placeholder="Last name" aria-label="Partner's last name" />
+            <select id="onboard-partner-gender" aria-label="Partner's gender">
               <option value="female">Female</option>
               <option value="male">Male</option>
               <option value="unknown">Other / Prefer not to say</option>
             </select>
-            <input type="text" id="onboard-partner-birth" placeholder="Birth year (e.g. 1991)" />
+            <input type="text" id="onboard-partner-birth" placeholder="Birth year (e.g. 1991)" aria-label="Partner's birth year" />
           </div>
           <div class="onboard-actions">
             <button class="btn-secondary" id="onboard-skip-2">Skip</button>
@@ -516,14 +517,14 @@
         <div class="onboarding-step" id="onboard-step-3">
           <h3>Step 3: Add a parent <span class="onboard-optional">(optional)</span></h3>
           <div class="onboard-form">
-            <input type="text" id="onboard-parent-given" placeholder="First name" />
-            <input type="text" id="onboard-parent-surname" placeholder="Last name" />
-            <select id="onboard-parent-gender">
+            <input type="text" id="onboard-parent-given" placeholder="First name" aria-label="Parent's first name" />
+            <input type="text" id="onboard-parent-surname" placeholder="Last name" aria-label="Parent's last name" />
+            <select id="onboard-parent-gender" aria-label="Parent's gender">
               <option value="male">Male (father)</option>
               <option value="female">Female (mother)</option>
               <option value="unknown">Other / Prefer not to say</option>
             </select>
-            <input type="text" id="onboard-parent-birth" placeholder="Birth year (e.g. 1960)" />
+            <input type="text" id="onboard-parent-birth" placeholder="Birth year (e.g. 1960)" aria-label="Parent's birth year" />
           </div>
           <div class="onboard-actions">
             <button class="btn-secondary" id="onboard-skip-3">Skip</button>
@@ -542,19 +543,19 @@
 
   <!-- Editors management overlay -->
   <div id="editors-overlay" class="editors-overlay hidden">
-    <div class="editors-panel">
+    <div class="editors-panel" role="dialog" aria-modal="true" aria-label="Manage Editors">
       <div class="editors-panel-header">
         <h2>Manage Editors</h2>
-        <button class="editors-panel-close" onclick="closeEditorsPanel()">&times;</button>
+        <button class="editors-panel-close" onclick="closeEditorsPanel()" aria-label="Close editors panel">&times;</button>
       </div>
       <p class="editors-panel-desc">Non-family members who can edit the tree (assistants, researchers).</p>
       <div id="editors-list" class="editors-list"></div>
       <div class="editors-add-section">
         <h3>Invite Editor</h3>
         <div class="editors-add-form">
-          <input id="editor-invite-email" type="email" placeholder="Email address" class="add-relative-input" />
-          <input id="editor-invite-name" type="text" placeholder="Name (optional)" class="add-relative-input" />
-          <select id="editor-invite-role" class="add-relative-input">
+          <input id="editor-invite-email" type="email" placeholder="Email address" class="add-relative-input" aria-label="Editor email address" />
+          <input id="editor-invite-name" type="text" placeholder="Name (optional)" class="add-relative-input" aria-label="Editor name" />
+          <select id="editor-invite-role" class="add-relative-input" aria-label="Editor role">
             <option value="assistant">Assistant</option>
             <option value="researcher">Researcher</option>
             <option value="editor">Editor</option>
