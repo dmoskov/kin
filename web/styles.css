@@ -381,6 +381,7 @@ main {
   fill: none;
   stroke: var(--border);
   stroke-width: 1.5;
+  pointer-events: stroke;
 }
 
 .union-link {
@@ -389,6 +390,21 @@ main {
   stroke-width: 2;
   stroke-dasharray: 6,4;
   opacity: 0.6;
+  pointer-events: stroke;
+}
+
+/* Wider invisible hit area so thin paths are easier to hover */
+.link-hit-area {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 12;
+  pointer-events: stroke;
+}
+.union-link-hit-area {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 12;
+  pointer-events: stroke;
 }
 
 /* ── Fog-of-war (POV-aware dimming) ────────────────────────── */

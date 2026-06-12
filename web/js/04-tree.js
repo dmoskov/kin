@@ -1073,29 +1073,32 @@ export function renderTree() {
     const childY = groupLinks[0].from.y;
     const busY = dropY + (childY - dropY) * 0.5; // bus bar at midpoint
 
+    const linkPersonIds = new Set([parent.id, ...groupLinks.map(l => l.from.id)]);
+
     if (groupLinks.length === 1) {
-      // Single child: simple elbow connector
       const cx = childXs[0];
+      const d = `M${dropX},${dropY} L${dropX},${busY} L${cx},${busY} L${cx},${childY}`;
       g.append("path")
+        .datum({ personIds: linkPersonIds })
         .attr("class", fogClass)
-        .attr("d", `M${dropX},${dropY} L${dropX},${busY} L${cx},${busY} L${cx},${childY}`);
+        .attr("d", d);
+      g.append("path").attr("class", "link-hit-area").attr("d", d);
     } else {
-      // Multiple children: bus bar pattern
       const minX = Math.min(...childXs);
       const maxX = Math.max(...childXs);
 
-      // Vertical drop from parent to bus bar
-      g.append("path").attr("class", fogClass)
-        .attr("d", `M${dropX},${dropY} L${dropX},${busY}`);
+      const d1 = `M${dropX},${dropY} L${dropX},${busY}`;
+      g.append("path").datum({ personIds: linkPersonIds }).attr("class", fogClass).attr("d", d1);
+      g.append("path").attr("class", "link-hit-area").attr("d", d1);
 
-      // Horizontal bus bar
-      g.append("path").attr("class", fogClass)
-        .attr("d", `M${minX},${busY} L${maxX},${busY}`);
+      const d2 = `M${minX},${busY} L${maxX},${busY}`;
+      g.append("path").datum({ personIds: linkPersonIds }).attr("class", fogClass).attr("d", d2);
+      g.append("path").attr("class", "link-hit-area").attr("d", d2);
 
-      // Vertical drops from bus bar to each child
       for (const cx of childXs) {
-        g.append("path").attr("class", fogClass)
-          .attr("d", `M${cx},${busY} L${cx},${childY}`);
+        const d3 = `M${cx},${busY} L${cx},${childY}`;
+        g.append("path").datum({ personIds: linkPersonIds }).attr("class", fogClass).attr("d", d3);
+        g.append("path").attr("class", "link-hit-area").attr("d", d3);
       }
     }
   }
@@ -1114,6 +1117,15 @@ export function renderTree() {
     .enter()
     .append("line")
     .attr("class", (d) => "union-link fog-" + Math.min(d.fogLevel, 4))
+    .attr("x1", (d) => d.x1)
+    .attr("y1", (d) => d.y1)
+    .attr("x2", (d) => d.x2)
+    .attr("y2", (d) => d.y2);
+  g.selectAll(".union-link-hit-area")
+    .data(unionsWithFog)
+    .enter()
+    .append("line")
+    .attr("class", "union-link-hit-area")
     .attr("x1", (d) => d.x1)
     .attr("y1", (d) => d.y1)
     .attr("x2", (d) => d.x2)
@@ -1421,22 +1433,20 @@ export function renderTree() {
     return visited;
   }
 
-  nodeGroups.on("mouseenter", (e, d) => {
-    clearTimeout(_fogRevealTimer);
-    if ((d.fogLevel || 0) === 0) return; // already clear, no reveal needed
-    const reveal = _fogNeighbors(d.id, 3);
+  function _fogReveal(reveal) {
     g.selectAll(".node-group").each(function(nd) {
       if (reveal.has(nd.id)) d3.select(this).classed("fog-revealed", true);
     });
     g.selectAll(".link").each(function(ld) {
-      if (reveal.has(ld.from.id) && reveal.has(ld.to.id)) d3.select(this).classed("fog-revealed", true);
+      if (ld && ld.personIds) {
+        for (const pid of ld.personIds) {
+          if (reveal.has(pid)) { d3.select(this).classed("fog-revealed", true); break; }
+        }
+      }
     });
     g.selectAll(".union-link").each(function(ud) {
-      // Union data doesn't directly carry person IDs, so just reveal
-      // union connectors near the hovered foggy area
       const el = d3.select(this);
       if (el.classed("fog-1") || el.classed("fog-2") || el.classed("fog-3") || el.classed("fog-4")) {
-        // Check spatial proximity — is this connector near any revealed node?
         const ux = (+el.attr("x1") + +el.attr("x2")) / 2;
         const uy = (+el.attr("y1") + +el.attr("y2")) / 2;
         for (const rid of reveal) {
@@ -1448,13 +1458,27 @@ export function renderTree() {
         }
       }
     });
-  });
+  }
 
-  nodeGroups.on("mouseleave", (e, d) => {
+  function _fogHide() {
+    clearTimeout(_fogRevealTimer);
     _fogRevealTimer = setTimeout(() => {
       g.selectAll(".fog-revealed").classed("fog-revealed", false);
-    }, 400);
+    }, 600);
+  }
+
+  nodeGroups.on("mouseenter", (e, d) => {
+    clearTimeout(_fogRevealTimer);
+    if ((d.fogLevel || 0) === 0) return;
+    _fogReveal(_fogNeighbors(d.id, 3));
   });
+
+  nodeGroups.on("mouseleave", () => { _fogHide(); });
+
+  g.selectAll(".link, .link-hit-area").on("mouseenter", () => { clearTimeout(_fogRevealTimer); });
+  g.selectAll(".link, .link-hit-area").on("mouseleave", () => { _fogHide(); });
+  g.selectAll(".union-link, .union-link-hit-area").on("mouseenter", () => { clearTimeout(_fogRevealTimer); });
+  g.selectAll(".union-link, .union-link-hit-area").on("mouseleave", () => { _fogHide(); });
 
   // Background click to deselect and clear focus
   svg.on("click", () => {
