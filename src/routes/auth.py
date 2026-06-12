@@ -1,10 +1,8 @@
 """Authentication endpoints."""
 
-import json
 import logging
 import os
 import time
-from pathlib import Path
 
 from flask import Blueprint, jsonify, request, session
 from google.auth.transport import requests as google_requests
@@ -43,54 +41,36 @@ def _rate_limited(ip: str) -> bool:
     return count > _AUTH_MAX_ATTEMPTS
 
 
+# DB errors in the two editor lookups below propagate (HTTP 500) instead of
+# being swallowed: with no editors visible, sign-in falls back to
+# everyone-is-an-editor, so answering "no editors" during a DB hiccup would
+# silently hand out write access.
+
+
 def _get_tree_editor(email: str) -> dict | None:
-    try:
-        with db_transaction() as conn:
-            row = _fetchone(
-                conn,
-                f"SELECT email, role, name FROM tree_editors WHERE email = {_ph()}",
-                (email,),
-            )
-        return dict(row) if row else None
-    except Exception:
-        return None
+    with db_transaction() as conn:
+        row = _fetchone(
+            conn,
+            f"SELECT email, role, name FROM tree_editors WHERE email = {_ph()}",
+            (email,),
+        )
+    return dict(row) if row else None
 
 
 def _has_any_tree_editors() -> bool:
-    try:
-        with db_transaction() as conn:
-            return _fetchone(conn, "SELECT 1 FROM tree_editors LIMIT 1") is not None
-    except Exception:
-        return False
+    with db_transaction() as conn:
+        return _fetchone(conn, "SELECT 1 FROM tree_editors LIMIT 1") is not None
 
 
-def _get_google_client_id() -> str | None:
-    """Get the Google Client ID from env or config file."""
-    client_id = os.environ.get("GOOGLE_CLIENT_ID")
-    if client_id:
-        return client_id
-    # Fall back to family-config.json
-    for candidate in [
-        web_server.PRIVATE_DIR / "config" / "family-config.json",
-        Path(web_server.WEB_DIR) / "family-config.json",
-    ]:
-        if candidate.exists():
-            config = json.loads(candidate.read_text())
-            if config.get("googleClientId"):
-                return config["googleClientId"]
-    return None
-
-
-def _verify_id_token(credential: str) -> dict | None:
-    """Verify a Google ID token: signature, expiry, issuer, and (when a
-    client ID is configured) audience — all checked by google-auth against
-    Google's published signing keys.
+def _verify_id_token(credential: str, audience: str) -> dict | None:
+    """Verify a Google ID token: signature, expiry, issuer, and audience —
+    all checked by google-auth against Google's published signing keys.
 
     Returns the token claims dict on success, or None on failure.
     """
     try:
         return google_id_token.verify_oauth2_token(
-            credential, google_requests.Request(), audience=_get_google_client_id()
+            credential, google_requests.Request(), audience=audience
         )
     except (ValueError, OSError) as e:
         logger.warning("Google token verification failed: %s", e)
@@ -107,14 +87,20 @@ def api_auth_google():
     if _rate_limited(request.remote_addr or "unknown"):
         return jsonify({"error": "Too many sign-in attempts; try again in a minute"}), 429
 
+    # Without a configured client id there is no audience to verify tokens
+    # against — google-auth would accept a valid token minted for ANY app.
+    # Refuse outright rather than verify with no audience check.
+    client_id = web_server._get_google_client_id()
+    if not client_id:
+        return jsonify({"error": "Google Sign-In is not configured on this server"}), 503
+
     body = request.get_json(force=True)
     credential = body.get("credential", "")
     if not credential:
         return jsonify({"error": "credential required"}), 400
 
-    # Verify token with Google (includes the audience check when a client ID
-    # is configured — see _verify_id_token).
-    payload = _verify_id_token(credential)
+    # Verify token with Google (signature, expiry, issuer, audience).
+    payload = _verify_id_token(credential, client_id)
     if not payload:
         return jsonify({"error": "Invalid Google token"}), 401
 

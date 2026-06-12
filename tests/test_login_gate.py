@@ -128,15 +128,16 @@ class TestGateAllowsAuthenticated:
         assert client.get("/photos/foo.png").status_code != 401
 
 
-# ── Gate off when GOOGLE_CLIENT_ID unset: open access preserved ────────────
+# ── Gate off when no client id is configured anywhere ──────────────────────
 
 
-def test_gate_off_without_google_client_id(tmp_path, monkeypatch):
+def _make_open_client(tmp_path, monkeypatch):
     db_path = str(tmp_path / "test.db")
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.setenv("FAMILY_TREE_DB", db_path)
     monkeypatch.delenv("EDITORS", raising=False)
     monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("ALLOW_OPEN_ACCESS", raising=False)
 
     from database.connection import init_db
 
@@ -145,7 +146,71 @@ def test_gate_off_without_google_client_id(tmp_path, monkeypatch):
     import web_server
 
     importlib.reload(web_server)
+    # Point at an empty private dir: a real private/config/family-config.json
+    # (e.g. on a dev machine) would turn the gate on via the config fallback.
+    web_server.PRIVATE_DIR = tmp_path
     web_server.app.config["TESTING"] = True
+    return web_server
+
+
+def test_gate_off_without_any_client_id(tmp_path, monkeypatch):
+    web_server = _make_open_client(tmp_path, monkeypatch)
     with web_server.app.test_client() as client:
-        # No gate configured → data is openly reachable (200, not 401).
+        # No gate configured anywhere → data is openly reachable.
         assert client.get("/api/data").status_code == 200
+
+
+# ── Gate on via family-config.json (no env var) ────────────────────────────
+
+
+def test_gate_on_via_config_file_only(tmp_path, monkeypatch):
+    """The API gate must key off the same client-id lookup as the frontend:
+    a client id in family-config.json alone gates the API, so losing the env
+    var can't silently fall open while the login screen still renders."""
+    web_server = _make_open_client(tmp_path, monkeypatch)
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "family-config.json").write_text('{"googleClientId": "file-client-id"}')
+    with web_server.app.test_client() as client:
+        resp = client.get("/api/data")
+        assert resp.status_code == 401
+        assert resp.get_json()["code"] == "unauthorized"
+
+
+# ── ALLOW_OPEN_ACCESS: explicit opt-out wins ────────────────────────────────
+
+
+def test_allow_open_access_disables_gate_and_frontend(tmp_path, monkeypatch):
+    web_server = _make_open_client(tmp_path, monkeypatch)
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "family-config.json").write_text('{"googleClientId": "file-client-id"}')
+    monkeypatch.setenv("ALLOW_OPEN_ACCESS", "1")
+    with web_server.app.test_client() as client:
+        assert client.get("/api/data").status_code == 200
+        # The frontend keys its login gate off googleClientId in /api/config;
+        # explicit open access must strip it so UI and API agree.
+        assert "googleClientId" not in client.get("/api/config").get_json()
+
+
+# ── Production refuses to start with no auth configured ────────────────────
+
+
+class TestProdFailsClosed:
+    def test_prod_without_client_id_refuses_to_start(self, tmp_path, monkeypatch):
+        web_server = _make_open_client(tmp_path, monkeypatch)
+        monkeypatch.setenv("DATABASE_URL", "postgresql://example/db")
+        with pytest.raises(RuntimeError, match="No Google client id"):
+            web_server._assert_prod_auth_configured()
+
+    def test_prod_with_client_id_starts(self, tmp_path, monkeypatch):
+        web_server = _make_open_client(tmp_path, monkeypatch)
+        monkeypatch.setenv("DATABASE_URL", "postgresql://example/db")
+        monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id")
+        web_server._assert_prod_auth_configured()  # no raise
+
+    def test_prod_with_explicit_open_access_starts(self, tmp_path, monkeypatch):
+        web_server = _make_open_client(tmp_path, monkeypatch)
+        monkeypatch.setenv("DATABASE_URL", "postgresql://example/db")
+        monkeypatch.setenv("ALLOW_OPEN_ACCESS", "1")
+        web_server._assert_prod_auth_configured()  # no raise

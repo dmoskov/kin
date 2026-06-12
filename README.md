@@ -381,7 +381,8 @@ docker run -p 8000:8000 -v $(pwd)/private:/app/private family-tree
 | `SECRET_KEY`       | Flask session key — set in production.                 | `dev-secret-...`     |
 | `MAX_PHOTO_BYTES`  | Per-file cap for `/api/photos/upload`.                 | `8388608` (8 MB)     |
 | `MAX_DOC_BYTES`    | Per-file cap for `/api/documents/upload`.              | `52428800` (50 MB)   |
-| `GOOGLE_CLIENT_ID` | Enables Google Sign-In on the dashboard.               | _(sign-in disabled)_ |
+| `GOOGLE_CLIENT_ID` | Enables Google Sign-In and the login gate. Also read from `googleClientId` in `family-config.json` — configuring it in either place gates the API. | _(sign-in disabled)_ |
+| `ALLOW_OPEN_ACCESS`| Set to `1` to explicitly run without authentication even when a Google client id is configured (local dev, deliberately public trees). Production (`DATABASE_URL` set) refuses to start with no client id unless this is set. | _(unset)_ |
 | `EDITORS`          | Comma-separated Gmail addresses with edit access. Anyone not listed can view but not edit. Editors may sign in even without a person record in the tree. Example: `alice@gmail.com,bob@gmail.com` | _(unset — editing unrestricted)_ |
 | `ANTHROPIC_API_KEY`| Enables **Parse with AI** for uploaded documents.      | _(parsing disabled)_ |
 | `ADMIN_PERSON_ID`  | Person ID that can assign emails to tree members and manage non-family editors (assistants, researchers) via the UI. | _(feature disabled)_ |

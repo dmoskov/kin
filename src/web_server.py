@@ -127,30 +127,50 @@ def _ensure_db():
 # ── Auth helpers ───────────────────────────────────────────────────────
 
 
+def _open_access() -> bool:
+    """True when authentication is explicitly disabled via ALLOW_OPEN_ACCESS.
+
+    The only way to run with a configured Google client id and no login
+    gate — local development and deliberately public deployments. Implicit
+    open access (auth quietly off because an env var went missing) is
+    exactly what this exists to prevent.
+    """
+    return os.environ.get("ALLOW_OPEN_ACCESS", "").lower() in ("1", "true", "yes")
+
+
 def _editors_configured() -> bool:
-    """Return True if any editor access control is configured (env or DB)."""
+    """Return True if any editor access control is configured (env or DB).
+
+    DB errors propagate: answering False on a DB hiccup would silently skip
+    authorization (no editors configured → everyone may write).
+    """
     if EDITORS:
         return True
-    try:
-        from database.connection import db_transaction
-        from database.repository import _fetchone
+    from database.connection import db_transaction
+    from database.repository import _fetchone
 
-        with db_transaction() as conn:
-            return _fetchone(conn, "SELECT 1 FROM tree_editors LIMIT 1") is not None
-    except Exception:
-        return False
+    with db_transaction() as conn:
+        return _fetchone(conn, "SELECT 1 FROM tree_editors LIMIT 1") is not None
+
+
+def _auth_enabled() -> bool:
+    """The login gate is on whenever a Google client id is configured
+    anywhere (env var or family-config.json) and ALLOW_OPEN_ACCESS is not
+    set. Keying enforcement off the same lookup the frontend uses means the
+    API can't silently fall open while the login screen still renders."""
+    return not _open_access() and bool(_get_google_client_id())
 
 
 def require_login(f):
     """Reject unauthenticated users when Google Sign-In is configured.
 
-    If GOOGLE_CLIENT_ID is not set, the original open-access behaviour is
-    preserved so existing deployments are not broken.
+    If no Google client id is configured anywhere, the original open-access
+    behaviour is preserved so existing deployments are not broken.
     """
 
     @wraps(f)
     def wrapper(*args, **kwargs):
-        if os.environ.get("GOOGLE_CLIENT_ID") and "person_id" not in session:
+        if _auth_enabled() and "person_id" not in session:
             return jsonify({"error": "login required", "code": "unauthorized"}), 401
         return f(*args, **kwargs)
 
@@ -280,14 +300,28 @@ def _get_google_client_id() -> str | None:
     return None
 
 
+def _assert_prod_auth_configured() -> None:
+    """Production (DATABASE_URL set) refuses to start with no auth configured
+    unless ALLOW_OPEN_ACCESS explicitly opts out — mirroring SECRET_KEY.
+    Without this, losing the client id config would silently serve the whole
+    tree to the internet while the frontend still showed a login screen."""
+    if os.environ.get("DATABASE_URL") and not _open_access() and not _get_google_client_id():
+        raise RuntimeError(
+            "No Google client id configured in production. Set GOOGLE_CLIENT_ID "
+            "(or googleClientId in family-config.json) to enable sign-in, or set "
+            "ALLOW_OPEN_ACCESS=1 to deliberately run without authentication."
+        )
+
+
+_assert_prod_auth_configured()
+
+
 # ── Core routes ────────────────────────────────────────────────────────
 
 
 @app.before_request
 def _enforce_login():
     """Require login for data endpoints when Google Sign-In is configured."""
-    if not os.environ.get("GOOGLE_CLIENT_ID"):
-        return  # No auth configured — open access
     path = request.path
     # Gate the data + uploaded files (photos, documents) regardless of file
     # extension — a path ending in .png/.jpg must not bypass auth just because
@@ -302,7 +336,9 @@ def _enforce_login():
             path.startswith("/api/") and not path.startswith("/api/auth/") and path != "/api/config"
         )
     )
-    if protected and "person_id" not in session:
+    # Path check first: _auth_enabled() may read family-config.json from
+    # disk, which static-asset requests shouldn't pay for.
+    if protected and "person_id" not in session and _auth_enabled():
         return jsonify({"error": "login required", "code": "unauthorized"}), 401
 
 
@@ -366,6 +402,10 @@ def api_config():
             config["editorsMisconfigured"] = editors_misconfigured
             if admin_person_id:
                 config["adminPersonId"] = admin_person_id
+            if _open_access():
+                # Auth is explicitly off — don't make the frontend show a
+                # login gate the API doesn't enforce.
+                config.pop("googleClientId", None)
             return jsonify(config)
     # Sensible defaults when no config file exists
     return jsonify(

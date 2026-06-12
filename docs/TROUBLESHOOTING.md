@@ -58,7 +58,7 @@ dates in `data/`, and AWS instance IDs. Move personal data to `private/`
 
 | Feature | Required env var | Notes |
 |---------|-----------------|-------|
-| Google Sign-In | `GOOGLE_CLIENT_ID` | Without it, the app runs in open access mode |
+| Google Sign-In | `GOOGLE_CLIENT_ID` | Also read from `googleClientId` in `family-config.json`; configuring it in either place turns on the login gate. With neither set, the app runs in open access mode. To run without auth while a client id is configured (e.g. local dev against a private config), set `ALLOW_OPEN_ACCESS=1`. Production (`DATABASE_URL` set) refuses to start with no client id unless `ALLOW_OPEN_ACCESS=1`. |
 | AI document parsing | `ANTHROPIC_API_KEY` | Gracefully disabled if unset (returns 503) |
 
 ### Photo uploads rejected (413 error)

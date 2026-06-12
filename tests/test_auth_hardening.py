@@ -14,7 +14,10 @@ def client(tmp_path, monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.setenv("FAMILY_TREE_DB", db_path)
     monkeypatch.delenv("EDITORS", raising=False)
-    monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
+    # Sign-in requires a configured client id (no-audience verification is
+    # refused), so these tests run with one set.
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-client-id")
+    monkeypatch.delenv("ALLOW_OPEN_ACCESS", raising=False)
 
     from database.connection import init_db
 
@@ -23,6 +26,7 @@ def client(tmp_path, monkeypatch):
     import web_server
 
     importlib.reload(web_server)
+    web_server.PRIVATE_DIR = tmp_path
     web_server.app.config["TESTING"] = True
 
     from routes import auth
@@ -81,7 +85,7 @@ class TestAuthRateLimit:
     def test_sign_in_attempts_rate_limited(self, client, monkeypatch):
         from routes import auth
 
-        monkeypatch.setattr(auth, "_verify_id_token", lambda credential: None)
+        monkeypatch.setattr(auth, "_verify_id_token", lambda credential, audience: None)
 
         for _ in range(auth._AUTH_MAX_ATTEMPTS):
             resp = client.post("/api/auth/google", json={"credential": "bad"})
@@ -93,7 +97,7 @@ class TestAuthRateLimit:
     def test_window_expiry_resets_limit(self, client, monkeypatch):
         from routes import auth
 
-        monkeypatch.setattr(auth, "_verify_id_token", lambda credential: None)
+        monkeypatch.setattr(auth, "_verify_id_token", lambda credential, audience: None)
 
         for _ in range(auth._AUTH_MAX_ATTEMPTS + 1):
             client.post("/api/auth/google", json={"credential": "bad"})
@@ -111,8 +115,50 @@ class TestAuthRateLimit:
         monkeypatch.setattr(
             auth,
             "_verify_id_token",
-            lambda credential: {"email": "x@example.com", "email_verified": False},
+            lambda credential, audience: {"email": "x@example.com", "email_verified": False},
         )
         resp = client.post("/api/auth/google", json={"credential": "tok"})
         assert resp.status_code == 401
         assert "verified" in resp.get_json()["error"].lower()
+
+
+# ── Sign-in refused when no client id is configured ─────────────────────────
+
+
+def test_sign_in_refused_without_client_id(client, monkeypatch):
+    """With no client id there is no audience to verify against — google-auth
+    would accept a valid token minted for ANY app, so sign-in must refuse."""
+    import web_server
+
+    monkeypatch.setattr(web_server, "_get_google_client_id", lambda: None)
+    resp = client.post("/api/auth/google", json={"credential": "tok"})
+    assert resp.status_code == 503
+    assert "not configured" in resp.get_json()["error"].lower()
+
+
+# ── Editor lookups fail loudly on DB errors ─────────────────────────────────
+
+
+def test_editors_configured_propagates_db_errors(client, monkeypatch):
+    """A DB hiccup must not read as 'no editors configured' — that fallback
+    grants editor to everyone. The error has to surface, not be swallowed."""
+    import database.connection as db_conn
+    import web_server
+
+    def boom():
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(db_conn, "db_transaction", boom)
+    with pytest.raises(RuntimeError, match="db down"):
+        web_server._editors_configured()
+
+
+def test_has_any_tree_editors_propagates_db_errors(client, monkeypatch):
+    from routes import auth
+
+    def boom():
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(auth, "db_transaction", boom)
+    with pytest.raises(RuntimeError, match="db down"):
+        auth._has_any_tree_editors()

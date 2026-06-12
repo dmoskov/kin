@@ -5,6 +5,9 @@
 //
 // Usage:
 //   1. Start the app on a port (default 8137) pointed at a DB with data.
+//      Locally, launch it with ALLOW_OPEN_ACCESS=1 — a private
+//      family-config.json carries a googleClientId, which would otherwise
+//      gate the API and show the sign-in screen instead of data.
 //   2. npx playwright install chrome   (once, if needed)
 //   3. SMOKE_URL=http://127.0.0.1:8137 node scripts/smoke_test.mjs
 import { chromium } from "playwright";
@@ -47,18 +50,6 @@ page.on("response", (res) => {
 const fail = (msg) => {
   errors.push(msg);
 };
-
-// Strip googleClientId from /api/config so the frontend never shows the
-// Google sign-in gate. Locally, private/config/family-config.json carries a
-// client id, which would gate the page and fail every check below; the gate
-// isn't what this test exercises. (The server must still run WITHOUT the
-// GOOGLE_CLIENT_ID env var, or the API itself 401s.)
-await page.route("**/api/config", async (route) => {
-  const resp = await route.fetch();
-  const json = await resp.json();
-  delete json.googleClientId;
-  await route.fulfill({ response: resp, json });
-});
 
 await page.goto(BASE, { waitUntil: "networkidle", timeout: 30000 });
 await page.waitForTimeout(2000);
