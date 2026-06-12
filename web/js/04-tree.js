@@ -1178,22 +1178,28 @@ export function renderTree() {
   const isRecent = (d) => !isCenter(d) && (d.gen ?? -99) >= -2;
   const photoSizeFor = (d) =>
     isCenter(d) ? CENTER_PHOTO_SIZE : isRecent(d) ? RECENT_PHOTO_SIZE : PHOTO_SIZE;
-  const clipIdFor = (d) =>
-    isCenter(d) ? "photo-clip-lg" : isRecent(d) ? "photo-clip-md" : "photo-clip";
 
+  // Circular clips in node coordinates, one per avatar size, centered where
+  // the avatar is actually drawn (left-padded, vertically centered). The
+  // cropped branch must hang its clip on a wrapping <g>: a clip-path on the
+  // nested <svg> itself resolves inside its viewBox (crop coords), where a
+  // node-coord circle may not intersect at all — which blanked or
+  // sliver-clipped cropped avatars.
   const defs = g.append("defs");
-  for (const [id, sz] of [
-    ["photo-clip", PHOTO_SIZE],
-    ["photo-clip-md", RECENT_PHOTO_SIZE],
-    ["photo-clip-lg", CENTER_PHOTO_SIZE],
+  for (const [suffix, sz] of [
+    ["sm", PHOTO_SIZE],
+    ["md", RECENT_PHOTO_SIZE],
+    ["lg", CENTER_PHOTO_SIZE],
   ]) {
     defs.append("clipPath")
-      .attr("id", id)
+      .attr("id", `photo-clip-${suffix}`)
       .append("circle")
-      .attr("cx", sz / 2)
-      .attr("cy", sz / 2)
+      .attr("cx", PHOTO_PAD + sz / 2)
+      .attr("cy", NODE_H / 2)
       .attr("r", sz / 2);
   }
+  const clipIdFor = (d) =>
+    isCenter(d) ? "photo-clip-lg" : isRecent(d) ? "photo-clip-md" : "photo-clip-sm";
 
   // For cropped photos, use a nested <svg> with viewBox; uncropped use standard behavior
   nodeGroups.filter(hasPhoto).each(function(d) {
@@ -1206,13 +1212,14 @@ export function renderTree() {
       const vy = crop.y * 1000;
       const vw = crop.w * 1000;
       const vh = crop.h * 1000;
-      g.append("svg")
+      g.append("g")
+        .attr("clip-path", `url(#${clipId})`)
+        .append("svg")
         .attr("x", PHOTO_PAD)
         .attr("y", (NODE_H - sz) / 2)
         .attr("width", sz)
         .attr("height", sz)
         .attr("viewBox", `${vx} ${vy} ${vw} ${vh}`)
-        .attr("clip-path", `url(#${clipId})`)
         .append("image")
         .attr("class", "node-photo")
         .attr("width", 1000)

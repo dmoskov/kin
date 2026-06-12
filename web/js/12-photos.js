@@ -469,7 +469,39 @@ export function _buildPickerGrid(personId) {
   const assigned = new Set(personEntries.map((e) => e.path));
   const captions = Object.fromEntries(personEntries.map((e) => [e.path, e.caption]));
 
-  grid.innerHTML = S.ALL_PHOTOS.map((photo) => {
+  // Apply the toolbar filter/sort. Assigned photos always group first so the
+  // person's own photos don't drown in a large library.
+  const query = (document.getElementById("photo-picker-search")?.value || "").toLowerCase().trim();
+  const sortMode = document.getElementById("photo-picker-sort")?.value || "added";
+  let photoList = [...S.ALL_PHOTOS];
+  if (query) {
+    photoList = photoList.filter((path) => {
+      const meta = S.PHOTOS_MAP[path];
+      const hay = [
+        path,
+        meta?.date,
+        meta?.place,
+        meta?.photo_type,
+        ...(meta?.tagged_people || []).flatMap((tp) => [tp.given_name, tp.surname, tp.caption]),
+      ].filter(Boolean).join(" ").toLowerCase();
+      return hay.includes(query);
+    });
+  }
+  const dateKey = (path) => S.PHOTOS_MAP[path]?.date || "";
+  const addedKey = (path) => S.PHOTOS_MAP[path]?.id || 0;
+  const cmp = {
+    added: (a, b) => addedKey(b) - addedKey(a),
+    "date-desc": (a, b) => (dateKey(b) || "0000").localeCompare(dateKey(a) || "0000"),
+    "date-asc": (a, b) => (dateKey(a) || "9999").localeCompare(dateKey(b) || "9999"),
+  }[sortMode];
+  photoList.sort((a, b) => (assigned.has(b) - assigned.has(a)) || cmp(a, b));
+
+  if (photoList.length === 0) {
+    grid.innerHTML = `<div class="photo-picker-empty">No photos match &ldquo;${escapeHtml(query)}&rdquo;</div>`;
+    return;
+  }
+
+  grid.innerHTML = photoList.map((photo) => {
     const sel = assigned.has(photo) ? "selected" : "";
     const cap = captions[photo] || "";
     return `
@@ -851,6 +883,16 @@ export async function openPhotoPicker(personId) {
     // API may return rich objects or flat strings (pre-migration)
     S.ALL_PHOTOS = raw.map(p => typeof p === "string" ? p : p.file_path);
   }
+
+  // Toolbar: fresh filter per open; plain property assignment so reopening
+  // the picker doesn't stack listeners.
+  const searchEl = document.getElementById("photo-picker-search");
+  const sortEl = document.getElementById("photo-picker-sort");
+  if (searchEl) {
+    searchEl.value = "";
+    searchEl.oninput = () => _buildPickerGrid(personId);
+  }
+  if (sortEl) sortEl.onchange = () => _buildPickerGrid(personId);
 
   _buildPickerGrid(personId);
 

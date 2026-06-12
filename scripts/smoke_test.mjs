@@ -48,6 +48,18 @@ const fail = (msg) => {
   errors.push(msg);
 };
 
+// Strip googleClientId from /api/config so the frontend never shows the
+// Google sign-in gate. Locally, private/config/family-config.json carries a
+// client id, which would gate the page and fail every check below; the gate
+// isn't what this test exercises. (The server must still run WITHOUT the
+// GOOGLE_CLIENT_ID env var, or the API itself 401s.)
+await page.route("**/api/config", async (route) => {
+  const resp = await route.fetch();
+  const json = await resp.json();
+  delete json.googleClientId;
+  await route.fulfill({ response: resp, json });
+});
+
 await page.goto(BASE, { waitUntil: "networkidle", timeout: 30000 });
 await page.waitForTimeout(2000);
 
