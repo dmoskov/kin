@@ -885,12 +885,17 @@ export async function openPhotoPicker(personId) {
   }
 
   // Toolbar: fresh filter per open; plain property assignment so reopening
-  // the picker doesn't stack listeners.
+  // the picker doesn't stack listeners. Input is debounced — each rebuild
+  // re-renders every tile, which is heavy on a large library.
   const searchEl = document.getElementById("photo-picker-search");
   const sortEl = document.getElementById("photo-picker-sort");
   if (searchEl) {
     searchEl.value = "";
-    searchEl.oninput = () => _buildPickerGrid(personId);
+    let searchTimer;
+    searchEl.oninput = () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => _buildPickerGrid(personId), 150);
+    };
   }
   if (sortEl) sortEl.onchange = () => _buildPickerGrid(personId);
 

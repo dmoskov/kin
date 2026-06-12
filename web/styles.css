@@ -6063,6 +6063,10 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
 .photos-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  /* Rows must size to content: tiles have overflow:hidden, so without this
+     the grid splits its fixed height across ALL rows instead of scrolling,
+     squashing every tile once the library has more than a few rows. */
+  grid-auto-rows: max-content;
   gap: var(--space-3);
   overflow-y: auto;
   flex: 1;
