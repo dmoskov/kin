@@ -14,6 +14,11 @@ export function setCenterPerson(personId) {
     ? (union.partner1_id === personId ? union.partner2_id : union.partner1_id)
     : personId;
 
+  // Rebase the focus-mode restore snapshot: exiting focus should return to
+  // the new viewer's center, not a couple captured under a previous viewer.
+  S.ORIGINAL_CENTER_ID_A = S.CENTER_ID_A;
+  S.ORIGINAL_CENTER_ID_B = S.CENTER_ID_B;
+
   // Rebuild lanes for the new center couple's grandparents
   // Always auto-compute to match the current viewer
   autoComputeLanes(S.CENTER_ID_A, S.CENTER_ID_B);
@@ -469,6 +474,7 @@ export function renderBulkToolbar() {
     <span class="bulk-count">${GALLERY_SELECTED.size} selected</span>
     <input type="number" id="bulk-year-input" class="gallery-year-input" placeholder="Year" min="1600" max="2099" />
     <button class="bulk-set-btn" onclick="bulkAssignYear()">Set Year</button>
+    <button class="bulk-delete-btn" onclick="bulkDeletePhotos()">Delete</button>
     <button class="bulk-cancel-btn" onclick="toggleSelectMode()">Cancel</button>
   `;
   document.body.appendChild(bar);
@@ -514,6 +520,50 @@ export async function bulkAssignYear() {
   } catch (err) {
     showToast("Bulk update failed: " + err.message, "error");
   }
+}
+
+export async function bulkDeletePhotos() {
+  const targets = [];
+  for (const fp of GALLERY_SELECTED) {
+    const photo = S.DATA.photos?.find((p) => p.file_path === fp);
+    if (photo) targets.push(photo);
+  }
+  if (targets.length === 0) return;
+
+  const taggedCount = targets.reduce((n, p) => n + (p.tagged_people?.length || 0), 0);
+  const msg =
+    `Permanently delete ${targets.length} photo${targets.length === 1 ? "" : "s"}?\n\n` +
+    `This removes ${taggedCount === 0 ? "them" : `${taggedCount} person assignment${taggedCount === 1 ? "" : "s"}`} ` +
+    `and deletes the image file${targets.length === 1 ? "" : "s"}. This cannot be undone.`;
+  if (!confirm(msg)) return;
+
+  let deleted = 0;
+  const failures = [];
+  const deletedPaths = new Set();
+  for (const photo of targets) {
+    try {
+      const res = await fetch(`/api/photos/${photo.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+      deleted++;
+      deletedPaths.add(photo.file_path);
+    } catch (err) {
+      failures.push(`${photo.file_path}: ${err.message}`);
+    }
+  }
+  // The picker caches the full library list independently of S.DATA (which
+  // afterMutate reloads) — purge deleted photos from it too.
+  if (S.ALL_PHOTOS) S.ALL_PHOTOS = S.ALL_PHOTOS.filter((p) => !deletedPaths.has(p));
+
+  if (failures.length) {
+    showToast(`Deleted ${deleted}; ${failures.length} failed: ${failures[0]}`, "error");
+  } else {
+    showToast(`Deleted ${deleted} photo${deleted === 1 ? "" : "s"}`);
+  }
+  GALLERY_SELECTED.clear();
+  // Deletion can touch anything that renders photos (profile avatars, panel,
+  // tree) — do the standard full post-mutation refresh.
+  await afterMutate();
+  if (GALLERY_SELECT_MODE) toggleSelectMode();
 }
 
 export function showQuickYearPicker(photo, anchorEl) {

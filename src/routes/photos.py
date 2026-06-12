@@ -324,6 +324,24 @@ def api_set_photo_caption(person_id):
 # ── Photo Metadata & Tagging ───────────────────────────────────────
 
 
+@photos_bp.route("/api/photos/<int:photo_id>", methods=["DELETE"])
+@web_server.require_editor
+def api_delete_photo(photo_id):
+    """Permanently delete a photo: its person assignments, face tags, DB row,
+    and the underlying file. Not undoable — for duplicates and errant uploads;
+    plain un-assignment from a person is DELETE /api/people/<id>/photos.
+    """
+    repo = TreeRepository()
+    file_path = repo.delete_photo(photo_id)
+    if file_path is None:
+        return jsonify({"error": "photo not found", "code": "not_found"}), 404
+    # DB rows are gone; remove the file last. If storage fails this surfaces
+    # as a 500 and leaves an orphaned file — harmless, unlike the reverse
+    # order, which would leave a photo record pointing at nothing.
+    storage.photo_storage.delete(file_path.removeprefix("photos/"))
+    return jsonify({"deleted": photo_id, "file_path": file_path})
+
+
 @photos_bp.route("/api/photos/<int:photo_id>/metadata", methods=["PUT"])
 @web_server.require_editor
 def api_update_photo_metadata(photo_id):

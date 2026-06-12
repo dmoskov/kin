@@ -103,6 +103,29 @@ class PhotosRepoMixin:
         finally:
             conn.close()
 
+    def delete_photo(self, photo_id: int) -> str | None:
+        """Permanently delete a photo row and its links (person assignments,
+        face regions). Returns the photo's file_path so the caller can remove
+        the underlying file, or None if the photo doesn't exist.
+
+        The links are also covered by ON DELETE CASCADE; the explicit deletes
+        make the intent visible and don't depend on FK enforcement.
+        """
+        conn = self._conn()
+        try:
+            row = _fetchone(
+                conn, f"SELECT file_path FROM photos WHERE id = {_ph()}", (photo_id,)
+            )
+            if not row:
+                return None
+            _execute(conn, f"DELETE FROM person_photos WHERE photo_id = {_ph()}", (photo_id,))
+            _execute(conn, f"DELETE FROM face_regions WHERE photo_id = {_ph()}", (photo_id,))
+            _execute(conn, f"DELETE FROM photos WHERE id = {_ph()}", (photo_id,))
+            conn.commit()
+            return row["file_path"]
+        finally:
+            conn.close()
+
     def photos_for_person(self, person_id: str) -> list[dict]:
         """Return all photos for a person, joined with person_photos metadata."""
         conn = self._conn()

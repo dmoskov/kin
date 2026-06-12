@@ -6211,6 +6211,17 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   font-weight: 600;
 }
 .bulk-set-btn:hover { opacity: 0.85; }
+.bulk-delete-btn {
+  background: none;
+  border: 1px solid var(--danger, #c0392b);
+  color: var(--danger, #c0392b);
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.bulk-delete-btn:hover { background: var(--danger, #c0392b); color: #fff; }
 .bulk-cancel-btn {
   background: none;
   border: 1px solid var(--border);

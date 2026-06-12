@@ -442,6 +442,57 @@ class TestDocumentUpload:
 # ── Filename sanitization unit tests ─────────────────────────────────────
 
 
+class TestPhotoDelete:
+    """DELETE /api/photos/<id> — permanent deletion of a photo, its links,
+    and the underlying file (for duplicates / errant uploads)."""
+
+    def _upload_and_link(self, client, repo):
+        """Upload a photo, assign it to p1 with a face region; return its
+        (photo_id, file_path, disk_path)."""
+        resp = client.post(
+            "/api/photos/upload",
+            data={"photo": (io.BytesIO(_tiny_png()), "dupe.png")},
+            content_type="multipart/form-data",
+        )
+        assert resp.status_code == 200
+        file_path = resp.get_json()["path"]
+        photo_id = repo.get_or_create_photo(file_path)
+        repo.assign_photo_to_person("p1", photo_id, caption="oops")
+        repo.save_face_region(photo_id, "p1", 0.1, 0.1, 0.2, 0.2)
+        import storage
+
+        disk_name = file_path.removeprefix("photos/")
+        assert storage.photo_storage.exists(disk_name)
+        return photo_id, file_path, disk_name
+
+    def test_delete_removes_row_links_and_file(self, app_client):
+        client, repo, _tmp = app_client
+        photo_id, file_path, disk_name = self._upload_and_link(client, repo)
+
+        resp = client.delete(f"/api/photos/{photo_id}")
+        assert resp.status_code == 200
+        assert resp.get_json() == {"deleted": photo_id, "file_path": file_path}
+
+        import storage
+
+        assert repo.get_photo(photo_id) is None
+        assert repo.photos_for_person("p1") == []
+        assert repo.get_face_regions(photo_id) == []
+        assert not storage.photo_storage.exists(disk_name)
+
+    def test_delete_missing_photo_404s(self, app_client):
+        client, _repo, _tmp = app_client
+        resp = client.delete("/api/photos/99999")
+        assert resp.status_code == 404
+        assert resp.get_json()["code"] == "not_found"
+
+    def test_delete_is_not_repeatable(self, app_client):
+        client, repo, _tmp = app_client
+        photo_id, _file_path, _disk = self._upload_and_link(client, repo)
+        assert client.delete(f"/api/photos/{photo_id}").status_code == 200
+        assert client.delete(f"/api/photos/{photo_id}").status_code == 404
+
+
 class TestSanitizeFilename:
     def test_strips_traversal(self):
         from web_server import _sanitize_filename
