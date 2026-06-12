@@ -113,9 +113,7 @@ class PhotosRepoMixin:
         """
         conn = self._conn()
         try:
-            row = _fetchone(
-                conn, f"SELECT file_path FROM photos WHERE id = {_ph()}", (photo_id,)
-            )
+            row = _fetchone(conn, f"SELECT file_path FROM photos WHERE id = {_ph()}", (photo_id,))
             if not row:
                 return None
             _execute(conn, f"DELETE FROM person_photos WHERE photo_id = {_ph()}", (photo_id,))
