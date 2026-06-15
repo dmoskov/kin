@@ -3,6 +3,7 @@
 // bridged onto window by 99-main.js so inline onclick handlers resolve.
 import { S } from "./00-state.js";
 import { _resolveCenterIds } from "./02-lanes.js";
+import { applyVisibilityFilter } from "./03-data-nav.js";
 
 
 function _computeAge(birthDateStr) {
@@ -1208,10 +1209,19 @@ export function renderTree() {
     const sz = photoSizeFor(d);
     const clipId = clipIdFor(d);
     if (crop) {
-      const vx = crop.x * 1000;
-      const vy = crop.y * 1000;
-      const vw = crop.w * 1000;
-      const vh = crop.h * 1000;
+      // Match croppedImg() (03-data-nav.js), which the panel/hovercard/map use:
+      // the crop is a square window in fractions of the photo's NATURAL width,
+      // with the photo scaled by width and anchored top-left. Do the same here
+      // in SVG so the tree avatar frames the exact region the crop editor and
+      // panel show. (The old code pre-squashed the photo into a 1000² square
+      // with `slice`, which shifted tall/wide photos so the same crop landed on
+      // a different spot — visible as a mismatch between tree and panel.)
+      //
+      // Coordinate space = fractions of natural width: x∈[0,1] is full width,
+      // y∈[0,aspectRatio]. The <image> width=1 with a tall box + "meet" forces
+      // width-based scaling top-left WITHOUT needing the natural aspect ratio
+      // (meet picks the smaller scale, which is always width here). The nested
+      // <svg> windows to the square crop and clips the overflow.
       g.append("g")
         .attr("clip-path", `url(#${clipId})`)
         .append("svg")
@@ -1219,13 +1229,15 @@ export function renderTree() {
         .attr("y", (NODE_H - sz) / 2)
         .attr("width", sz)
         .attr("height", sz)
-        .attr("viewBox", `${vx} ${vy} ${vw} ${vh}`)
+        .attr("viewBox", `${crop.x} ${crop.y} ${crop.w} ${crop.w}`)
         .append("image")
         .attr("class", "node-photo")
-        .attr("width", 1000)
-        .attr("height", 1000)
+        .attr("x", 0)
+        .attr("y", 0)
+        .attr("width", 1)
+        .attr("height", 100) // > any real aspect ratio; "meet" clamps to width
         .attr("href", "/" + d.person._profilePhotoPath)
-        .attr("preserveAspectRatio", "xMidYMid slice");
+        .attr("preserveAspectRatio", "xMinYMin meet");
     } else {
       g.append("image")
         .attr("class", "node-photo")
@@ -1588,14 +1600,18 @@ export function highlightNode(personId) {
 // Focus Mode
 // ═══════════════════════════════════════════════════════════════
 
+// Walks S.DATA (the viewer-filtered base), not S.ORIGINAL_DATA, so the BFS
+// can't reach people only connected through relationships hidden from the
+// current viewer. applyFocus rebuilds S.DATA via applyVisibilityFilter()
+// before calling this.
 export function computeFocusSubgraph(personId, hops) {
   const adj = {};
   const addEdge = (a, b) => {
     (adj[a] || (adj[a] = [])).push(b);
     (adj[b] || (adj[b] = [])).push(a);
   };
-  for (const r of S.ORIGINAL_DATA.relationships) addEdge(r.parent_id, r.child_id);
-  for (const u of S.ORIGINAL_DATA.unions) addEdge(u.partner1_id, u.partner2_id);
+  for (const r of S.DATA.relationships) addEdge(r.parent_id, r.child_id);
+  for (const u of S.DATA.unions) addEdge(u.partner1_id, u.partner2_id);
 
   const visited = new Set([personId]);
   let frontier = [personId];
@@ -1613,11 +1629,11 @@ export function computeFocusSubgraph(personId, hops) {
   }
 
   // Always include siblings (co-children of any parent) regardless of hop depth
-  const parents = S.ORIGINAL_DATA.relationships
+  const parents = S.DATA.relationships
     .filter(r => r.child_id === personId)
     .map(r => r.parent_id);
   for (const parentId of parents) {
-    for (const r of S.ORIGINAL_DATA.relationships) {
+    for (const r of S.DATA.relationships) {
       if (r.parent_id === parentId && !visited.has(r.child_id)) {
         visited.add(r.child_id);
       }
@@ -1628,23 +1644,30 @@ export function computeFocusSubgraph(personId, hops) {
 }
 
 export function applyFocus() {
+  // Rebuild S.DATA from the viewer-filtered base — never raw S.ORIGINAL_DATA,
+  // which would resurrect relationships hidden from the current viewer.
+  applyVisibilityFilter();
   if (!S.FOCUS_PERSON_ID || S.FOCUS_DEPTH === "all") {
-    S.DATA = S.ORIGINAL_DATA;
-    if (!S.FOCUS_PERSON_ID) {
+    // Restore the pre-focus center only if a snapshot exists. With no
+    // snapshot (never focused, e.g. a background click), keep the current
+    // center — nulling it would make _resolveCenterIds re-center the tree
+    // on an arbitrary most-connected person.
+    if (!S.FOCUS_PERSON_ID && S.ORIGINAL_CENTER_ID_A) {
       S.CENTER_ID_A = S.ORIGINAL_CENTER_ID_A;
       S.CENTER_ID_B = S.ORIGINAL_CENTER_ID_B;
     }
   } else {
+    const base = S.DATA;
     const inScope = computeFocusSubgraph(S.FOCUS_PERSON_ID, S.FOCUS_DEPTH);
     S.DATA = {
-      ...S.ORIGINAL_DATA,
-      people: S.ORIGINAL_DATA.people.filter(p => inScope.has(p.id)),
-      relationships: S.ORIGINAL_DATA.relationships.filter(r => inScope.has(r.parent_id) && inScope.has(r.child_id)),
-      unions: S.ORIGINAL_DATA.unions.filter(u => inScope.has(u.partner1_id) && inScope.has(u.partner2_id)),
-      events: (S.ORIGINAL_DATA.events || []).filter(e => inScope.has(e.person_id)),
+      ...base,
+      people: base.people.filter(p => inScope.has(p.id)),
+      relationships: base.relationships.filter(r => inScope.has(r.parent_id) && inScope.has(r.child_id)),
+      unions: base.unions.filter(u => inScope.has(u.partner1_id) && inScope.has(u.partner2_id)),
+      events: (base.events || []).filter(e => inScope.has(e.person_id)),
     };
     S.CENTER_ID_A = S.FOCUS_PERSON_ID;
-    const focusUnion = S.ORIGINAL_DATA.unions.find(
+    const focusUnion = base.unions.find(
       u => u.partner1_id === S.FOCUS_PERSON_ID || u.partner2_id === S.FOCUS_PERSON_ID
     );
     S.CENTER_ID_B = focusUnion
@@ -1668,6 +1691,10 @@ export function setFocus(personId) {
 }
 
 export function clearFocus() {
+  // No-op when not focused: the tree background click calls this
+  // unconditionally, and re-applying focus state would both discard the
+  // viewer's center and waste a full re-render.
+  if (!S.FOCUS_PERSON_ID) return;
   S.FOCUS_PERSON_ID = null;
   applyFocus();
 }
