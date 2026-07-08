@@ -4,10 +4,15 @@
 //
 // Write ownership — everything else treats these as read-only:
 //   S.DATA / S.ORIGINAL_DATA / S.PEOPLE_MAP / S.PHOTOS_MAP
-//       loadData (03) builds them; applyVisibilityFilter (03) and
-//       applyFocus (04) derive S.DATA from S.ORIGINAL_DATA.
+//       loadData (03) builds them; applyVisibilityFilter (03) derives
+//       S.DATA from S.ORIGINAL_DATA (viewer-relative); applyFocus (04)
+//       always goes through applyVisibilityFilter, then scopes S.DATA to
+//       the focus subgraph — it must never read S.ORIGINAL_DATA directly.
 //   S.CENTER_ID_A/B   setCenterPerson (16, viewer change), applyFocus (04,
 //       focus mode), initViewingAs (02) + applyConfig (01) at startup.
+//   S.ORIGINAL_CENTER_ID_A/B   the focus-exit restore snapshot: setFocus
+//       (04) captures it entering focus; setCenterPerson (16) rebases it
+//       on viewer change. applyFocus only restores when it is non-null.
 //   S.VIEWER_ID       setCenterPerson (16) only — the person the user is
 //       "viewing as" (their identity). Unlike CENTER_ID_A it is NOT moved
 //       by focus mode or layout fallbacks; relationship pills key off it.

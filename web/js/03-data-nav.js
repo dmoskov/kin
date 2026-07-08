@@ -53,10 +53,12 @@ function _kinCircles(viewerId) {
 
 // Rebuild S.DATA from S.ORIGINAL_DATA, hiding links the current viewer
 // shouldn't see. Call after the viewer changes (and once at startup).
+// Keys off S.VIEWER_ID (who the user IS) so the filter stays correct while
+// focus mode moves S.CENTER_ID_A to the focused person.
 export function applyVisibilityFilter() {
   const full = S.ORIGINAL_DATA;
   if (!full || !full.relationships) return;
-  const viewerId = S.CENTER_ID_A || null;
+  const viewerId = S.VIEWER_ID || S.CENTER_ID_A || null;
   const { family, extended } = viewerId
     ? _kinCircles(viewerId)
     : { family: new Set(), extended: new Set() };
