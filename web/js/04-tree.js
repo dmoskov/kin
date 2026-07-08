@@ -162,7 +162,8 @@ export function buildHierarchy() {
 /**
  * Compute "fog of war" distance from the center couple's bloodline outward.
  * Distance 0 = bloodline (center couple + blood ancestors/descendants),
- * 1 = their partners (married in), 2+ = in-law branches.
+ * 1 = their partners (married in) and blood aunts/uncles (children of
+ * blood ancestors), 2+ = in-law branches and collateral descendants.
  *
  * Shared by the tree (visual dimming) and the map (proximity filtering). Pass
  * the data source: the tree uses S.DATA; the map uses S.ORIGINAL_DATA so focus-mode
@@ -235,35 +236,26 @@ export function computeFogDistance(src) {
       if (fog[u.partner1_id] === undefined) fog[u.partner1_id] = 1;
     }
   }
-  // BFS outward through parent/child/union edges
-  let frontier = Object.entries(fog)
-    .filter(([_, d]) => d === 1)
-    .map(([id]) => id);
-  let dist = 1;
-  while (frontier.length > 0 && dist < 10) {
-    const next = [];
-    for (const pid of frontier) {
-      for (const par of parentsOf[pid] || []) {
-        if (fog[par] === undefined) {
-          fog[par] = dist + 1;
-          next.push(par);
+  // BFS outward through parent/child/union edges, in distance order, seeded
+  // from everything already assigned (bloodline = 0, married-in partners = 1).
+  // Seeding from the bloodline too means children of blood ancestors — aunts/
+  // uncles and their branches — inherit distance from their bloodline parent
+  // (a great-uncle is 1, his wife and children 2) instead of being unreachable
+  // and falling to max fog (hidden until the "Everyone" depth level).
+  const buckets = [];
+  for (const [id, d] of Object.entries(fog)) (buckets[d] ||= []).push(id);
+  for (let dist = 0; dist < 10; dist++) {
+    for (const pid of buckets[dist] || []) {
+      const assign = (n) => {
+        if (fog[n] === undefined) {
+          fog[n] = dist + 1;
+          (buckets[dist + 1] ||= []).push(n);
         }
-      }
-      for (const kid of childrenOf[pid] || new Set()) {
-        if (fog[kid] === undefined) {
-          fog[kid] = dist + 1;
-          next.push(kid);
-        }
-      }
-      for (const partner of unionPartner[pid] || []) {
-        if (fog[partner] === undefined) {
-          fog[partner] = dist + 1;
-          next.push(partner);
-        }
-      }
+      };
+      for (const par of parentsOf[pid] || []) assign(par);
+      for (const kid of childrenOf[pid] || new Set()) assign(kid);
+      for (const partner of unionPartner[pid] || []) assign(partner);
     }
-    frontier = next;
-    dist++;
   }
   return fog;
 }
