@@ -36,6 +36,14 @@ jobs:
           pip install pytest
       - name: Run tests
         run: pytest tests/ -x -q
+      # Guard the README quick-start: editable install must produce a working
+      # `python -m cli` / `family-tree` from any directory, not just repo root.
+      - name: Verify documented install path
+        run: |
+          pip install -e .
+          cd /tmp
+          python -m cli --help >/dev/null
+          family-tree --help >/dev/null
 
   js-unit:
     runs-on: ubuntu-latest

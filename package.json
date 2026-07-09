@@ -4,7 +4,10 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "build": "bash scripts/build_js.sh",
+    "watch": "esbuild web/js/99-main.js --bundle --format=esm --outfile=web/dist/app.min.js --watch",
+    "clean": "rm -rf web/dist"
   },
   "devDependencies": {
     "axe-core": "^4.12.0",

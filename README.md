@@ -46,6 +46,10 @@ python3 -m cli serve
 # Open http://localhost:8000
 ```
 
+> If you've configured Google sign-in (`googleClientId` in your family config)
+> and just want to browse locally without it, run
+> `ALLOW_OPEN_ACCESS=1 python3 -m cli serve`.
+
 You can also seed with example data to see a populated tree:
 
 ```bash

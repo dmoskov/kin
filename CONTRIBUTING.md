@@ -27,8 +27,8 @@ use synthetic data only.
 ## Development setup
 
 ```bash
-git clone https://github.com/dmoskov/family-tree.git
-cd family-tree
+git clone https://github.com/dmoskov/kin.git
+cd kin
 git config core.hooksPath .githooks            # enable the PII guard
 
 # Python backend
@@ -58,12 +58,19 @@ pytest                  # Python tests
 npm test                # JS unit tests (vitest)
 ```
 
-Frontend JS is bundled with esbuild. If you change files under `web/js/`,
-rebuild the bundle:
+Frontend JS is bundled with esbuild. **The server prefers `web/dist/app.min.js`
+whenever it exists**, so a stale bundle silently masks your edits to `web/js/`.
+While developing, either delete the bundle (the server then serves the raw
+modules) or keep it rebuilding:
 
 ```bash
-bash scripts/build_js.sh
+npm run clean   # serve raw modules from web/js/ — edits show on refresh
+npm run watch   # or: keep rebuilding the bundle on every change
+npm run build   # one-off production bundle (same as scripts/build_js.sh)
 ```
+
+If sign-in gets in your way locally (a config with a `googleClientId` gates the
+API), start the server with `ALLOW_OPEN_ACCESS=1`.
 
 ## Pull requests
 

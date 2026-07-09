@@ -8,6 +8,20 @@ license = "MIT"
 [project.scripts]
 family-tree = "cli:main"
 
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+# src/ holds top-level modules (cli, web_server, ...) plus packages
+# (database, routes, ...); both must be listed or `pip install -e .`
+# silently installs nothing and `python -m cli` breaks.
+[tool.setuptools]
+package-dir = {"" = "src"}
+py-modules = ["cli", "web_server", "dates", "exif_utils", "geocoder", "storage", "wikipedia"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
