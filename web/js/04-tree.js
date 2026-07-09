@@ -518,6 +518,29 @@ export function buildButterflyLayout() {
   // Works for any tree expressed as a childrenMap. Multiple top-down + bottom-up
   // passes converge to a compact, balanced layout.
 
+  // Resolve overlaps in a generation, then re-center the group so the
+  // median stays stable (prevents rightward drift). Shared by the per-block
+  // layered passes and the global refinement pass.
+  function resolveOverlaps(group) {
+    if (group.length <= 1) return;
+    group.sort((a, b) => couplePositions.get(a).cx - couplePositions.get(b).cx);
+    // Remember center of mass before
+    const cmBefore = group.reduce((s, i) => s + couplePositions.get(i).cx, 0) / group.length;
+    // Push apart
+    for (let i = 1; i < group.length; i++) {
+      const prev = couplePositions.get(group[i - 1]);
+      const curr = couplePositions.get(group[i]);
+      const minGap = (coupleWidth(couples[group[i - 1]]) + coupleWidth(couples[group[i]])) / 2 + H_SPACING;
+      if (curr.cx - prev.cx < minGap) {
+        curr.cx = prev.cx + minGap;
+      }
+    }
+    // Re-center group around original center of mass
+    const cmAfter = group.reduce((s, i) => s + couplePositions.get(i).cx, 0) / group.length;
+    const drift = cmAfter - cmBefore;
+    for (const idx of group) couplePositions.get(idx).cx -= drift;
+  }
+
   function positionLayered(allIndicesArr, childrenMap) {
     const allIndices = new Set(allIndicesArr);
     if (allIndices.size === 0) return;
@@ -540,28 +563,6 @@ export function buildButterflyLayout() {
 
     const gens = Object.keys(byGen).map(Number).sort((a, b) => a - b);
     if (gens.length === 0) return;
-
-    // Resolve overlaps in a generation, then re-center the group so the
-    // median stays stable (prevents rightward drift).
-    function resolveOverlaps(group) {
-      if (group.length <= 1) return;
-      group.sort((a, b) => couplePositions.get(a).cx - couplePositions.get(b).cx);
-      // Remember center of mass before
-      const cmBefore = group.reduce((s, i) => s + couplePositions.get(i).cx, 0) / group.length;
-      // Push apart
-      for (let i = 1; i < group.length; i++) {
-        const prev = couplePositions.get(group[i - 1]);
-        const curr = couplePositions.get(group[i]);
-        const minGap = (coupleWidth(couples[group[i - 1]]) + coupleWidth(couples[group[i]])) / 2 + H_SPACING;
-        if (curr.cx - prev.cx < minGap) {
-          curr.cx = prev.cx + minGap;
-        }
-      }
-      // Re-center group around original center of mass
-      const cmAfter = group.reduce((s, i) => s + couplePositions.get(i).cx, 0) / group.length;
-      const drift = cmAfter - cmBefore;
-      for (const idx of group) couplePositions.get(idx).cx -= drift;
-    }
 
     // Initial placement: roots packed compactly, centered at x=0.
     // Honor an explicit `order` hint (used to flank the center couple with
@@ -676,7 +677,10 @@ export function buildButterflyLayout() {
     for (const pid of parentsOf[centerPersonId] || []) {
       if (personCoupleIdx[pid] !== undefined) { anchorIdx = personCoupleIdx[pid]; break; }
     }
-    if (anchorIdx === undefined || !couplePositions.has(anchorIdx)) return;
+    // The anchor must belong to THIS line: with a couple-center, one
+    // partner's parents can live in the other line, and shifting this line
+    // relative to a foreign anchor produces a garbage offset.
+    if (anchorIdx === undefined || !couplePositions.has(anchorIdx) || !lineIndices.includes(anchorIdx)) return;
     const group = [centerIdx];
     for (let i = 0; i < couples.length; i++) {
       if (couples[i].side === "center" && onThisSide(couples[i])) group.push(i);
@@ -708,14 +712,48 @@ export function buildButterflyLayout() {
     alignLineOverChildren(allL, S.CENTER_ID_B, (c) => (c.order || 0) > 0);
   }
 
-  // Keep the two ancestor blocks from colliding after alignment.
-  if (allR.length > 0 && allL.length > 0) {
-    const rExt = getExtent(allR);
-    const lExt = getExtent(allL);
-    const overlap = rExt.max + H_SPACING * 2 - lExt.min;
-    if (overlap > 0) {
-      shiftAll(allR, -overlap / 2);
-      shiftAll(allL, overlap / 2);
+  // ── Global refinement: pull parents over their children across blocks ──
+  // The three blocks are positioned and aligned independently. This used to
+  // end with a crude fix — shifting the two ancestor blocks apart by half
+  // their combined width when their global extents overlapped — which could
+  // fling a parent thousands of pixels away from a child living in another
+  // block. Instead, run barycenter iterations over the natural parent→child
+  // tree of ALL couples at once (seeded with the per-block positions, which
+  // set the left/right macro-arrangement): parents settle over their actual
+  // children wherever the blocks put them, and cross-block collisions resolve
+  // per generation with minimal movement.
+  {
+    const allIdx = [];
+    for (let i = 0; i < couples.length; i++) if (couplePositions.has(i)) allIdx.push(i);
+    const { natKids } = buildNaturalTree(allIdx);
+    const parentIdxOf = {};
+    for (const idx of allIdx) for (const kid of natKids[idx] || []) parentIdxOf[kid] = idx;
+    const refineByGen = {};
+    for (const idx of allIdx) (refineByGen[couples[idx].gen] ||= []).push(idx);
+    const refineGens = Object.keys(refineByGen).map(Number).sort((a, b) => a - b);
+    for (let iter = 0; iter < 3; iter++) {
+      // Top-down: each child at its parent's x
+      for (let gi = 1; gi < refineGens.length; gi++) {
+        const group = refineByGen[refineGens[gi]];
+        for (const idx of group) {
+          const par = parentIdxOf[idx];
+          if (par !== undefined && couplePositions.has(par)) {
+            couplePositions.get(idx).cx = couplePositions.get(par).cx;
+          }
+        }
+        resolveOverlaps(group);
+      }
+      // Bottom-up: each parent at the average of its children
+      for (let gi = refineGens.length - 1; gi >= 0; gi--) {
+        const group = refineByGen[refineGens[gi]];
+        for (const idx of group) {
+          const kids = (natKids[idx] || []).filter((k) => couplePositions.has(k));
+          if (kids.length === 0) continue;
+          couplePositions.get(idx).cx =
+            kids.reduce((s, k) => s + couplePositions.get(k).cx, 0) / kids.length;
+        }
+        resolveOverlaps(group);
+      }
     }
   }
 
