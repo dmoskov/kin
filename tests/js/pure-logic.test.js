@@ -11,6 +11,7 @@ import {
 import { calculateRelationship, viewerRelationText } from "../../web/js/07-relationship.js";
 import { autoComputeLanes, assignLane, buildLaneCache } from "../../web/js/02-lanes.js";
 import { _personPhotos } from "../../web/js/12-photos.js";
+import { populateViewingAsDropdown } from "../../web/js/16-gallery.js";
 
 // ─── Fixture helpers ───────────────────────────────────────────────────────
 
@@ -873,5 +874,53 @@ describe("buildButterflyLayout collision + wrapping", () => {
     expect(n.U1.w, "blood uncle (fog 1) full width").toBe(NODE_W);
     expect(n.SU1.w, "uncle's wife (fog 2) compact").toBe(COMPACT_NODE_W);
     expect(n.C1a.w, "cousin (fog 2) compact").toBe(COMPACT_NODE_W);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 8. populateViewingAsDropdown — only living members
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("populateViewingAsDropdown", () => {
+  beforeEach(() => {
+    S.DATA = {
+      people: [
+        makePerson("L1", "Alice", "Smith"),
+        makePerson("L2", "Bob", "Jones"),
+        makePerson("D1", "Charlie", "Brown", { death_date: "2020-01-01" }),
+        makePerson("D2", "Diana", "Prince", { death_date: "1985-06-15" }),
+        makePerson("N1", null, "NoFirst"),
+      ],
+    };
+    S.CENTER_ID_A = "L1";
+  });
+
+  it("excludes deceased people from the dropdown", () => {
+    const sel = document.createElement("select");
+    sel.id = "test-viewing-as";
+    document.body.appendChild(sel);
+
+    populateViewingAsDropdown("test-viewing-as");
+
+    const values = [...sel.options].map(o => o.value);
+    expect(values).toContain("L1");
+    expect(values).toContain("L2");
+    expect(values).not.toContain("D1");
+    expect(values).not.toContain("D2");
+    expect(values).not.toContain("N1");
+
+    document.body.removeChild(sel);
+  });
+
+  it("shows only living people with names", () => {
+    const sel = document.createElement("select");
+    sel.id = "test-viewing-as-2";
+    document.body.appendChild(sel);
+
+    populateViewingAsDropdown("test-viewing-as-2");
+
+    expect(sel.options).toHaveLength(2);
+
+    document.body.removeChild(sel);
   });
 });
