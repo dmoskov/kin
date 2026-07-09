@@ -1296,7 +1296,7 @@ export function populateViewingAsDropdown(selectId) {
   sel.innerHTML = "";
 
   const sorted = [...S.DATA.people]
-    .filter(p => p.given_name)
+    .filter(p => p.given_name && !p.death_date)
     .sort((a, b) => {
       const nameA = `${a.given_name || ""} ${a.surname || ""}`.trim();
       const nameB = `${b.given_name || ""} ${b.surname || ""}`.trim();
