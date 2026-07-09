@@ -752,6 +752,62 @@ export function buildButterflyLayout() {
   for (let i = 0; i < couples.length; i++) {
     (idxByGen[couples[i].gen] ||= []).push(i);
   }
+
+  // ── Keep foreign branches out of the center family's span ──
+  // Collateral branches of an ancestor line (e.g. the married-in side's
+  // cousins) can descend into the same generations the center family occupies
+  // and land horizontally between its siblings. Wrapping them into a sub-row
+  // there would read as membership in that family, so relocate each intruding
+  // sibling group to the nearest edge of the center block's span for that
+  // generation instead. Residual crowding at the edges falls through to the
+  // wrap pass below.
+  const centerExtent = {};
+  for (let i = 0; i < couples.length; i++) {
+    const c = couples[i];
+    if (c.side !== "center" || !coupleVisible(c)) continue;
+    const pos = couplePositions.get(i);
+    if (!pos) continue;
+    const hw = coupleWidth(c) / 2;
+    const e = (centerExtent[c.gen] ||= { min: Infinity, max: -Infinity });
+    e.min = Math.min(e.min, pos.cx - hw);
+    e.max = Math.max(e.max, pos.cx + hw);
+  }
+  for (const genKey of Object.keys(centerExtent)) {
+    const gen = Number(genKey);
+    const hull = centerExtent[gen];
+    const groups = new Map(); // treeParent -> couple indices (siblings move together)
+    for (const idx of idxByGen[gen] || []) {
+      const c = couples[idx];
+      if (c.side === "center" || !coupleVisible(c)) continue;
+      const pos = couplePositions.get(idx);
+      if (!pos) continue;
+      const hw = coupleWidth(c) / 2;
+      if (pos.cx + hw <= hull.min - H_SPACING || pos.cx - hw >= hull.max + H_SPACING) continue;
+      if (!groups.has(c.treeParent)) groups.set(c.treeParent, []);
+      groups.get(c.treeParent).push(idx);
+    }
+    if (groups.size === 0) continue;
+    const mid = (hull.min + hull.max) / 2;
+    let leftCursor = hull.min - H_SPACING;
+    let rightCursor = hull.max + H_SPACING;
+    const ordered = [...groups.values()]
+      .map((g) => ({ g, mean: g.reduce((s, i) => s + couplePositions.get(i).cx, 0) / g.length }))
+      .sort((a, b) => Math.abs(a.mean - mid) - Math.abs(b.mean - mid));
+    for (const { g, mean } of ordered) {
+      g.sort((a, b) => couplePositions.get(a).cx - couplePositions.get(b).cx);
+      const width =
+        g.reduce((s, i) => s + coupleWidth(couples[i]), 0) + H_SPACING * (g.length - 1);
+      let x = mean <= mid ? leftCursor - width : rightCursor;
+      if (mean <= mid) leftCursor = x - H_SPACING;
+      for (const idx of g) {
+        const w = coupleWidth(couples[idx]);
+        couplePositions.get(idx).cx = x + w / 2;
+        x += w + H_SPACING;
+      }
+      if (mean > mid) rightCursor = x;
+    }
+  }
+
   const laneOf = new Map();
   const laneCount = {};
   for (let gen = genRange.min; gen <= genRange.max; gen++) {

@@ -4,7 +4,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { S } from "../../web/js/00-state.js";
 import { rankPeople, searchPeopleLocal, dateYear, dateSortKey } from "../../web/js/03-data-nav.js";
-import { computeFogDistance, buildButterflyLayout } from "../../web/js/04-tree.js";
+import {
+  computeFogDistance, buildButterflyLayout,
+  NODE_W, COMPACT_NODE_W, NODE_H, ROW_HEIGHT, SUB_ROW_HEIGHT, MAX_SUB_ROWS,
+} from "../../web/js/04-tree.js";
 import { calculateRelationship, viewerRelationText } from "../../web/js/07-relationship.js";
 import { autoComputeLanes, assignLane, buildLaneCache } from "../../web/js/02-lanes.js";
 import { _personPhotos } from "../../web/js/12-photos.js";
@@ -743,5 +746,132 @@ describe("dateSortKey", () => {
   });
   it("extracts the ISO core from a noisy value so it still sorts by year", () => {
     expect(dateSortKey("~1622")).toBe("1622");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// buildButterflyLayout: collision pass, sub-row wrapping, compact cards
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("buildButterflyLayout collision + wrapping", () => {
+  const mkP = (id, gender) => makePerson(id, id, "X", { gender });
+  // Dense fixture: 4 blood uncles, each with a spouse and 3 kids, puts 12
+  // cousin couples in the same generation row as the center couple — the
+  // cross-block layout that used to stack cards on top of each other.
+  const people = [
+    mkP("Me", "male"), mkP("Spouse", "female"),
+    mkP("K1", "female"), mkP("K2", "male"),
+    mkP("Dad", "male"), mkP("Mom", "female"),
+    mkP("GF", "male"), mkP("GM", "female"),
+    mkP("SpDad", "male"), mkP("SpMom", "female"),
+  ];
+  const relationships = [
+    { parent_id: "GF", child_id: "Dad" }, { parent_id: "GM", child_id: "Dad" },
+    { parent_id: "Dad", child_id: "Me" }, { parent_id: "Mom", child_id: "Me" },
+    { parent_id: "SpDad", child_id: "Spouse" }, { parent_id: "SpMom", child_id: "Spouse" },
+    { parent_id: "Me", child_id: "K1" }, { parent_id: "Spouse", child_id: "K1" },
+    { parent_id: "Me", child_id: "K2" }, { parent_id: "Spouse", child_id: "K2" },
+  ];
+  const unions = [
+    { partner1_id: "Me", partner2_id: "Spouse" },
+    { partner1_id: "Dad", partner2_id: "Mom" },
+    { partner1_id: "GF", partner2_id: "GM" },
+    { partner1_id: "SpDad", partner2_id: "SpMom" },
+  ];
+  for (let u = 1; u <= 4; u++) {
+    people.push(mkP(`U${u}`, "male"), mkP(`SU${u}`, "female"));
+    relationships.push(
+      { parent_id: "GF", child_id: `U${u}` },
+      { parent_id: "GM", child_id: `U${u}` },
+    );
+    unions.push({ partner1_id: `U${u}`, partner2_id: `SU${u}` });
+    for (const k of ["a", "b", "c"]) {
+      people.push(mkP(`C${u}${k}`, "female"));
+      relationships.push(
+        { parent_id: `U${u}`, child_id: `C${u}${k}` },
+        { parent_id: `SU${u}`, child_id: `C${u}${k}` },
+      );
+    }
+  }
+  const data = { people, relationships, unions, events: [] };
+
+  beforeEach(() => {
+    const pm = {};
+    for (const p of people) pm[p.id] = p;
+    S.PEOPLE_MAP = pm;
+    S.DATA = data;
+    S.ORIGINAL_DATA = data;
+    S.CENTER_ID_A = "Me";
+    S.CENTER_ID_B = "Spouse";
+    S.TREE_DEPTH = 4; // "Everyone" — all nodes participate in the lane pass
+    S.LANES = [];
+    S.CONFIG = { familyName: "Test" };
+  });
+
+  const byId = (nodes) => Object.fromEntries(nodes.map((n) => [n.id, n]));
+
+  it("renders every card with zero overlaps despite cross-block density", () => {
+    const { nodes } = buildButterflyLayout();
+    expect(nodes.length).toBe(people.length);
+    const bad = [];
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const a = nodes[i], b = nodes[j];
+        const ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+        const oy = Math.min(a.y + NODE_H, b.y + NODE_H) - Math.max(a.y, b.y);
+        if (ox > 1 && oy > 1) bad.push(`${a.id} <-> ${b.id}`);
+      }
+    }
+    expect(bad, "overlapping cards").toEqual([]);
+  });
+
+  it("caps band growth and keeps sparse bands flat", () => {
+    const { bands, genRange } = buildButterflyLayout();
+    // Grandparents' generation holds one couple: must stay single-row.
+    expect(bands.heights[-2]).toBe(ROW_HEIGHT);
+    // No band may grow beyond the sub-row cap.
+    const maxH = ROW_HEIGHT + (MAX_SUB_ROWS - 1) * SUB_ROW_HEIGHT;
+    for (let g = genRange.min; g <= genRange.max; g++) {
+      expect(bands.heights[g]).toBeLessThanOrEqual(maxH);
+    }
+  });
+
+  it("keeps collateral cousins outside the center family's horizontal span", () => {
+    // A card from another branch sitting BETWEEN the center couple's cards
+    // reads as a member of that family (the Barry Kleinberg bug).
+    const { nodes, couples } = buildButterflyLayout();
+    const gens = {};
+    for (const n of nodes) (gens[n.gen] ||= []).push(n);
+    for (const gen of Object.keys(gens)) {
+      const row = gens[gen];
+      const centerCards = row.filter((n) => couples[n.coupleIdx].side === "center");
+      if (centerCards.length === 0) continue;
+      const min = Math.min(...centerCards.map((n) => n.x));
+      const max = Math.max(...centerCards.map((n) => n.x + n.w));
+      for (const n of row) {
+        if (couples[n.coupleIdx].side === "center") continue;
+        const inside = n.x + n.w > min + 1 && n.x < max - 1;
+        expect(inside, `${n.id} interleaved into center span at gen ${gen}`).toBe(false);
+      }
+    }
+  });
+
+  it("keeps every card vertically inside its own generation band", () => {
+    const { nodes, bands } = buildButterflyLayout();
+    for (const n of nodes) {
+      expect(n.y, `${n.id} below band top`).toBeGreaterThanOrEqual(bands.tops[n.gen]);
+      expect(n.y + NODE_H, `${n.id} above band bottom`).toBeLessThanOrEqual(
+        bands.tops[n.gen] + bands.heights[n.gen]
+      );
+    }
+  });
+
+  it("sizes in-law branches (fog >= 2) compact and bloodline full-width", () => {
+    const { nodes } = buildButterflyLayout();
+    const n = byId(nodes);
+    expect(n.Me.w).toBe(NODE_W);
+    expect(n.U1.w, "blood uncle (fog 1) full width").toBe(NODE_W);
+    expect(n.SU1.w, "uncle's wife (fog 2) compact").toBe(COMPACT_NODE_W);
+    expect(n.C1a.w, "cousin (fog 2) compact").toBe(COMPACT_NODE_W);
   });
 });
