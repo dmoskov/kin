@@ -416,7 +416,7 @@ export function _openTagSearch(anchorBtn, currentPersonId) {
       .filter(p => !alreadyTagged.has(p.id) && p.fullName.toLowerCase().includes(q))
       .slice(0, 5);
     results.innerHTML = matches.map(p =>
-      `<div class="photo-tag-search-result" data-id="${p.id}">${personThumb(p.id, 20)} ${p.fullName}</div>`
+      `<div class="photo-tag-search-result" data-id="${p.id}">${personThumb(p.id, 20)} ${escapeHtml(p.fullName)}</div>`
     ).join("");
     results.querySelectorAll(".photo-tag-search-result").forEach(el => {
       el.addEventListener("click", async () => {

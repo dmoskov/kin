@@ -892,7 +892,7 @@ function renderBranchesGrid(container, entries) {
     html += `
       <div class="timeline-cell-header" style="border-bottom-color:${lane.color}">
         <span class="lane-color-dot" style="background:${lane.color}"></span>
-        ${lane.label}
+        ${escapeHtml(lane.label)}
         <span class="lane-count">${byLane[lane.id].length}</span>
       </div>`;
   }
@@ -918,7 +918,7 @@ function renderBranchesGrid(container, entries) {
             <div class="timeline-entry-dot" style="border-color:${e.type === "photo" ? (EVENT_COLORS.photo || "#d4a843") : lane.color}"></div>
             <div class="timeline-content">
               <span class="timeline-year-inline">${escapeHtml(e.dateDisplay || e.year)}</span>
-              ${e.type === "photo" && e.photoPath ? `<img class="timeline-photo-thumb" src="/${e.photoPath}" alt="" loading="lazy" onclick="openLightbox('/${e.photoPath}', '${(e.title || "").replace(/'/g, "\\'")}', '${e.photoPath}')" />` : ""}
+              ${e.type === "photo" && e.photoPath ? `<img class="timeline-photo-thumb" src="/${e.photoPath}" alt="" loading="lazy" ${_lightboxAttrs(`/${e.photoPath}`, e.rawCaption || "", e.photoPath)} />` : ""}
               <h4>${e.title}</h4>
               ${e.place ? `<div class="timeline-place"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;margin-right:3px"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>${escapeHtml(e.place)}</div>` : ""}
             </div>
@@ -1102,6 +1102,11 @@ function _applyLaneFocusClass(container) {
   });
 }
 
+function _lightboxAttrs(src, alt, path, list = null) {
+  const listAttr = list && list.length > 1 ? ` data-lightbox-list="${escapeHtml(JSON.stringify(list))}"` : "";
+  return `data-lightbox-src="${escapeHtml(src)}" data-lightbox-alt="${escapeHtml(alt || "")}" data-lightbox-path="${escapeHtml(path)}"${listAttr}`;
+}
+
 // ── Photo-first card ────────────────────────────────────────────
 // Returns the `.tstream-card.tstream-photo-card` markup for a photo entry —
 // the photo IS the card (full-bleed) with a caption/meta overlay. Reusable by
@@ -1120,17 +1125,14 @@ function _applyLaneFocusClass(container) {
 // object-position after measuring its runtime aspect on load.
 export function buildPhotoCardHtml(entry, laneChipHtml = "", laneColor = "") {
   const e = entry;
-  const safeAlt = (e.title || "").replace(/'/g, "\\'");
   // Tie the card to its subject's lane with a colored edge, so a big portrait
   // reads as belonging to that person's branch rather than the node above it.
   const laneEdge = laneColor ? ` style="--lane-edge:${laneColor}"` : "";
 
   // Cluster cards open the whole set in the lightbox (photoList = all members);
   // single cards open just themselves.
-  const listArg = e.cluster && e.clusterPaths && e.clusterPaths.length > 1
-    ? `[${e.clusterPaths.map((p) => `'${p.replace(/'/g, "\\'")}'`).join(",")}]`
-    : "null";
-  const onClick = `openLightbox('/${e.photoPath}', '${safeAlt}', '${e.photoPath}', ${listArg})`;
+  const clusterList = e.cluster && e.clusterPaths && e.clusterPaths.length > 1 ? e.clusterPaths : null;
+  const lbAttrs = _lightboxAttrs(`/${e.photoPath}`, e.rawCaption || "", e.photoPath, clusterList);
 
   // Identity first: the subject's name is the headline (people want "who" before
   // "who painted it"), with any real caption demoted to a smaller attribution
@@ -1170,7 +1172,7 @@ export function buildPhotoCardHtml(entry, laneChipHtml = "", laneColor = "") {
     strip += `</div>`;
     return `
       <div class="tstream-card tstream-photo-card tstream-photo-card--cluster"${laneEdge}>
-        <div class="tstream-photo-stage" onclick="${onClick}">
+        <div class="tstream-photo-stage" ${lbAttrs}>
           <div class="tstream-photo-blurfill" aria-hidden="true" style="background-image:url(/${e.photoPath})"></div>
           <img class="tstream-photo-img" src="/${e.photoPath}" alt="${escapeHtml(e.title || "")}" loading="lazy" />
           ${overlay}
@@ -1182,7 +1184,7 @@ export function buildPhotoCardHtml(entry, laneChipHtml = "", laneColor = "") {
   // Single hero card.
   return `
     <div class="tstream-card tstream-photo-card"${laneEdge}>
-      <div class="tstream-photo-stage" onclick="${onClick}">
+      <div class="tstream-photo-stage" ${lbAttrs}>
         <div class="tstream-photo-blurfill" aria-hidden="true" style="background-image:url(/${e.photoPath})"></div>
         <img class="tstream-photo-img" src="/${e.photoPath}" alt="${escapeHtml(e.title || "")}" loading="lazy" />
         ${overlay}
@@ -1289,12 +1291,9 @@ function _laterPhotosCarouselHtml(e) {
     const alt = escapeHtml(p.caption || "");
     const dateStr = p.dateCirca ? `c. ${p.date}` : p.date;
     const meta = [dateStr, p.place].filter(Boolean).map(escapeHtml).join(" · ");
-    const listArg = photos.length > 1
-      ? `[${photos.map(ph => `'${ph.path.replace(/'/g, "\\'")}'`).join(",")}]`
-      : "null";
-    const onClick = `openLightbox('/${p.path}', '${alt}', '${p.path.replace(/'/g, "\\'")}', ${listArg})`;
+    const lbAttrs = _lightboxAttrs(`/${p.path}`, p.caption || "", p.path, photos.length > 1 ? photos.map(ph => ph.path) : null);
     return `<div class="tstream-death-slide${i === 0 ? " active" : ""}" data-index="${i}">` +
-      `<img class="tstream-death-slide-img" src="/${p.path}" alt="${alt}" loading="lazy" onclick="${onClick}" />` +
+      `<img class="tstream-death-slide-img" src="/${p.path}" alt="${alt}" loading="lazy" ${lbAttrs} />` +
       (meta ? `<div class="tstream-death-slide-meta">${meta}</div>` : "") +
       `</div>`;
   }).join("");
@@ -1407,6 +1406,12 @@ export function populateTimelineFilter() {
 // Handles both the branches grid (.timeline-entry, data-person-id) and the
 // stream feed (.tstream-entry, whose person link/thumb expose data-person-id).
 document.getElementById("timeline-entries")?.addEventListener("click", (e) => {
+  const lb = e.target.closest("[data-lightbox-src]");
+  if (lb) {
+    const list = lb.dataset.lightboxList ? JSON.parse(lb.dataset.lightboxList) : null;
+    openLightbox(lb.dataset.lightboxSrc, lb.dataset.lightboxAlt, lb.dataset.lightboxPath, list);
+    return;
+  }
   if (e.target.closest("a, img, [onclick]")) return;
   const gridEntry = e.target.closest(".timeline-entry");
   if (gridEntry?.dataset.personId) {

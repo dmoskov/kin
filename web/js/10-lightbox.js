@@ -341,7 +341,7 @@ export function _openFaceTagSearch(container, photoData, x, y, w, h, mouseEvent,
         .slice(0, 5);
     }
     results.innerHTML = matches.map(p =>
-      `<div class="face-tag-search-result" data-id="${p.id}">${personThumb(p.id, 20)} ${p.fullName}</div>`
+      `<div class="face-tag-search-result" data-id="${p.id}">${personThumb(p.id, 20)} ${escapeHtml(p.fullName)}</div>`
     ).join("") || (q ? "<div class='face-tag-no-results'>No matches</div>" : "");
     results.querySelectorAll(".face-tag-search-result").forEach(el => {
       el.addEventListener("click", async () => {

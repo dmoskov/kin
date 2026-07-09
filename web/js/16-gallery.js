@@ -927,7 +927,7 @@ export function _wireGalleryTagEvents(form, photoPath) {
           .filter(p => !alreadyTagged.has(p.id) && p.fullName.toLowerCase().includes(q))
           .slice(0, 6);
         results.innerHTML = matches.map(p =>
-          `<div class="ge-tag-search-result" data-id="${p.id}">${personThumb(p.id, 18)} ${p.fullName}</div>`
+          `<div class="ge-tag-search-result" data-id="${p.id}">${personThumb(p.id, 18)} ${escapeHtml(p.fullName)}</div>`
         ).join("");
         results.querySelectorAll(".ge-tag-search-result").forEach(el => {
           el.addEventListener("click", async (ev) => {

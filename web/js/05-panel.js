@@ -355,7 +355,7 @@ export function showPersonPanel(personId) {
       const icon = e.kind === "photo" ? "📷" : _eventIcon(e.event_type);
       const colorVar = e.kind === "photo" ? "--event-custom" : _eventColorVar(e.event_type);
       const photoThumb = e.kind === "photo" && e.photoPath
-        ? `<img class="panel-event-photo" src="/${e.photoPath}" alt="" loading="lazy" onclick="openLightbox('/${e.photoPath}', '${(e.description || "").replace(/'/g, "\\'")}', '${e.photoPath}')" />`
+        ? `<img class="panel-event-photo" src="/${escapeHtml(e.photoPath)}" alt="" loading="lazy" data-photo-path="${escapeHtml(e.photoPath)}" />`
         : "";
       const editActions = (e.kind === "event" && canEditEvents && e.id)
         ? `<span class="panel-event-actions"><button class="panel-event-edit-btn" onclick="openEditEventForm(${e.id}, '${personId}')" title="Edit">✎</button><button class="panel-event-del-btn" onclick="deleteEvent(${e.id}, '${personId}')" title="Delete">×</button></span>`
@@ -397,6 +397,8 @@ export function showPersonPanel(personId) {
     _wirePanelPhotoClicks(photosSection, personId);
     _wireSetProfileButtons(photosSection, personId);
   }
+  const eventsTimeline = content.querySelector(".panel-events-timeline");
+  if (eventsTimeline) _wirePanelPhotoClicks(eventsTimeline, personId);
   // Hero photo opens the lightbox (parity with panel photo clicks).
   const heroImg = content.querySelector(".panel-hero-img, .panel-hero-face");
   if (heroImg) {
@@ -442,7 +444,7 @@ function _fetchPersonWikipedia(personId, attempt = 0) {
           .map((e) => `<div class="panel-wiki-event"><span class="panel-wiki-year">${e.year}</span><span class="panel-wiki-text">${escapeHtml(e.text)}</span></div>`)
           .join("");
         el.innerHTML =
-          `<a class="panel-wiki-badge" href="${res.url}" target="_blank" rel="noopener">📖 On Wikipedia</a>` +
+          `<a class="panel-wiki-badge" href="${escapeHtml(res.url)}" target="_blank" rel="noopener">📖 On Wikipedia</a>` +
           (res.description ? `<div class="panel-wiki-desc">${escapeHtml(res.description)}</div>` : "") +
           (events ? `<div class="panel-wiki-events">${events}</div>` : "");
         el.classList.remove("hidden");

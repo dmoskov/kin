@@ -460,7 +460,7 @@ export function buildMapEvents() {
         personId: pid || "",
         fogLevel: pid ? personFog(pid) : 0,
         place: photo.place || "GPS location",
-        desc: primaryPerson?.caption || "Photo",
+        desc: escapeHtml(primaryPerson?.caption || "Photo"),
         latlng: ll,
         photoPath: photo.file_path,
       });
