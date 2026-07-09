@@ -5,6 +5,18 @@ import { S } from "./00-state.js";
 
 export const GEOCODE = {
   // ── Eastern Europe / Middle East ──
+  // Historical Pale-of-Settlement places: Nominatim mangles these (it matched
+  // Radzivil to Vilnius and "…, Russia" strings to Moscow), so they're
+  // hand-pinned. Volhynia = the historical gubernia in today's western
+  // Ukraine, NOT anywhere near Moscow.
+  "Wolyn (Volhynia), Russia (now Ukraine)":       [50.75, 25.32],  // Volhynia region (Lutsk)
+  "Radzivil, Wolhynia (now Radyvyliv, Ukraine)":  [50.131, 25.254],
+  // Siegel family cluster is Volhynian, so "Alexandria" = Oleksandriya,
+  // Rivne oblast — not the St. Petersburg estate Nominatim picked.
+  "Alexandria, Russia":                           [50.74, 26.31],
+  "Russia (Pale of Settlement)":                  [51.0, 27.0],
+  "Podolia gubernia, Russian Empire":             [48.68, 26.58],  // gubernia capital Kamianets-Podilskyi
+  "Russian Empire":                               [59.94, 30.31],  // capital convention (St. Petersburg)
   "Odessa, Russia":                               [46.48, 30.73],
   "Kamunetz-Podolsk, Russia":                     [48.68, 26.58],
   "Kamenitz-Podolsk, Russia":                     [48.68, 26.58],
@@ -38,6 +50,7 @@ export const GEOCODE = {
   "Ontario":                                      [51.25, -85.32],
   "Canada":                                       [56.13, -106.35],
   "Quebec, Canada":                               [46.81, -71.21],
+  "Quebec":                                       [46.81, -71.21],
   // ── New England ──
   "Boston, MA":                                   [42.36, -71.06],
   "Boston, Massachusetts":                        [42.36, -71.06],
@@ -55,6 +68,7 @@ export const GEOCODE = {
   "Cambridge, Massachusetts":                     [42.374, -71.11],
   "Harvard University":                           [42.374, -71.117],
   "Harvard University, Cambridge, MA":            [42.374, -71.117],
+  "Harvard College":                              [42.374, -71.117],
   "Boston Latin School, Boston, MA":              [42.34, -71.10],
   "Natick, MA":                                   [42.284, -71.347],
   "Pepperell, MA":                                [42.665, -71.579],
@@ -69,6 +83,10 @@ export const GEOCODE = {
   "Ithaca, NY":                                   [42.44, -76.50],
   "Ellis Island, New York Harbor":                [40.70, -74.04],
   "Ellis Island, New York Harbor, USA":           [40.70, -74.04],
+  "Castle Garden, New York":                      [40.7033, -74.017],
+  "Castle Garden, Battery Park, Manhattan, New York": [40.7033, -74.017],
+  "Port of New York":                             [40.7033, -74.017],
+  "Port of New York (Barge Office)":              [40.7017, -74.0142],
   "Niagara Falls, NY":                            [43.09, -79.06],
   // ── Minnesota ──
   "Minnesota":                                    [44.98, -93.27],
@@ -90,7 +108,7 @@ export const GEOCODE = {
   "Lincoln County, MN":                           [44.41, -96.27],
   "Anoka, Anoka County, Minnesota":               [45.20, -93.39],
   "Ramsey County, Minnesota":                     [44.95, -93.13],
-  "Wright, Carlton County, Minnesota":            [46.66, -92.56],
+  "Wright, Carlton County, Minnesota":            [46.672, -93.007],
   "Riverside, St. Louis County, Minnesota":       [47.53, -92.18],
   "University of Minnesota":                      [44.97, -93.23],
   // ── Other Midwest / South ──
@@ -207,13 +225,15 @@ export function geocode(place) {
   if (GEOCODE[place]) return GEOCODE[place];
   // Then server-resolved (Nominatim) coordinates
   if (GEOCODE_RUNTIME[place]) return GEOCODE_RUNTIME[place];
-  // Fuzzy match against hardcoded table
+  // Fuzzy match: only prefix matches, i.e. one string is a more specific
+  // version of the other ("Odessa" ↔ "Odessa, Russia"). Substring matching
+  // let a trailing country name hijack the pin — "Wolyn (Volhynia), Russia
+  // (now Ukraine)" contains "Russia" and rendered at Moscow, 1000km away.
   for (const [key, coords] of Object.entries(GEOCODE)) {
-    if (place.includes(key) || key.includes(place)) return coords;
+    if (place.startsWith(key) || key.startsWith(place)) return coords;
   }
-  // Fuzzy match against runtime results
   for (const [key, coords] of Object.entries(GEOCODE_RUNTIME)) {
-    if (place.includes(key) || key.includes(place)) return coords;
+    if (place.startsWith(key) || key.startsWith(place)) return coords;
   }
   return null;
 }

@@ -11,6 +11,7 @@ import {
 import { calculateRelationship, viewerRelationText } from "../../web/js/07-relationship.js";
 import { autoComputeLanes, assignLane, buildLaneCache } from "../../web/js/02-lanes.js";
 import { _personPhotos } from "../../web/js/12-photos.js";
+import { geocode } from "../../web/js/08-map.js";
 import { populateViewingAsDropdown } from "../../web/js/16-gallery.js";
 
 // ─── Fixture helpers ───────────────────────────────────────────────────────
@@ -922,5 +923,40 @@ describe("populateViewingAsDropdown", () => {
     expect(sel.options).toHaveLength(2);
 
     document.body.removeChild(sel);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// geocode: prefix-only fuzzy matching + curated historical places
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("geocode", () => {
+  it("a trailing country name must not hijack the pin (Wolyn-Moscow bug)", () => {
+    // "Wolyn (Volhynia), Russia (now Ukraine)" contains "Russia", whose
+    // curated pin is Moscow. It must resolve to the curated Volhynia entry,
+    // ~1000km southwest.
+    const [lat, lng] = geocode("Wolyn (Volhynia), Russia (now Ukraine)");
+    expect(lat).toBeCloseTo(50.75, 1);
+    expect(lng).toBeCloseTo(25.32, 1);
+  });
+
+  it("an unknown place containing a country name resolves to nothing, not the capital", () => {
+    expect(geocode("Totally Unknown Shtetl, Russia (now Ukraine)")).toBe(null);
+  });
+
+  it("prefix fuzzy still matches more/less specific variants", () => {
+    // Place more specific than key
+    expect(geocode("Odessa, Russia (Black Sea port)")).toEqual([46.48, 30.73]);
+    // Place less specific than key
+    expect(geocode("Harvard University, Cambridge")).toEqual(geocode("Harvard University"));
+  });
+
+  it("curated pins for the Volhynia family places are in Ukraine", () => {
+    const radzivil = geocode("Radzivil, Wolhynia (now Radyvyliv, Ukraine)");
+    expect(radzivil[0]).toBeCloseTo(50.131, 1);
+    expect(radzivil[1]).toBeCloseTo(25.254, 1);
+    const port = geocode("Port of New York");
+    expect(port[0]).toBeCloseTo(40.7, 1);
+    expect(port[1]).toBeCloseTo(-74.0, 1);
   });
 });
