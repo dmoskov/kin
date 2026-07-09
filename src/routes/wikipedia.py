@@ -2,10 +2,13 @@
 
 from flask import Blueprint, jsonify, request
 
+from ratelimit import rate_limit
+
 wikipedia_bp = Blueprint("wikipedia", __name__)
 
 
 @wikipedia_bp.route("/api/person-wikipedia", methods=["POST"])
+@rate_limit(30, 60, name="wikipedia")
 def api_person_wikipedia():
     """Resolve people to their Wikipedia article (cached, year-verified).
 

@@ -2,10 +2,13 @@
 
 from flask import Blueprint, jsonify, request
 
+from ratelimit import rate_limit
+
 geocode_bp = Blueprint("geocode", __name__)
 
 
 @geocode_bp.route("/api/geocode", methods=["POST"])
+@rate_limit(30, 60, name="geocode")
 def api_geocode():
     """Geocode a list of place strings via Nominatim (with DB cache).
 

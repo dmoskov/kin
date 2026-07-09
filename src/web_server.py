@@ -177,6 +177,45 @@ def require_login(f):
     return wrapper
 
 
+def relationship_visibility_scope() -> tuple[bool, str | None]:
+    """Decide how the current session sees parent-child links.
+
+    Returns ``(filtered, viewer_id)``:
+      * ``(False, None)`` — return every link unchanged. This covers
+        open-access / no-auth deployments (no privacy expectation), the admin
+        (``ADMIN_PERSON_ID``), and invited editors (``session["is_editor"]``,
+        which is set for both family editors and ``editor:<email>`` sessions).
+      * ``(True, viewer_id)`` — filter links to ``viewer_id``'s kin circles.
+        ``viewer_id`` is the session ``person_id``; a viewer with no
+        relationships then sees only "everyone" links.
+    """
+    # No login gate (open access or no client id configured) → no filtering.
+    if not _auth_enabled():
+        return False, None
+    person_id = session.get("person_id")
+    admin_person_id = os.environ.get("ADMIN_PERSON_ID", "")
+    if admin_person_id and person_id == admin_person_id:
+        return False, None
+    if session.get("is_editor"):
+        return False, None
+    return True, person_id
+
+
+def filter_tree_for_viewer(tree) -> None:
+    """Drop parent-child links the current viewer may not see (in place).
+
+    A no-op for admins, editors, and open-access / no-auth deployments. The
+    ``tree`` passed in is always freshly loaded per request, so mutating its
+    ``relationships`` list is safe.
+    """
+    filtered, viewer_id = relationship_visibility_scope()
+    if not filtered:
+        return
+    from traversal.visibility import filter_relationships
+
+    tree.relationships = filter_relationships(tree.relationships, viewer_id)
+
+
 def require_editor(f):
     """Reject non-editors when an EDITORS list or tree_editors are configured.
 
@@ -473,6 +512,10 @@ def api_data():
     """Return the full family tree as JSON (read from DB on each request)."""
     repo = TreeRepository()
     tree = repo.load_tree()
+    # Enforce per-link visibility server-side, keyed to the authenticated
+    # identity — hidden links must never leave the server for a viewer who
+    # isn't in the relevant kin circle.
+    filter_tree_for_viewer(tree)
     all_photos = repo.list_all_photos()
     photos_list = []
     for p in all_photos:

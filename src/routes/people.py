@@ -1,5 +1,6 @@
 """Person CRUD and relationship/union creation endpoints."""
 
+import hashlib
 import json
 import logging
 import os
@@ -12,10 +13,17 @@ from database.repository import TreeRepository, _fetchall, _fetchone, _ph
 from dates import normalize_date
 from import_export.json_io import _event_to_dict, _person_to_dict
 from models.person import Gender, Person
+from ratelimit import TTLCache, rate_limit
 
 logger = logging.getLogger(__name__)
 
 people_bp = Blueprint("people", __name__)
+
+# AI summaries are billed per call and rarely change between views, so cache
+# them in-memory keyed by person id + a hash of the data that feeds the prompt.
+# Any edit to the person (or their family/events) changes the hash and misses
+# the cache; otherwise repeat views for ~a day are served for free.
+_SUMMARY_CACHE = TTLCache(ttl_seconds=86400)
 
 
 # Fields a client is allowed to provide on create / update. Anything else
@@ -292,6 +300,7 @@ def api_delete_person(person_id):
 
 
 @people_bp.route("/api/people/<person_id>/summary", methods=["GET"])
+@rate_limit(10, 60, name="summary")
 def api_person_summary(person_id):
     """Generate an AI-powered biographical summary for a person.
 
@@ -307,6 +316,11 @@ def api_person_summary(person_id):
 
     repo = TreeRepository()
     tree = repo.load_tree()
+    # Filter the relationship graph to what this viewer may see BEFORE building
+    # the prompt context, so hidden links can't leak through the AI prose
+    # (parents/children/siblings are all derived from tree.relationships).
+    scope_filtered, scope_viewer = web_server.relationship_visibility_scope()
+    web_server.filter_tree_for_viewer(tree)
 
     person = tree.people.get(person_id)
     if person is None:
@@ -360,6 +374,20 @@ def api_person_summary(person_id):
         "life_events": [_event_to_dict(e) for e in events],
     }
 
+    # Serve a cached summary if the person's data is unchanged since it was
+    # generated, so repeat panel views don't re-bill the Anthropic API.
+    context_json = json.dumps(context, indent=2, sort_keys=True)
+    # Namespace the cache by the effective viewer scope so one viewer's summary
+    # (built from the links THEY can see) can never be served to another
+    # viewer. "all" = unfiltered (admin / editor / open access); otherwise the
+    # viewer's person_id. The context hash already varies with the visible
+    # links, so this is belt-and-suspenders against future context changes.
+    scope = scope_viewer if scope_filtered else "all"
+    cache_key = f"{scope}:{person_id}:{hashlib.sha256(context_json.encode()).hexdigest()}"
+    cached = _SUMMARY_CACHE.get(cache_key)
+    if cached is not None:
+        return jsonify({"summary": cached})
+
     prompt = (
         "You are writing a brief biographical summary for a family tree profile page. "
         "Write 2-3 sentences that capture who this person is/was — their life dates, "
@@ -369,7 +397,7 @@ def api_person_summary(person_id):
         "Do NOT use bullet points or headers. Just flowing prose. "
         "Do NOT mention that information is limited or sparse. "
         "Return ONLY the summary text, no JSON or markup.\n\n"
-        f"Person data:\n{json.dumps(context, indent=2)}"
+        f"Person data:\n{context_json}"
     )
 
     try:
@@ -382,6 +410,7 @@ def api_person_summary(person_id):
             messages=[{"role": "user", "content": prompt}],
         )
         summary = message.content[0].text.strip()
+        _SUMMARY_CACHE.set(cache_key, summary)
         return jsonify({"summary": summary})
     except Exception:
         logger.exception("Failed to generate person summary")

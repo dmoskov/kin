@@ -2,6 +2,7 @@
 
 from flask import Blueprint, Response
 
+import web_server
 from database.repository import TreeRepository
 from import_export.gedcom_export import export_gedcom
 
@@ -18,6 +19,9 @@ def api_export_gedcom() -> Response:
     """
     repo = TreeRepository()
     tree = repo.load_tree()
+    # Same per-link visibility enforcement as /api/data: an exported GEDCOM
+    # must not carry links the viewer isn't allowed to see.
+    web_server.filter_tree_for_viewer(tree)
     gedcom_text = export_gedcom(tree)
 
     return Response(
