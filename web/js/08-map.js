@@ -255,6 +255,11 @@ export const EVENT_COLORS = {
   photo:          "#d4a843",
 };
 
+// Hover-stability timers: dwell-before-show for marker hovercards and a
+// grace period before the arc spotlight clears (see the handlers below).
+let _markerHoverShowTimer = null;
+let _spotlightClearTimer = null;
+
 let MAP_MARKERS = [];      // { marker, latlng, events: [{date, year, type, personId, desc, place}] }
 let MAP_ARCS = [];         // { polyline, arrowHead, boat, boatBase, latlngs, personId, fromYear, toYear }
 let MAP_ALL_EVENTS = [];   // flat list of {date, year, type, personId, place, desc, latlng}
@@ -655,16 +660,24 @@ export function plotMapMarkers(events) {
     if (isCluster) {
       marker.bindTooltip(`${peopleCount} people · ${escapeHtml(place)}`, { direction: "top" });
     } else {
+      // Dwell-to-show + grace-to-hide: sweeping the cursor across markers
+      // must not strobe hovercards. Show only after a brief dwell; on leave,
+      // give the hide a grace period (a new marker's show cancels it).
       marker.on("mouseover", (e) => {
         const primaryEvent = events[0];
-        if (primaryEvent) {
+        if (!primaryEvent) return;
+        clearTimeout(_markerHoverShowTimer);
+        _markerHoverShowTimer = setTimeout(() => {
           const containerPt = S.MAP.latLngToContainerPoint(e.latlng);
           const mapEl = document.getElementById("map");
           const mapRect = mapEl.getBoundingClientRect();
           showHovercardAt(primaryEvent.personId, mapRect.left + containerPt.x, mapRect.top + containerPt.y);
-        }
+        }, 120);
       });
-      marker.on("mouseout", () => { hideHovercard(); });
+      marker.on("mouseout", () => {
+        clearTimeout(_markerHoverShowTimer);
+        scheduleHideHovercard(200);
+      });
     }
 
     marker.on("click", () => {
@@ -1039,8 +1052,12 @@ export function plotMigrationArcs(events) {
       );
 
       // Hover: spotlight this person's WHOLE journey (dim everyone else),
-      // plus thicken the hovered segment.
+      // plus thicken the hovered segment. Arcs overlap heavily, so clearing
+      // the spotlight waits a grace period — crossing from one arc to the
+      // next hands the spotlight over without un-dimming the whole map
+      // in between (that global blink read as flicker).
       hitArea.on("mouseover", () => {
+        clearTimeout(_spotlightClearTimer);
         setSpotlight(personId);
         polyline.setStyle({
           weight: arcWeight + 3,
@@ -1049,9 +1066,10 @@ export function plotMigrationArcs(events) {
         arrowHead.setStyle({ radius: lerp(2, 4, ratio) + 2 });
       });
       hitArea.on("mouseout", () => {
-        setSpotlight(null);
         polyline.setStyle({ weight: arcWeight, opacity: arcOpacity });
         arrowHead.setStyle({ radius: lerp(2, 4, ratio) });
+        clearTimeout(_spotlightClearTimer);
+        _spotlightClearTimer = setTimeout(() => setSpotlight(null), 180);
       });
 
       // Click: open popup with migration details for the person

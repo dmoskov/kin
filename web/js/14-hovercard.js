@@ -82,6 +82,10 @@ export function buildHovercardHtml(personId) {
 export function showHovercardAt(personId, x, y) {
   const hc = document.getElementById("hovercard");
   if (!hc) return;
+  // Cancel any hide scheduled by a previous anchor — otherwise that stale
+  // timer fires right after this card appears and blinks it away.
+  clearTimeout(_hovercardTimer);
+  _hovercardTimer = null;
   const html = buildHovercardHtml(personId);
   if (!html) return;
 

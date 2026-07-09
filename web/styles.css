@@ -2843,6 +2843,15 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   cursor: pointer !important;
 }
 
+/* Leaflet re-creates tooltip DOM on every open; a short fade-in keeps rapid
+   hover sweeps from strobing (they appear softly instead of popping). */
+.leaflet-tooltip {
+  animation: tooltip-fade-in 0.14s ease-out;
+}
+@keyframes tooltip-fade-in {
+  from { opacity: 0; }
+}
+
 .arc-tooltip {
   font-family: 'Inter', sans-serif;
   font-size: 12px;
