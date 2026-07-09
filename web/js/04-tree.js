@@ -24,10 +24,19 @@ function _computeAge(birthDateStr) {
 
 // Layout constants
 export const NODE_W = 160;
+// In-law branches (fog ≥ 2) render as name-only compact cards: they're
+// context, not subjects, and the width they give back goes to exactly the
+// generations that are most crowded.
+export const COMPACT_NODE_W = 104;
 export const NODE_H = 52;
 export const COUPLE_GAP = 18;
 export const H_SPACING = 10;
 export const ROW_HEIGHT = 95;
+// Crowded generations wrap into extra sub-rows inside their band instead of
+// spreading wider; each sub-row adds this much band height, capped so one
+// dense generation can't balloon the whole tree vertically.
+export const SUB_ROW_HEIGHT = NODE_H + 14;
+export const MAX_SUB_ROWS = 3;
 export const BAND_PADDING = 20;
 
 // Generation band gradient — warm center → cool ancestors
@@ -457,8 +466,17 @@ export function buildButterflyLayout() {
     genRange.max = Math.max(genRange.max, c.gen);
   }
 
+  // Fog distance is needed before positioning (not just for dimming at render
+  // time): in-law branches at fog ≥ 2 draw as compact cards, so every couple's
+  // footprint depends on it.
+  const fogDistance = computeFogDistance(S.DATA);
+  const personW = (pid) =>
+    Math.min(fogDistance[pid] ?? 99, 4) >= 2 ? COMPACT_NODE_W : NODE_W;
+
   function coupleWidth(c) {
-    return c.partnerId ? NODE_W * 2 + COUPLE_GAP : NODE_W;
+    return c.partnerId
+      ? personW(c.primaryId) + COUPLE_GAP + personW(c.partnerId)
+      : personW(c.primaryId);
   }
 
   function genY(gen) {
@@ -714,6 +732,71 @@ export function buildButterflyLayout() {
     maxX += w;
   }
 
+  // ── Global collision pass with sub-row wrapping ──
+  // The center block and the two ancestor blocks are each internally
+  // overlap-free, but nothing above checks them against each other, so cousin
+  // branches from a side block can land on top of the center family. Rather
+  // than pushing collisions apart horizontally (which widens the already-dense
+  // recent generations), wrap the overflow onto extra sub-rows: a band only
+  // grows taller where its row is actually too crowded. Only couples visible
+  // at the current depth filter occupy lane space — hidden in-law branches
+  // shouldn't force wraps the viewer can't see. (fogDistance computed above,
+  // before positioning, because compact-card widths depend on it.)
+  const maxVisibleFog = S.TREE_DEPTH >= 4 ? Infinity : S.TREE_DEPTH;
+  const coupleVisible = (c) => {
+    if (Math.min(fogDistance[c.primaryId] ?? 99, 4) <= maxVisibleFog) return true;
+    return c.partnerId != null && Math.min(fogDistance[c.partnerId] ?? 99, 4) <= maxVisibleFog;
+  };
+
+  const idxByGen = {};
+  for (let i = 0; i < couples.length; i++) {
+    (idxByGen[couples[i].gen] ||= []).push(i);
+  }
+  const laneOf = new Map();
+  const laneCount = {};
+  for (let gen = genRange.min; gen <= genRange.max; gen++) {
+    const row = (idxByGen[gen] || [])
+      .filter((i) => couplePositions.has(i) && coupleVisible(couples[i]))
+      .sort((a, b) => couplePositions.get(a).cx - couplePositions.get(b).cx);
+    const laneRight = []; // right edge of the last couple placed in each sub-row
+    for (const idx of row) {
+      const pos = couplePositions.get(idx);
+      const hw = coupleWidth(couples[idx]) / 2;
+      let lane = laneRight.findIndex((r) => pos.cx - hw >= r + H_SPACING);
+      if (lane === -1 && laneRight.length < MAX_SUB_ROWS) {
+        lane = laneRight.length;
+        laneRight.push(-Infinity);
+      }
+      if (lane === -1) {
+        // Every sub-row is occupied here: nudge right into the one that frees
+        // up first. This is the only remaining way the layout widens.
+        lane = 0;
+        for (let li = 1; li < laneRight.length; li++) {
+          if (laneRight[li] < laneRight[lane]) lane = li;
+        }
+        pos.cx = laneRight[lane] + H_SPACING + hw;
+      }
+      laneRight[lane] = pos.cx + hw;
+      laneOf.set(idx, lane);
+    }
+    laneCount[gen] = Math.max(1, laneRight.length);
+  }
+
+  // Re-stack the bands: each is only as tall as its sub-row count requires,
+  // and every couple drops to its assigned sub-row within its band.
+  const bands = { tops: {}, heights: {} };
+  let bandCursor = 0;
+  for (let gen = genRange.min; gen <= genRange.max; gen++) {
+    bands.tops[gen] = bandCursor;
+    bands.heights[gen] = ROW_HEIGHT + ((laneCount[gen] || 1) - 1) * SUB_ROW_HEIGHT;
+    bandCursor += bands.heights[gen];
+  }
+  for (let i = 0; i < couples.length; i++) {
+    const pos = couplePositions.get(i);
+    if (!pos) continue;
+    pos.y = bands.tops[couples[i].gen] + BAND_PADDING + (laneOf.get(i) || 0) * SUB_ROW_HEIGHT;
+  }
+
   // Build flat node list
   const nodes = [];
   const nodeMap = {};
@@ -726,9 +809,10 @@ export function buildButterflyLayout() {
     const person = S.PEOPLE_MAP[c.primaryId];
     if (!person) continue;
 
-    const primaryX = c.partnerId ? pos.cx - w / 2 : pos.cx - NODE_W / 2;
+    const pw = personW(c.primaryId);
+    const primaryX = pos.cx - w / 2;
     const primaryNode = {
-      id: c.primaryId, x: primaryX, y: pos.y, cx: primaryX + NODE_W / 2,
+      id: c.primaryId, x: primaryX, y: pos.y, w: pw, cx: primaryX + pw / 2,
       gen: c.gen, side: c.side, person, coupleIdx: i,
     };
     nodes.push(primaryNode);
@@ -737,9 +821,10 @@ export function buildButterflyLayout() {
     if (c.partnerId) {
       const partnerPerson = S.PEOPLE_MAP[c.partnerId];
       if (partnerPerson) {
-        const partnerX = primaryX + NODE_W + COUPLE_GAP;
+        const qw = personW(c.partnerId);
+        const partnerX = primaryX + pw + COUPLE_GAP;
         const partnerNode = {
-          id: c.partnerId, x: partnerX, y: pos.y, cx: partnerX + NODE_W / 2,
+          id: c.partnerId, x: partnerX, y: pos.y, w: qw, cx: partnerX + qw / 2,
           gen: c.gen, side: c.side, person: partnerPerson, coupleIdx: i,
         };
         nodes.push(partnerNode);
@@ -765,18 +850,16 @@ export function buildButterflyLayout() {
     const n2 = nodeMap[c.partnerId];
     if (n1 && n2) {
       unions.push({
-        x1: n1.x + NODE_W, y1: n1.y + NODE_H / 2,
+        x1: n1.x + n1.w, y1: n1.y + NODE_H / 2,
         x2: n2.x, y2: n2.y + NODE_H / 2,
         id1: c.primaryId, id2: c.partnerId,
       });
     }
   }
 
-  // ── Compute bloodline distance (fog-of-war) ──
+  // ── Bloodline distance (fog-of-war), computed above for the lane pass ──
   // Distance 0 = center couple + blood ancestors/descendants; 1 = their
   // partners; 2+ = in-law branches. Shared with the map via computeFogDistance.
-  const fogDistance = computeFogDistance(S.DATA);
-
   // Assign fogLevel to each node: 0 = clear, 1-4 = increasing fog
   for (const n of nodes) {
     const dist = fogDistance[n.id] ?? 99;
@@ -786,7 +869,7 @@ export function buildButterflyLayout() {
   // Export fog distance globally so the map can filter by viewer proximity
   window._fogDistance = fogDistance;
 
-  return { nodes, links, unions, genRange, couples, couplePositions };
+  return { nodes, links, unions, genRange, couples, couplePositions, bands };
 }
 
 // ── Tree pan/zoom controls (state populated by renderTree) ──────────────
@@ -914,13 +997,13 @@ export function renderTree() {
   const nodes = layout.nodes.filter(n => visibleIds.has(n.id));
   const links = layout.links.filter(l => visibleIds.has(l.from.id) && visibleIds.has(l.to.id));
   const unions = layout.unions.filter(u => visibleIds.has(u.id1) && visibleIds.has(u.id2));
-  const { genRange } = layout;
+  const { genRange, bands } = layout;
 
   // Calculate bounds
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   for (const n of nodes) {
     minX = Math.min(minX, n.x);
-    maxX = Math.max(maxX, n.x + NODE_W);
+    maxX = Math.max(maxX, n.x + n.w);
     minY = Math.min(minY, n.y);
     maxY = Math.max(maxY, n.y + NODE_H);
   }
@@ -1010,7 +1093,8 @@ export function renderTree() {
 
   for (let gen = genRange.min; gen <= genRange.max; gen++) {
     const meta = getGenMeta(gen);
-    const bandY = (gen - genRange.min) * ROW_HEIGHT;
+    const bandY = bands.tops[gen];
+    const bandH = bands.heights[gen];
     const opacity = isLight ? 0.08 : 0.06;
 
     g.append("rect")
@@ -1018,7 +1102,7 @@ export function renderTree() {
       .attr("x", minX - 300)
       .attr("y", bandY - 8)
       .attr("width", bandExtent)
-      .attr("height", ROW_HEIGHT)
+      .attr("height", bandH)
       .attr("fill", meta.color)
       .attr("opacity", opacity)
       .attr("rx", 6);
@@ -1026,7 +1110,7 @@ export function renderTree() {
     g.append("text")
       .attr("class", "gen-label")
       .attr("x", minX - 20)
-      .attr("y", bandY + ROW_HEIGHT / 2 + 2)
+      .attr("y", bandY + bandH / 2 + 2)
       .attr("text-anchor", "end")
       .attr("fill", meta.color)
       .attr("opacity", isLight ? 0.5 : 0.4)
@@ -1061,16 +1145,17 @@ export function renderTree() {
     const dropX = parentPos ? parentPos.cx : parent.cx;
     const dropY = parent.y + NODE_H;
 
-    // Children x positions
+    // Children can sit on different sub-rows within their band, so run the
+    // bus bar above the highest child and drop each vertical to its own card.
     const childXs = groupLinks.map(l => l.from.cx);
-    const childY = groupLinks[0].from.y;
-    const busY = dropY + (childY - dropY) * 0.5; // bus bar at midpoint
+    const minChildY = Math.min(...groupLinks.map(l => l.from.y));
+    const busY = dropY + (minChildY - dropY) * 0.5;
 
     const linkPersonIds = new Set([parent.id, ...groupLinks.map(l => l.from.id)]);
 
     if (groupLinks.length === 1) {
-      const cx = childXs[0];
-      const d = `M${dropX},${dropY} L${dropX},${busY} L${cx},${busY} L${cx},${childY}`;
+      const child = groupLinks[0].from;
+      const d = `M${dropX},${dropY} L${dropX},${busY} L${child.cx},${busY} L${child.cx},${child.y}`;
       g.append("path")
         .datum({ personIds: linkPersonIds })
         .attr("class", fogClass)
@@ -1088,10 +1173,10 @@ export function renderTree() {
       g.append("path").datum({ personIds: linkPersonIds }).attr("class", fogClass).attr("d", d2);
       g.append("path").attr("class", "link-hit-area").attr("d", d2);
 
-      for (const cx of childXs) {
-        const d3 = `M${cx},${busY} L${cx},${childY}`;
-        g.append("path").datum({ personIds: linkPersonIds }).attr("class", fogClass).attr("d", d3);
-        g.append("path").attr("class", "link-hit-area").attr("d", d3);
+      for (const l of groupLinks) {
+        const dDrop = `M${l.from.cx},${busY} L${l.from.cx},${l.from.y}`;
+        g.append("path").datum({ personIds: linkPersonIds }).attr("class", fogClass).attr("d", dDrop);
+        g.append("path").attr("class", "link-hit-area").attr("d", dDrop);
       }
     }
   }
@@ -1152,7 +1237,7 @@ export function renderTree() {
     .attr("class", (d) => "node-rect" + (_isCenterId(d) ? " center-node" : ""))
     .attr("x", (d) => (_isCenterId(d) ? -CENTER_OVERHANG_X : 0))
     .attr("y", (d) => (_isCenterId(d) ? -CENTER_OVERHANG_Y : 0))
-    .attr("width", (d) => NODE_W + (_isCenterId(d) ? CENTER_OVERHANG_X * 2 : 0))
+    .attr("width", (d) => d.w + (_isCenterId(d) ? CENTER_OVERHANG_X * 2 : 0))
     .attr("height", (d) => NODE_H + (_isCenterId(d) ? CENTER_OVERHANG_Y * 2 : 0))
     .attr("fill", (d) => d.person.gender === "female" ? "var(--node-female-bg)" : d.person.gender === "other" ? "var(--node-other-bg)" : "var(--node-male-bg)")
     .attr("stroke", (d) => d.person.gender === "female" ? "var(--female)" : d.person.gender === "other" ? "var(--other)" : "var(--male)");
@@ -1168,7 +1253,10 @@ export function renderTree() {
   const CENTER_PHOTO_SIZE = 44;
   const hasPhoto = (d) => !!d.person._profilePhotoPath;
   const isCenter = (d) => d.id === S.CENTER_ID_A || d.id === S.CENTER_ID_B;
-  const isRecent = (d) => !isCenter(d) && (d.gen ?? -99) >= -2;
+  // Compact (fog ≥ 2) cards always use the small avatar regardless of
+  // generation — the larger recent-gen avatar wouldn't leave room for a name.
+  const isCompact = (d) => (d.fogLevel ?? 0) >= 2;
+  const isRecent = (d) => !isCenter(d) && !isCompact(d) && (d.gen ?? -99) >= -2;
   const photoSizeFor = (d) =>
     isCenter(d) ? CENTER_PHOTO_SIZE : isRecent(d) ? RECENT_PHOTO_SIZE : PHOTO_SIZE;
 
@@ -1299,11 +1387,11 @@ export function renderTree() {
   // center node's larger avatar pushes its text column further right.
   function textX(d) {
     const sz = photoSizeFor(d);
-    return PHOTO_PAD + sz + 6 + (NODE_W - PHOTO_PAD - sz - 6) / 2;
+    return PHOTO_PAD + sz + 6 + (d.w - PHOTO_PAD - sz - 6) / 2;
   }
   function textAvailW(d) {
     const sz = photoSizeFor(d);
-    return NODE_W - PHOTO_PAD - sz - 6 - 4;
+    return d.w - PHOTO_PAD - sz - 6 - 4;
   }
 
   // The larger recent-gen avatars leave less width for text. Long names drop
@@ -1314,7 +1402,9 @@ export function renderTree() {
     .append("text")
     .attr("class", (d) => "node-name" + (isCenter(d) || isRecent(d) ? " node-name-lg" : ""))
     .attr("x", textX)
-    .attr("y", 20)
+    // Compact cards carry only the name, so center it vertically; full cards
+    // keep the three-line stack (name / dates / hook).
+    .attr("y", (d) => (isCompact(d) ? NODE_H / 2 + 4 : 20))
     .attr("text-anchor", "middle")
     .text((d) => d.person.fullName)
     .each(function (d) {
@@ -1336,6 +1426,7 @@ export function renderTree() {
     });
 
   nodeGroups
+    .filter((d) => !isCompact(d))
     .append("text")
     .attr("class", "node-dates")
     .attr("x", textX)
@@ -1387,6 +1478,7 @@ export function renderTree() {
     return place.length > 22 ? place.substring(0, 20) + "\u2026" : place;
   };
   nodeGroups
+    .filter((d) => !isCompact(d))
     .append("text")
     .attr("class", (d) => {
       const usedHook = (isRecent(d) || isCenter(d)) && (eventsByPerson[d.person.id] || [])
@@ -1534,7 +1626,7 @@ export function renderTree() {
     mmG.append("rect")
       .attr("x", n.x)
       .attr("y", n.y)
-      .attr("width", NODE_W)
+      .attr("width", n.w)
       .attr("height", NODE_H)
       .attr("rx", 3)
       .attr("fill", n.person.gender === "female" ? "var(--female)" : n.person.gender === "other" ? "var(--other)" : "var(--male)")
