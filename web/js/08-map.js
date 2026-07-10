@@ -989,6 +989,24 @@ export function plotMigrationArcs(events) {
     byPerson[e.personId].push(e);
   }
 
+  // People who traveled the same route (couples emigrating together, siblings
+  // following each other) would draw pixel-identical curves — stacked lines
+  // where only the top one is hoverable. Fan duplicates into parallel lanes:
+  // first arc keeps the default bow, the second mirrors to the other side,
+  // then progressively wider bows on alternating sides. Endpoints are
+  // bucketed to a ~2° grid so NEAR-identical routes fan too — three siblings
+  // leaving neighboring shtetls for Boston coincide for the entire ocean
+  // crossing if each keeps the default bow.
+  const routeCounts = {};
+  const laneBucket = (ll) => `${Math.round(ll[0] / 2) * 2},${Math.round(ll[1] / 2) * 2}`;
+  const laneCurvature = (fromLatlng, toLatlng) => {
+    const key = `${laneBucket(fromLatlng)}→${laneBucket(toLatlng)}`;
+    const dupIndex = routeCounts[key] || 0;
+    routeCounts[key] = dupIndex + 1;
+    const side = dupIndex % 2 === 0 ? 1 : -1;
+    return side * (0.15 + Math.floor(dupIndex / 2) * 0.12);
+  };
+
   for (const [personId, personEvents] of Object.entries(byPerson)) {
     // Deduplicate consecutive same-location
     const waypoints = [];
@@ -1014,7 +1032,7 @@ export function plotMigrationArcs(events) {
       const arcWeight = lerp(WEIGHT_FLOOR, WEIGHT_CEIL, ratio);
 
       // Draw a curved line with an arrowhead
-      const latlngs = curvedPath(from.latlng, to.latlng);
+      const latlngs = curvedPath(from.latlng, to.latlng, laneCurvature(from.latlng, to.latlng));
 
       // Invisible wider hit-area polyline for easier mouse interaction
       const hitArea = L.polyline(latlngs, {
@@ -1333,15 +1351,16 @@ export function buildArcPopup(personId, from, to) {
   </div>`;
 }
 
-export function curvedPath(from, to) {
+export function curvedPath(from, to, curvature = 0.15) {
   // Create a quadratic bezier curve between two lat/lng points
   const midLat = (from[0] + to[0]) / 2;
   const midLng = (from[1] + to[1]) / 2;
-  // Offset perpendicular to the line for curvature
+  // Offset perpendicular to the line for curvature. Sign of `curvature`
+  // picks the side; callers vary it to fan out same-route duplicates.
   const dLat = to[0] - from[0];
   const dLng = to[1] - from[1];
   const dist = Math.sqrt(dLat * dLat + dLng * dLng);
-  const offset = dist * 0.15;
+  const offset = dist * curvature;
   const controlLat = midLat + (-dLng / dist) * offset;
   const controlLng = midLng + (dLat / dist) * offset;
 
