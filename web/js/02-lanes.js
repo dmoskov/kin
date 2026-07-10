@@ -240,6 +240,11 @@ export function autoComputeLanes(centerA, centerB) {
 // children carry every subline of both sides. Married-in spouses carry
 // none — a bare card is itself the "not blood family" signal.
 export const SUBLINE_GLYPHS = ["◆", "●", "▲", "■", "✦", "⬢"];
+// Dedicated subline palette (not the gender pink/blue, not the lane vars):
+// validated for lightness, chroma, CVD separation and contrast against both
+// theme surfaces (#f5f0e8 light / #1a1714 dark); the glyph shapes above are
+// the color-independent secondary encoding.
+export const SUBLINE_COLORS = ["#0f9482", "#b34a32", "#7d5ba6", "#b8790f", "#3b74c9", "#a34d7c"];
 
 export function computeSublines() {
   if (!S.DATA) return { sublines: [], byPerson: {} };
@@ -320,12 +325,7 @@ export function computeSublines() {
       people[0];
     const label = namer?.surname || namer?.given_name || "Family";
 
-    // Color: stay consistent with the timeline's lane colors when a lane is
-    // rooted at one of the same people.
-    const lane = (S.LANES || []).find((l) =>
-      (l.rootIds || (l.rootId ? [l.rootId] : [])).some((r) => root.ids.includes(r))
-    );
-    const color = lane?.color || LANE_COLORS[idx % LANE_COLORS.length];
+    const color = SUBLINE_COLORS[idx % SUBLINE_COLORS.length];
 
     for (const pid of members) (byPerson[pid] ||= []).push(idx);
     sublines.push({ label, color, glyph: SUBLINE_GLYPHS[idx % SUBLINE_GLYPHS.length] });

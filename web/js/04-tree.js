@@ -1334,6 +1334,65 @@ export function renderTree() {
     .attr("y2", (d) => d.y2);
 
   // ── 4. Node cards ──
+  // Sub-family ("subline") membership drives card color: each ancestral
+  // branch has a validated hue, a person's card blends the hues of every
+  // branch they descend from (left→right gradient), and married-in spouses
+  // get a neutral card — bloodlines literally carry their families' colors
+  // down the tree. Gender stays on the avatar disc/ring. With fewer than two
+  // sublines (no grandparents to root them) cards fall back to gender colors.
+  const sublineData = computeSublines();
+  const glyphsFor = (d) => sublineData.byPerson[d.id] || [];
+  const sublinesActive = sublineData.sublines.length >= 2;
+  const tintOf = (color) => `color-mix(in srgb, ${color} 16%, var(--surface))`;
+  const gradDefs = g.append("defs");
+  const comboGradients = new Map(); // combo key -> {fill, stroke} gradient ids
+  function comboGradientIds(list) {
+    const key = list.join("-");
+    let ids = comboGradients.get(key);
+    if (ids) return ids;
+    ids = { fill: `subline-fill-${key}`, stroke: `subline-stroke-${key}` };
+    for (const [id, full] of [[ids.fill, false], [ids.stroke, true]]) {
+      const lg = gradDefs.append("linearGradient").attr("id", id);
+      list.forEach((si, k) => {
+        const color = sublineData.sublines[si].color;
+        lg.append("stop")
+          .attr("offset", `${(k / (list.length - 1)) * 100}%`)
+          .style("stop-color", full ? color : tintOf(color));
+      });
+    }
+    comboGradients.set(key, ids);
+    return ids;
+  }
+  const genderFill = (d) =>
+    d.person.gender === "female" ? "var(--node-female-bg)" : d.person.gender === "other" ? "var(--node-other-bg)" : "var(--node-male-bg)";
+  const genderStroke = (d) =>
+    d.person.gender === "female" ? "var(--female)" : d.person.gender === "other" ? "var(--other)" : "var(--male)";
+  const cardFill = (d) => {
+    if (!sublinesActive) return genderFill(d);
+    const list = glyphsFor(d);
+    if (list.length === 0) return "var(--surface)";
+    if (list.length === 1) return tintOf(sublineData.sublines[list[0]].color);
+    return `url(#${comboGradientIds(list).fill})`;
+  };
+  const cardStroke = (d) => {
+    if (!sublinesActive) return genderStroke(d);
+    const list = glyphsFor(d);
+    if (list.length === 0) return "var(--border)";
+    if (list.length === 1) return sublineData.sublines[list[0]].color;
+    return `url(#${comboGradientIds(list).stroke})`;
+  };
+  // With color carrying family, gender moves into the card's FORM: hard
+  // corners for men, soft for women, in between when unknown. The avatar
+  // disc/ring takes the person's first branch color (neutral for
+  // married-ins) so nothing on the card reads as pink/blue anymore.
+  const cardRadius = (d) =>
+    d.person.gender === "male" ? 3 : d.person.gender === "female" ? 16 : 9;
+  const avatarColor = (d) => {
+    if (!sublinesActive) return genderStroke(d);
+    const list = glyphsFor(d);
+    return list.length ? sublineData.sublines[list[0]].color : "var(--text-muted)";
+  };
+
   // Sort so center couple (gen 0) renders last → on top in SVG
   const sortedNodes = [...nodes].sort((a, b) => {
     const aCenter = (a.id === S.CENTER_ID_A || a.id === S.CENTER_ID_B) ? 1 : 0;
@@ -1371,8 +1430,10 @@ export function renderTree() {
     .attr("y", (d) => (_isCenterId(d) ? -CENTER_OVERHANG_Y : 0))
     .attr("width", (d) => d.w + (_isCenterId(d) ? _overhangL(d) + _overhangR(d) : 0))
     .attr("height", (d) => NODE_H + (_isCenterId(d) ? CENTER_OVERHANG_Y * 2 : 0))
-    .attr("fill", (d) => d.person.gender === "female" ? "var(--node-female-bg)" : d.person.gender === "other" ? "var(--node-other-bg)" : "var(--node-male-bg)")
-    .attr("stroke", (d) => d.person.gender === "female" ? "var(--female)" : d.person.gender === "other" ? "var(--other)" : "var(--male)");
+    .attr("rx", cardRadius)
+    .attr("ry", cardRadius)
+    .attr("fill", cardFill)
+    .attr("stroke", cardStroke);
 
   // Photo thumbnails (circular, clipped)
   const PHOTO_SIZE = 28;
@@ -1468,7 +1529,7 @@ export function renderTree() {
       .attr("cx", PHOTO_PAD + sz / 2)
       .attr("cy", NODE_H / 2)
       .attr("r", sz / 2 + 1)
-      .attr("stroke", d.person.gender === "female" ? "var(--female)" : "var(--male)");
+      .attr("stroke", avatarColor(d));
   });
 
   // Monogram fallback for people without a profile photo — a colored initial
@@ -1480,7 +1541,7 @@ export function renderTree() {
     .attr("cx", (d) => PHOTO_PAD + photoSizeFor(d) / 2)
     .attr("cy", NODE_H / 2)
     .attr("r", (d) => photoSizeFor(d) / 2)
-    .attr("fill", (d) => d.person.gender === "female" ? "var(--female)" : d.person.gender === "other" ? "var(--other)" : "var(--male)");
+    .attr("fill", avatarColor);
   monoGroups
     .append("text")
     .attr("class", "node-monogram-text")
@@ -1518,9 +1579,7 @@ export function renderTree() {
   // ── Subline glyphs: heraldic family badges on the card's top-right edge ──
   // Each ancestral sub-family (Siegel ◆, Kleinberg ●, …) marks its blood
   // members; the badges accumulate down the generations, and married-in
-  // spouses carry none. See computeSublines (02-lanes.js).
-  const sublineData = computeSublines();
-  const glyphsFor = (d) => sublineData.byPerson[d.id] || [];
+  // spouses carry none. The color-independent counterpart of the card hues.
   nodeGroups.filter((d) => glyphsFor(d).length > 0).each(function (d) {
     const grp = d3.select(this);
     const topY = _isCenterId(d) ? -CENTER_OVERHANG_Y : 0;
@@ -1811,7 +1870,7 @@ export function renderTree() {
       .attr("width", n.w)
       .attr("height", NODE_H)
       .attr("rx", 3)
-      .attr("fill", n.person.gender === "female" ? "var(--female)" : n.person.gender === "other" ? "var(--other)" : "var(--male)")
+      .attr("fill", avatarColor(n))
       .attr("opacity", fog >= 3 ? 0.15 : fog >= 1 ? 0.4 : 0.7);
   }
 
