@@ -1337,10 +1337,16 @@ export function renderTree() {
   // Sub-family ("subline") membership drives card color: each ancestral
   // branch has a validated hue, a person's card blends the hues of every
   // branch they descend from (left→right gradient), and married-in spouses
-  // get a neutral card — bloodlines literally carry their families' colors
-  // down the tree. Gender stays on the avatar disc/ring. With fewer than two
-  // sublines (no grandparents to root them) cards fall back to gender colors.
-  const sublineData = computeSublines();
+  // blend their own minor line's new color with their spouse's — bloodlines
+  // literally carry their families' colors down the tree. Gender stays on
+  // the card shape and avatar. With fewer than two sublines (no
+  // grandparents to root them) cards fall back to gender colors.
+  // Root depth is a user option (legend dropdown): deeper roots split a
+  // deep tree into more, finer sublines. Persisted like the other toggles.
+  if (!S.SUBLINE_DEPTH) {
+    S.SUBLINE_DEPTH = parseInt(localStorage.getItem("ft-subline-depth"), 10) || 2;
+  }
+  const sublineData = computeSublines(S.SUBLINE_DEPTH);
   const glyphsFor = (d) => sublineData.byPerson[d.id] || [];
   const sublinesActive = sublineData.sublines.length >= 2;
   const tintOf = (color) => `color-mix(in srgb, ${color} 16%, var(--surface))`;
@@ -1367,16 +1373,31 @@ export function renderTree() {
     d.person.gender === "female" ? "var(--node-female-bg)" : d.person.gender === "other" ? "var(--node-other-bg)" : "var(--node-male-bg)";
   const genderStroke = (d) =>
     d.person.gender === "female" ? "var(--female)" : d.person.gender === "other" ? "var(--other)" : "var(--male)";
+  // A married-in spouse (minor-line-only person) blends their own new color
+  // with the colors they married into — their line's color faces outward,
+  // the spouse's lines face the spouse. Blood members show only their own.
+  const isMinorOnly = (list) =>
+    list.length > 0 && list.every((si) => sublineData.sublines[si]?.minor);
+  const fillListFor = (d) => {
+    const own = glyphsFor(d);
+    if (!isMinorOnly(own)) return own;
+    const couple = layout.couples[d.coupleIdx];
+    if (!couple) return own;
+    const partnerId = couple.primaryId === d.id ? couple.partnerId : couple.primaryId;
+    const partnerList = partnerId ? sublineData.byPerson[partnerId] || [] : [];
+    if (!partnerList.length) return own;
+    return couple.primaryId === d.id ? [...own, ...partnerList] : [...partnerList, ...own];
+  };
   const cardFill = (d) => {
     if (!sublinesActive) return genderFill(d);
-    const list = glyphsFor(d);
+    const list = fillListFor(d);
     if (list.length === 0) return "var(--surface)";
     if (list.length === 1) return tintOf(sublineData.sublines[list[0]].color);
     return `url(#${comboGradientIds(list).fill})`;
   };
   const cardStroke = (d) => {
     if (!sublinesActive) return genderStroke(d);
-    const list = glyphsFor(d);
+    const list = fillListFor(d);
     if (list.length === 0) return "var(--border)";
     if (list.length === 1) return sublineData.sublines[list[0]].color;
     return `url(#${comboGradientIds(list).stroke})`;
@@ -1577,14 +1598,22 @@ export function renderTree() {
     .attr("aria-label", (d) => `${d.person.fullName}, ${photoCount(d)} photos`);
 
   // ── Subline glyphs: heraldic family badges on the card's top-right edge ──
-  // Each ancestral sub-family (Siegel ◆, Kleinberg ●, …) marks its blood
-  // members; the badges accumulate down the generations, and married-in
-  // spouses carry none. The color-independent counterpart of the card hues.
+  // Each sub-family (Siegel ◆, Kleinberg ●, …) marks its blood members; the
+  // badges accumulate down the generations. Married-in spouses carry only
+  // their own minor line's badge (their card fill borrows the spouse's
+  // colors, but blood membership stays strictly their own).
+  // At deeper root depths a recent-generation card can belong to many
+  // sublines; cap the badge row so it never swallows the card edge (the
+  // gradient fill still blends every line).
+  const MAX_GLYPHS = 4;
   nodeGroups.filter((d) => glyphsFor(d).length > 0).each(function (d) {
     const grp = d3.select(this);
     const topY = _isCenterId(d) ? -CENTER_OVERHANG_Y : 0;
     const rightX = d.w + (_isCenterId(d) ? _overhangR(d) : 0);
-    glyphsFor(d).forEach((si, k) => {
+    const list = glyphsFor(d);
+    const overflow = list.length > MAX_GLYPHS ? list.length - (MAX_GLYPHS - 1) : 0;
+    const shown = overflow ? list.slice(0, MAX_GLYPHS - 1) : list;
+    shown.forEach((si, k) => {
       const sub = sublineData.sublines[si];
       if (!sub) return;
       grp.append("text")
@@ -1598,6 +1627,17 @@ export function renderTree() {
         .append("title")
         .text(sub.label);
     });
+    if (overflow) {
+      grp.append("text")
+        .attr("class", "subline-glyph subline-glyph-more")
+        .attr("x", rightX - 9 - shown.length * 11)
+        .attr("y", topY)
+        .attr("text-anchor", "middle")
+        .attr("dominant-baseline", "central")
+        .text(`+${overflow}`)
+        .append("title")
+        .text(list.slice(shown.length).map((si) => sublineData.sublines[si]?.label).filter(Boolean).join(", "));
+    }
   });
 
   // Legend mapping each glyph to its family name, so the badges are
@@ -1605,13 +1645,14 @@ export function renderTree() {
   const legendHost = document.querySelector(".tree-container");
   if (legendHost) {
     let legendEl = legendHost.querySelector(".tree-subline-legend");
-    if (sublineData.sublines.length >= 2) {
+    if (sublineData.sublines.filter((sub) => !sub.minor).length >= 2) {
       if (!legendEl) {
         legendEl = document.createElement("div");
         legendEl.className = "tree-subline-legend";
         legendHost.appendChild(legendEl);
       }
-      legendEl.innerHTML = sublineData.sublines
+      const items = sublineData.sublines
+        .filter((sub) => !sub.minor)
         .map(
           (sub) =>
             `<span class="tree-subline-legend-item">` +
@@ -1619,6 +1660,24 @@ export function renderTree() {
             `${escapeHtml(sub.label)}</span>`
         )
         .join("");
+      const depthOptions = [
+        [2, "Grandparents"],
+        [3, "Great-grandparents"],
+        [4, "2× great-grandparents"],
+      ]
+        .map(
+          ([v, label]) =>
+            `<option value="${v}"${v === S.SUBLINE_DEPTH ? " selected" : ""}>${label}</option>`
+        )
+        .join("");
+      legendEl.innerHTML =
+        items +
+        `<select class="tree-subline-depth" aria-label="How far back family lines are rooted">${depthOptions}</select>`;
+      legendEl.querySelector(".tree-subline-depth").addEventListener("change", (e) => {
+        S.SUBLINE_DEPTH = parseInt(e.target.value, 10) || 2;
+        localStorage.setItem("ft-subline-depth", String(S.SUBLINE_DEPTH));
+        renderTree();
+      });
     } else if (legendEl) {
       legendEl.remove();
     }

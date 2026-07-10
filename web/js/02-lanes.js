@@ -237,16 +237,24 @@ export function autoComputeLanes(centerA, centerB) {
 // carries a subline's glyph when they are blood kin to it — an ancestor,
 // a descendant, or collateral blood (a great-uncle is still a Siegel). The
 // glyphs therefore accumulate down the generations: the center couple's
-// children carry every subline of both sides. Married-in spouses carry
-// none — a bare card is itself the "not blood family" signal.
+// children carry every subline of both sides. Married-in spouses found a
+// MINOR subline of their own (rooted at their parents when shown, else at
+// themselves): their in-law family cluster shares it and their children
+// inherit it — the "new blood" half of every blended line. Minor lines are
+// kept out of the legend.
 export const SUBLINE_GLYPHS = ["◆", "●", "▲", "■", "✦", "⬢"];
 // Dedicated subline palette (not the gender pink/blue, not the lane vars):
 // validated for lightness, chroma, CVD separation and contrast against both
 // theme surfaces (#f5f0e8 light / #1a1714 dark); the glyph shapes above are
 // the color-independent secondary encoding.
-export const SUBLINE_COLORS = ["#0f9482", "#b34a32", "#7d5ba6", "#b8790f", "#3b74c9", "#a34d7c"];
+export const SUBLINE_COLORS = [
+  "#0f9482", "#b34a32", "#3b74c9", "#b8790f", "#7d5ba6", "#4f9433",
+  "#b8478f", "#1990bd", "#c96a2b", "#5f5fd3", "#ad8508", "#a34d7c",
+  "#1f9663", "#c4574e", "#5578cf", "#9c6f1d", "#9a6fc0", "#5d8c1d",
+  "#d4589e", "#b06a3c", "#0c93ab", "#7a6fd8", "#7d8a10", "#c14a68",
+];
 
-export function computeSublines() {
+export function computeSublines(depth = 2) {
   if (!S.DATA) return { sublines: [], byPerson: {} };
 
   const parentsOf = {};
@@ -261,37 +269,46 @@ export function computeSublines() {
     (partnersOf[u.partner2_id] ||= []).push(u.partner1_id);
   }
 
-  // Root couples: each center partner's grandparent couples. A parent with
-  // no parents of their own roots a subline directly (their surname still
-  // names a family) — same fallback as autoComputeLanes.
+  // Root couples sit `depth` generations above the center couple (2 =
+  // grandparents, 3 = great-grandparents, …). A line that ends early roots
+  // at its deepest person instead — their surname still names a family —
+  // so every blood line founds a subline regardless of how far back it goes.
+  const groupCouples = (pids) => {
+    const groups = [];
+    const used = new Set();
+    for (const g of pids) {
+      if (used.has(g)) continue;
+      const mate = (partnersOf[g] || []).find((m) => pids.includes(m) && m !== g);
+      used.add(g);
+      if (mate) used.add(mate);
+      groups.push(mate ? [g, mate] : [g]);
+    }
+    return groups;
+  };
+  const rootsAbove = (pid, gensUp) => {
+    const pars = (parentsOf[pid] || []).filter((g) => S.PEOPLE_MAP[g]);
+    if (pars.length === 0) return [{ ids: [pid], via: pid }];
+    if (gensUp === 1) return groupCouples(pars).map((ids) => ({ ids, via: pid }));
+    const out = [];
+    for (const par of pars) out.push(...rootsAbove(par, gensUp - 1));
+    return out;
+  };
   const roots = [];
   const seenRoot = new Set();
   for (const centerPid of [S.CENTER_ID_A, S.CENTER_ID_B]) {
-    if (!centerPid) continue;
-    for (const par of parentsOf[centerPid] || []) {
-      const gps = (parentsOf[par] || []).filter((g) => S.PEOPLE_MAP[g]);
-      const groups = [];
-      const used = new Set();
-      for (const g of gps) {
-        if (used.has(g)) continue;
-        const mate = (partnersOf[g] || []).find((m) => gps.includes(m) && m !== g);
-        used.add(g);
-        if (mate) used.add(mate);
-        groups.push(mate ? [g, mate] : [g]);
-      }
-      if (groups.length === 0 && S.PEOPLE_MAP[par]) groups.push([par]);
-      for (const ids of groups) {
-        const key = [...ids].sort().join("|");
-        if (seenRoot.has(key)) continue;
-        seenRoot.add(key);
-        roots.push({ ids, via: par });
-      }
+    if (!centerPid || !(parentsOf[centerPid] || []).length) continue;
+    for (const root of rootsAbove(centerPid, Math.max(2, depth))) {
+      const key = [...root.ids].sort().join("|");
+      if (seenRoot.has(key)) continue;
+      seenRoot.add(key);
+      roots.push(root);
     }
   }
 
   const sublines = [];
   const byPerson = {};
-  roots.forEach((root, idx) => {
+  const addSubline = (root, minor) => {
+    const idx = sublines.length;
     // Blood members: the root couple, all their ancestors, and every
     // descendant of any of those.
     const up = new Set();
@@ -325,11 +342,34 @@ export function computeSublines() {
       people[0];
     const label = namer?.surname || namer?.given_name || "Family";
 
-    const color = SUBLINE_COLORS[idx % SUBLINE_COLORS.length];
-
     for (const pid of members) (byPerson[pid] ||= []).push(idx);
-    sublines.push({ label, color, glyph: SUBLINE_GLYPHS[idx % SUBLINE_GLYPHS.length] });
-  });
+    sublines.push({
+      label,
+      color: SUBLINE_COLORS[idx % SUBLINE_COLORS.length],
+      glyph: SUBLINE_GLYPHS[idx % SUBLINE_GLYPHS.length],
+      minor: !!minor,
+    });
+  };
+  roots.forEach((root) => addSubline(root, false));
+
+  // ── Minor sublines: married-in spouses found their own line ──
+  // A spouse with no blood membership shouldn't stay colorless: they root a
+  // personal subline (at their parents' couple when shown, so siblings who
+  // married into the family share one line) and their children inherit it.
+  // Only spouses of people already colored above found one, so color doesn't
+  // creep outward marriage by marriage into distant in-law branches.
+  const minorRoots = [];
+  for (const p of S.DATA.people) {
+    if (byPerson[p.id]) continue;
+    if (!(partnersOf[p.id] || []).some((s) => byPerson[s])) continue;
+    for (const root of rootsAbove(p.id, 1)) {
+      const key = [...root.ids].sort().join("|");
+      if (seenRoot.has(key)) continue;
+      seenRoot.add(key);
+      minorRoots.push(root);
+    }
+  }
+  minorRoots.forEach((root) => addSubline(root, true));
 
   return { sublines, byPerson };
 }

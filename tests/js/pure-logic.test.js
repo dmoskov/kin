@@ -978,7 +978,7 @@ describe("buildButterflyLayout couple orientation", () => {
     mkP("William", "male"), mkP("RoseC", "female"),
     mkP("Beatrice", "female"), mkP("Murray", "male"),
     mkP("MorrisM", "male"), mkP("CeliaM", "female"),
-    mkP("Milt", "male"), mkP("Dustin", "male"),
+    mkP("Milt", "male"), mkP("Dustin", "male"), mkP("Buzz", "male"),
   ];
   const relationships = [];
   const kidsOf = (pars, cs) => {
@@ -989,6 +989,7 @@ describe("buildButterflyLayout couple orientation", () => {
   kidsOf(["William", "RoseC"], ["Rosalie", "Beatrice", "Murray"]);
   kidsOf(["MorrisM", "CeliaM"], ["Richard"]);
   kidsOf(["Nancy", "Richard"], ["Dustin"]);
+  kidsOf(["Lillian", "Milt"], ["Buzz"]);
   const unions = [
     { partner1_id: "Nancy", partner2_id: "Richard" },
     { partner1_id: "Jack", partner2_id: "Rosalie" },
@@ -1041,11 +1042,11 @@ describe("buildButterflyLayout couple orientation", () => {
     expect(checked).toBeGreaterThan(0); // Jack+Rosalie at minimum
   });
 
-  it("computeSublines: badges accumulate down generations; married-ins carry none", () => {
+  it("computeSublines: badges accumulate down generations; married-ins found minor lines", () => {
     const { sublines, byPerson } = computeSublines();
     // Nancy's two grandparent couples + Richard's two fallback roots (his
-    // parents have no parents of their own).
-    expect(sublines.length).toBe(4);
+    // parents have no parents of their own) + Milt's minor line.
+    expect(sublines.filter((s) => !s.minor).length).toBe(4);
     expect((byPerson["Jack"] || []).length).toBe(1);
     expect((byPerson["Rosalie"] || []).length).toBe(1);
     expect(byPerson["Jack"][0]).not.toBe(byPerson["Rosalie"][0]);
@@ -1053,7 +1054,25 @@ describe("buildButterflyLayout couple orientation", () => {
     expect(byPerson["Lillian"]).toEqual(byPerson["Jack"]); // siblings too
     expect((byPerson["Nancy"] || []).length).toBe(2); // one from each parent
     expect((byPerson["Dustin"] || []).length).toBe(4); // all four accumulate
-    expect(byPerson["Milt"]).toBeUndefined(); // married-in: bare card is the signal
+    // Married-in Milt founds his own MINOR line — new blood gets a new color.
+    expect((byPerson["Milt"] || []).length).toBe(1);
+    expect(sublines[byPerson["Milt"][0]].minor).toBe(true);
+    expect(byPerson["Milt"][0]).not.toBe(byPerson["Lillian"][0]);
+    // Their child blends both: mother's major line + father's minor line.
+    expect(byPerson["Buzz"]).toEqual(
+      expect.arrayContaining([byPerson["Lillian"][0], byPerson["Milt"][0]])
+    );
+    expect(byPerson["Buzz"].length).toBe(2);
+  });
+
+  it("computeSublines: deeper root depth splits lines into more sublines", () => {
+    const deep = computeSublines(3);
+    // Every gen -2 line ends there, so each grandparent roots their own
+    // subline: Abraham, Ida, William, RoseC + MorrisM, CeliaM (+ Milt minor).
+    expect(deep.sublines.filter((s) => !s.minor).length).toBe(6);
+    expect((deep.byPerson["Jack"] || []).length).toBe(2); // Abraham-root + Ida-root
+    expect((deep.byPerson["Dustin"] || []).length).toBe(6); // all six accumulate
+    expect(deep.sublines[deep.byPerson["Milt"][0]].minor).toBe(true);
   });
 
   it("puts Jack on the Siegel side and Rosalie on the Kleinberg side", () => {
