@@ -9,7 +9,7 @@ import {
   NODE_W, COMPACT_NODE_W, NODE_H, ROW_HEIGHT, SUB_ROW_HEIGHT, MAX_SUB_ROWS,
 } from "../../web/js/04-tree.js";
 import { calculateRelationship, viewerRelationText } from "../../web/js/07-relationship.js";
-import { autoComputeLanes, assignLane, buildLaneCache } from "../../web/js/02-lanes.js";
+import { autoComputeLanes, assignLane, buildLaneCache, computeSublines } from "../../web/js/02-lanes.js";
 import { _personPhotos } from "../../web/js/12-photos.js";
 import { geocode } from "../../web/js/08-map.js";
 import { populateViewingAsDropdown } from "../../web/js/16-gallery.js";
@@ -958,5 +958,109 @@ describe("geocode", () => {
     const port = geocode("Port of New York");
     expect(port[0]).toBeCloseTo(40.7, 1);
     expect(port[1]).toBeCloseTo(-74.0, 1);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// buildButterflyLayout: cross-family couples face their blood relatives
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("buildButterflyLayout couple orientation", () => {
+  // Mirrors the prod shape that read wrong: Jack Siegel ⚭ Rosalie Kleinberg
+  // sit between the two family blocks; each partner must render on the side
+  // facing their own parents/siblings.
+  const mkP = (id, gender) => makePerson(id, id, "X", { gender });
+  const people = [
+    mkP("Nancy", "female"), mkP("Richard", "male"), mkP("Lynn", "female"),
+    mkP("Jack", "male"), mkP("Rosalie", "female"),
+    mkP("Abraham", "male"), mkP("Ida", "female"),
+    mkP("Lillian", "female"), mkP("Rose", "female"), mkP("Besse", "female"), mkP("Sarah", "female"),
+    mkP("William", "male"), mkP("RoseC", "female"),
+    mkP("Beatrice", "female"), mkP("Murray", "male"),
+    mkP("MorrisM", "male"), mkP("CeliaM", "female"),
+    mkP("Milt", "male"), mkP("Dustin", "male"),
+  ];
+  const relationships = [];
+  const kidsOf = (pars, cs) => {
+    for (const c of cs) for (const p of pars) relationships.push({ parent_id: p, child_id: c });
+  };
+  kidsOf(["Jack", "Rosalie"], ["Nancy", "Lynn"]);
+  kidsOf(["Abraham", "Ida"], ["Jack", "Lillian", "Rose", "Besse", "Sarah"]);
+  kidsOf(["William", "RoseC"], ["Rosalie", "Beatrice", "Murray"]);
+  kidsOf(["MorrisM", "CeliaM"], ["Richard"]);
+  kidsOf(["Nancy", "Richard"], ["Dustin"]);
+  const unions = [
+    { partner1_id: "Nancy", partner2_id: "Richard" },
+    { partner1_id: "Jack", partner2_id: "Rosalie" },
+    { partner1_id: "Abraham", partner2_id: "Ida" },
+    { partner1_id: "William", partner2_id: "RoseC" },
+    { partner1_id: "MorrisM", partner2_id: "CeliaM" },
+    { partner1_id: "Lillian", partner2_id: "Milt" },
+  ];
+  const data = { people, relationships, unions, events: [] };
+
+  beforeEach(() => {
+    const pm = {};
+    for (const p of people) pm[p.id] = p;
+    S.PEOPLE_MAP = pm;
+    S.DATA = data;
+    S.ORIGINAL_DATA = data;
+    S.CENTER_ID_A = "Nancy";
+    S.CENTER_ID_B = "Richard";
+    S.TREE_DEPTH = 4;
+    S.LANES = [];
+    S.CONFIG = { familyName: "Test" };
+  });
+
+  it("orients every cross-family couple toward each partner's own parents", () => {
+    const { couples, couplePositions } = buildButterflyLayout();
+    const coupleIdxOf = {};
+    couples.forEach((c, i) => {
+      coupleIdxOf[c.primaryId] = i;
+      if (c.partnerId) coupleIdxOf[c.partnerId] = i;
+    });
+    const parentsOf = {};
+    for (const r of relationships) (parentsOf[r.child_id] ||= []).push(r.parent_id);
+    const anchor = (pid) => {
+      for (const par of parentsOf[pid] || []) {
+        const ci = coupleIdxOf[par];
+        if (ci !== undefined && couplePositions.has(ci)) return couplePositions.get(ci).cx;
+      }
+      return null;
+    };
+    let checked = 0;
+    couples.forEach((c, i) => {
+      if (i === 0 || !c.partnerId) return; // couples[0] = center couple, fixed order
+      const leftAnchor = anchor(c.primaryId);
+      const rightAnchor = anchor(c.partnerId);
+      if (leftAnchor === null || rightAnchor === null || leftAnchor === rightAnchor) return;
+      checked++;
+      expect(leftAnchor, `${c.primaryId} (left) + ${c.partnerId} (right) face away from their families`)
+        .toBeLessThanOrEqual(rightAnchor);
+    });
+    expect(checked).toBeGreaterThan(0); // Jack+Rosalie at minimum
+  });
+
+  it("computeSublines: badges accumulate down generations; married-ins carry none", () => {
+    const { sublines, byPerson } = computeSublines();
+    // Nancy's two grandparent couples + Richard's two fallback roots (his
+    // parents have no parents of their own).
+    expect(sublines.length).toBe(4);
+    expect((byPerson["Jack"] || []).length).toBe(1);
+    expect((byPerson["Rosalie"] || []).length).toBe(1);
+    expect(byPerson["Jack"][0]).not.toBe(byPerson["Rosalie"][0]);
+    expect(byPerson["Ida"]).toEqual(byPerson["Jack"]); // ancestors carry their line's badge
+    expect(byPerson["Lillian"]).toEqual(byPerson["Jack"]); // siblings too
+    expect((byPerson["Nancy"] || []).length).toBe(2); // one from each parent
+    expect((byPerson["Dustin"] || []).length).toBe(4); // all four accumulate
+    expect(byPerson["Milt"]).toBeUndefined(); // married-in: bare card is the signal
+  });
+
+  it("puts Jack on the Siegel side and Rosalie on the Kleinberg side", () => {
+    const { nodes } = buildButterflyLayout();
+    const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
+    const siegelSide = Math.sign(byId["Abraham"].cx - byId["William"].cx);
+    expect(siegelSide).not.toBe(0);
+    expect(Math.sign(byId["Jack"].cx - byId["Rosalie"].cx)).toBe(siegelSide);
   });
 });

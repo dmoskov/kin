@@ -231,6 +231,109 @@ export function autoComputeLanes(centerA, centerB) {
   _updateHeaderFromLanes();
 }
 
+// ── Sublines: which ancestral sub-families a person belongs to ──────────
+// Heraldry-style membership for the tree view. Each of the center couple's
+// grandparent couples founds a "subline" (Siegel, Kleinberg, …); a person
+// carries a subline's glyph when they are blood kin to it — an ancestor,
+// a descendant, or collateral blood (a great-uncle is still a Siegel). The
+// glyphs therefore accumulate down the generations: the center couple's
+// children carry every subline of both sides. Married-in spouses carry
+// none — a bare card is itself the "not blood family" signal.
+export const SUBLINE_GLYPHS = ["◆", "●", "▲", "■", "✦", "⬢"];
+
+export function computeSublines() {
+  if (!S.DATA) return { sublines: [], byPerson: {} };
+
+  const parentsOf = {};
+  const childrenOf = {};
+  for (const r of S.DATA.relationships) {
+    (parentsOf[r.child_id] ||= []).push(r.parent_id);
+    (childrenOf[r.parent_id] ||= []).push(r.child_id);
+  }
+  const partnersOf = {};
+  for (const u of S.DATA.unions) {
+    (partnersOf[u.partner1_id] ||= []).push(u.partner2_id);
+    (partnersOf[u.partner2_id] ||= []).push(u.partner1_id);
+  }
+
+  // Root couples: each center partner's grandparent couples. A parent with
+  // no parents of their own roots a subline directly (their surname still
+  // names a family) — same fallback as autoComputeLanes.
+  const roots = [];
+  const seenRoot = new Set();
+  for (const centerPid of [S.CENTER_ID_A, S.CENTER_ID_B]) {
+    if (!centerPid) continue;
+    for (const par of parentsOf[centerPid] || []) {
+      const gps = (parentsOf[par] || []).filter((g) => S.PEOPLE_MAP[g]);
+      const groups = [];
+      const used = new Set();
+      for (const g of gps) {
+        if (used.has(g)) continue;
+        const mate = (partnersOf[g] || []).find((m) => gps.includes(m) && m !== g);
+        used.add(g);
+        if (mate) used.add(mate);
+        groups.push(mate ? [g, mate] : [g]);
+      }
+      if (groups.length === 0 && S.PEOPLE_MAP[par]) groups.push([par]);
+      for (const ids of groups) {
+        const key = [...ids].sort().join("|");
+        if (seenRoot.has(key)) continue;
+        seenRoot.add(key);
+        roots.push({ ids, via: par });
+      }
+    }
+  }
+
+  const sublines = [];
+  const byPerson = {};
+  roots.forEach((root, idx) => {
+    // Blood members: the root couple, all their ancestors, and every
+    // descendant of any of those.
+    const up = new Set();
+    const upStack = [...root.ids];
+    while (upStack.length) {
+      const pid = upStack.pop();
+      if (up.has(pid)) continue;
+      up.add(pid);
+      for (const p of parentsOf[pid] || []) upStack.push(p);
+    }
+    const members = new Set(up);
+    const downStack = [...up];
+    while (downStack.length) {
+      const pid = downStack.pop();
+      for (const kid of childrenOf[pid] || []) {
+        if (!members.has(kid)) {
+          members.add(kid);
+          downStack.push(kid);
+        }
+      }
+    }
+
+    // Label: prefer the root partner whose surname the connecting parent
+    // carries (Abraham SIEGEL over Ida Tocher when the line runs through
+    // Jack Siegel), then the male partner, then whoever is first.
+    const people = root.ids.map((id) => S.PEOPLE_MAP[id]).filter(Boolean);
+    const viaSurname = (S.PEOPLE_MAP[root.via]?.surname || "").toLowerCase();
+    const namer =
+      people.find((p) => p.surname && p.surname.toLowerCase() === viaSurname) ||
+      people.find((p) => p.gender === "male") ||
+      people[0];
+    const label = namer?.surname || namer?.given_name || "Family";
+
+    // Color: stay consistent with the timeline's lane colors when a lane is
+    // rooted at one of the same people.
+    const lane = (S.LANES || []).find((l) =>
+      (l.rootIds || (l.rootId ? [l.rootId] : [])).some((r) => root.ids.includes(r))
+    );
+    const color = lane?.color || LANE_COLORS[idx % LANE_COLORS.length];
+
+    for (const pid of members) (byPerson[pid] ||= []).push(idx);
+    sublines.push({ label, color, glyph: SUBLINE_GLYPHS[idx % SUBLINE_GLYPHS.length] });
+  });
+
+  return { sublines, byPerson };
+}
+
 /**
  * Set the page title from auto-detected lane labels when no familyName is
  * configured.  Produces e.g. "Smith · Jones · Brown · Wilson".

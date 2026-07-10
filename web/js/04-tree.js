@@ -2,8 +2,8 @@
 // Shared mutable state lives in S (00-state.js); functions/consts are
 // bridged onto window by 99-main.js so inline onclick handlers resolve.
 import { S } from "./00-state.js";
-import { _resolveCenterIds } from "./02-lanes.js";
-import { applyVisibilityFilter } from "./03-data-nav.js";
+import { _resolveCenterIds, computeSublines } from "./02-lanes.js";
+import { applyVisibilityFilter, escapeHtml } from "./03-data-nav.js";
 
 
 function _computeAge(birthDateStr) {
@@ -29,8 +29,10 @@ export const NODE_W = 160;
 // generations that are most crowded.
 export const COMPACT_NODE_W = 104;
 export const NODE_H = 52;
-export const COUPLE_GAP = 18;
-export const H_SPACING = 10;
+// Couples must sit closer to each other than to unrelated neighbors, or a
+// married-in spouse reads as a sibling of the adjacent blood family.
+export const COUPLE_GAP = 8;
+export const H_SPACING = 26;
 export const ROW_HEIGHT = 95;
 // Crowded generations wrap into extra sub-rows inside their band instead of
 // spreading wider; each sub-row adds this much band height, capped so one
@@ -891,6 +893,34 @@ export function buildButterflyLayout() {
     pos.y = bands.tops[couples[i].gen] + BAND_PADDING + (laneOf.get(i) || 0) * SUB_ROW_HEIGHT;
   }
 
+  // ── Orient cross-family couples toward their blood relatives ──
+  // The primary partner renders on the left. When both partners' parents are
+  // in the tree (Jack Siegel ⚭ Rosalie Kleinberg, sitting between the two
+  // family blocks), draw each partner on the side facing their own parents so
+  // neither reads as a sibling of the other's family. Positions are couple
+  // centers, so swapping never moves the couple itself. The center couple is
+  // excluded: its A-left/B-right order is what the ancestor blocks were
+  // positioned around (and what the center-card overhang assumes).
+  const familyAnchorX = (pid) => {
+    for (const par of parentsOf[pid] || []) {
+      const ci = personCoupleIdx[par];
+      if (ci !== undefined && couplePositions.has(ci)) return couplePositions.get(ci).cx;
+    }
+    return null;
+  };
+  for (let i = 0; i < couples.length; i++) {
+    const c = couples[i];
+    if (i === centerIdx || !c.partnerId) continue;
+    const primaryAnchor = familyAnchorX(c.primaryId);
+    const partnerAnchor = familyAnchorX(c.partnerId);
+    if (primaryAnchor === null || partnerAnchor === null) continue;
+    if (partnerAnchor < primaryAnchor) {
+      const tmp = c.primaryId;
+      c.primaryId = c.partnerId;
+      c.partnerId = tmp;
+    }
+  }
+
   // Build flat node list
   const nodes = [];
   const nodeMap = {};
@@ -1326,12 +1356,20 @@ export function renderTree() {
   const CENTER_OVERHANG_X = 12;
   const CENTER_OVERHANG_Y = 8;
   const _isCenterId = (d) => d.id === S.CENTER_ID_A || d.id === S.CENTER_ID_B;
+  // With both center partners shown, their facing edges sit only COUPLE_GAP
+  // apart — overhang those edges by less so the enlarged cards don't overlap.
+  const _centerPairShown = !!(S.CENTER_ID_A && S.CENTER_ID_B);
+  const CENTER_INNER_OVERHANG = 2;
+  const _overhangL = (d) =>
+    _centerPairShown && d.id === S.CENTER_ID_B ? CENTER_INNER_OVERHANG : CENTER_OVERHANG_X;
+  const _overhangR = (d) =>
+    _centerPairShown && d.id === S.CENTER_ID_A ? CENTER_INNER_OVERHANG : CENTER_OVERHANG_X;
   nodeGroups
     .append("rect")
     .attr("class", (d) => "node-rect" + (_isCenterId(d) ? " center-node" : ""))
-    .attr("x", (d) => (_isCenterId(d) ? -CENTER_OVERHANG_X : 0))
+    .attr("x", (d) => (_isCenterId(d) ? -_overhangL(d) : 0))
     .attr("y", (d) => (_isCenterId(d) ? -CENTER_OVERHANG_Y : 0))
-    .attr("width", (d) => d.w + (_isCenterId(d) ? CENTER_OVERHANG_X * 2 : 0))
+    .attr("width", (d) => d.w + (_isCenterId(d) ? _overhangL(d) + _overhangR(d) : 0))
     .attr("height", (d) => NODE_H + (_isCenterId(d) ? CENTER_OVERHANG_Y * 2 : 0))
     .attr("fill", (d) => d.person.gender === "female" ? "var(--node-female-bg)" : d.person.gender === "other" ? "var(--node-other-bg)" : "var(--node-male-bg)")
     .attr("stroke", (d) => d.person.gender === "female" ? "var(--female)" : d.person.gender === "other" ? "var(--other)" : "var(--male)");
@@ -1476,6 +1514,56 @@ export function renderTree() {
   // Append the photo count to the node's aria-label for screen readers.
   nodeGroups.filter((d) => photoCount(d) >= 2)
     .attr("aria-label", (d) => `${d.person.fullName}, ${photoCount(d)} photos`);
+
+  // ── Subline glyphs: heraldic family badges on the card's top-right edge ──
+  // Each ancestral sub-family (Siegel ◆, Kleinberg ●, …) marks its blood
+  // members; the badges accumulate down the generations, and married-in
+  // spouses carry none. See computeSublines (02-lanes.js).
+  const sublineData = computeSublines();
+  const glyphsFor = (d) => sublineData.byPerson[d.id] || [];
+  nodeGroups.filter((d) => glyphsFor(d).length > 0).each(function (d) {
+    const grp = d3.select(this);
+    const topY = _isCenterId(d) ? -CENTER_OVERHANG_Y : 0;
+    const rightX = d.w + (_isCenterId(d) ? _overhangR(d) : 0);
+    glyphsFor(d).forEach((si, k) => {
+      const sub = sublineData.sublines[si];
+      if (!sub) return;
+      grp.append("text")
+        .attr("class", "subline-glyph")
+        .attr("x", rightX - 9 - k * 11)
+        .attr("y", topY)
+        .attr("text-anchor", "middle")
+        .attr("dominant-baseline", "central")
+        .attr("fill", sub.color)
+        .text(sub.glyph)
+        .append("title")
+        .text(sub.label);
+    });
+  });
+
+  // Legend mapping each glyph to its family name, so the badges are
+  // self-explanatory (mirrors the timeline's lane legend).
+  const legendHost = document.querySelector(".tree-container");
+  if (legendHost) {
+    let legendEl = legendHost.querySelector(".tree-subline-legend");
+    if (sublineData.sublines.length >= 2) {
+      if (!legendEl) {
+        legendEl = document.createElement("div");
+        legendEl.className = "tree-subline-legend";
+        legendHost.appendChild(legendEl);
+      }
+      legendEl.innerHTML = sublineData.sublines
+        .map(
+          (sub) =>
+            `<span class="tree-subline-legend-item">` +
+            `<span class="tree-subline-legend-glyph" style="color:${sub.color}">${sub.glyph}</span>` +
+            `${escapeHtml(sub.label)}</span>`
+        )
+        .join("");
+    } else if (legendEl) {
+      legendEl.remove();
+    }
+  }
 
   // Every node now has an avatar, so text is always shifted right of it. The
   // center node's larger avatar pushes its text column further right.

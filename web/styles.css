@@ -359,6 +359,48 @@ main {
   user-select: none;
 }
 
+/* Subline glyphs — heraldic sub-family badges straddling the card's top
+   edge. The halo stroke lifts them off band backgrounds and link lines. */
+.subline-glyph {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 3px;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Legend mapping subline glyphs to family names (top-right of the tree). */
+.tree-subline-legend {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 14px;
+  max-width: 300px;
+  padding: 8px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--text-muted);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+.tree-subline-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.tree-subline-legend-glyph { font-size: 11px; line-height: 1; }
+@media (max-width: 600px) {
+  .tree-subline-legend { display: none; }
+}
+
 /* Photo-count badge — small accent disc on multi-photo nodes. Hidden until
    the tree is zoomed in (class toggled on the SVG) to avoid clutter. */
 .node-photo-badge { opacity: 0; transition: opacity 0.2s ease; }
