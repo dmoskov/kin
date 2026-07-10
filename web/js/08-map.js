@@ -965,19 +965,32 @@ export function placeIcons(place) {
 // Spotlight one person's whole journey: brighten all their arcs/boats and dim
 // everyone else's. Implemented via CSS classes on the SVG/marker elements, so
 // clearing is just removing the container class — no per-arc style recompute.
-export function setSpotlight(personId) {
+// Emphasize one person's journey. Two intensities:
+//   dim: false — hover: brighten this person's arcs, leave the rest alone
+//   dim: true  — click: full spotlight, everyone else fades to a whisper
+// Hover must stay gentle: dimming the whole map on a passing cursor made
+// every stray hover a dramatic global flash, which read as instability.
+export function setSpotlight(personId, opts = {}) {
   const cont = S.MAP && S.MAP.getContainer();
   if (!cont) return;
-  if (!personId) { cont.classList.remove("map-spotlighting"); return; }
-  cont.classList.add("map-spotlighting");
+  const dim = opts.dim !== false;
+  if (!personId) {
+    cont.classList.remove("map-spotlighting");
+    for (const a of MAP_ARCS) {
+      for (const layer of [a.polyline, a.hitArea, a.arrowHead, a.boat]) {
+        const el = layer && layer.getElement && layer.getElement();
+        if (el) { el.classList.remove("arc-spot"); el.classList.remove("arc-dim"); }
+      }
+    }
+    return;
+  }
+  cont.classList.toggle("map-spotlighting", dim);
   for (const a of MAP_ARCS) {
     const on = a.personId === personId;
-    for (const layer of [a.polyline, a.hitArea, a.arrowHead]) {
+    for (const layer of [a.polyline, a.hitArea, a.arrowHead, a.boat]) {
       const el = layer && layer.getElement && layer.getElement();
-      if (el) { el.classList.toggle("arc-spot", on); el.classList.toggle("arc-dim", !on); }
+      if (el) { el.classList.toggle("arc-spot", on); el.classList.toggle("arc-dim", !on && dim); }
     }
-    const bel = a.boat && a.boat.getElement && a.boat.getElement();
-    if (bel) { bel.classList.toggle("arc-spot", on); bel.classList.toggle("arc-dim", !on); }
   }
 }
 
@@ -1076,7 +1089,8 @@ export function plotMigrationArcs(events) {
       // in between (that global blink read as flicker).
       hitArea.on("mouseover", () => {
         clearTimeout(_spotlightClearTimer);
-        setSpotlight(personId);
+        // Gentle: brighten this journey, don't dim the world (that's click's job)
+        setSpotlight(personId, { dim: false });
         polyline.setStyle({
           weight: arcWeight + 3,
           opacity: Math.min(arcOpacity + 0.3, 1),
@@ -1087,8 +1101,14 @@ export function plotMigrationArcs(events) {
         polyline.setStyle({ weight: arcWeight, opacity: arcOpacity });
         arrowHead.setStyle({ radius: lerp(2, 4, ratio) });
         clearTimeout(_spotlightClearTimer);
-        _spotlightClearTimer = setTimeout(() => setSpotlight(null), 180);
+        _spotlightClearTimer = setTimeout(() => {
+          // Don't undo a click-committed spotlight on a mere mouse exit
+          if (!S.MAP?.getContainer()?.classList.contains("map-spotlighting")) setSpotlight(null);
+        }, 180);
       });
+      // Click commits: full spotlight while the popup is open
+      hitArea.on("click", () => setSpotlight(personId));
+      hitArea.on("popupclose", () => setSpotlight(null));
 
       // Click: open popup with migration details for the person
       const popupContent = buildArcPopup(personId, from, to);

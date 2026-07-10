@@ -2842,6 +2842,9 @@ a.src-chip:hover { color: var(--accent); background: color-mix(in srgb, var(--ac
   pointer-events: stroke !important;
   cursor: pointer !important;
 }
+/* Clicking the invisible hit path must not draw a giant focus rectangle
+   around its bounding box — the popup + spotlight are the click feedback. */
+.arc-hit-area:focus { outline: none; }
 
 /* Leaflet re-creates tooltip DOM on every open; a short fade-in keeps rapid
    hover sweeps from strobing (they appear softly instead of popping). */
@@ -6517,6 +6520,10 @@ select.ge-input { padding: 3px 4px; }
 
 /* Person journey spotlight: hovering an arc highlights that person's whole
    path and dims everyone else's. */
+/* Hover: the hovered person's whole journey brightens in place — no global
+   dim (that's reserved for click, when the user commits to an identity). */
+path.arc-spot:not(.arc-hit-area) { stroke-opacity: 0.95 !important; transition: stroke-opacity 0.15s; }
+
 .map-spotlighting .arc-dim { opacity: 0.06 !important; transition: opacity 0.15s; }
 .map-spotlighting path.arc-spot { opacity: 1 !important; stroke-width: 4 !important; transition: opacity 0.15s; }
 .map-spotlighting .arc-spot { opacity: 1 !important; }
