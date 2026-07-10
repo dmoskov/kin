@@ -1597,51 +1597,9 @@ export function renderTree() {
   nodeGroups.filter((d) => photoCount(d) >= 2)
     .attr("aria-label", (d) => `${d.person.fullName}, ${photoCount(d)} photos`);
 
-  // ── Subline glyphs: heraldic family badges on the card's top-right edge ──
-  // Each sub-family (Siegel ◆, Kleinberg ●, …) marks its blood members; the
-  // badges accumulate down the generations. Married-in spouses carry only
-  // their own minor line's badge (their card fill borrows the spouse's
-  // colors, but blood membership stays strictly their own).
-  // At deeper root depths a recent-generation card can belong to many
-  // sublines; cap the badge row so it never swallows the card edge (the
-  // gradient fill still blends every line).
-  const MAX_GLYPHS = 4;
-  nodeGroups.filter((d) => glyphsFor(d).length > 0).each(function (d) {
-    const grp = d3.select(this);
-    const topY = _isCenterId(d) ? -CENTER_OVERHANG_Y : 0;
-    const rightX = d.w + (_isCenterId(d) ? _overhangR(d) : 0);
-    const list = glyphsFor(d);
-    const overflow = list.length > MAX_GLYPHS ? list.length - (MAX_GLYPHS - 1) : 0;
-    const shown = overflow ? list.slice(0, MAX_GLYPHS - 1) : list;
-    shown.forEach((si, k) => {
-      const sub = sublineData.sublines[si];
-      if (!sub) return;
-      grp.append("text")
-        .attr("class", "subline-glyph")
-        .attr("x", rightX - 9 - k * 11)
-        .attr("y", topY)
-        .attr("text-anchor", "middle")
-        .attr("dominant-baseline", "central")
-        .attr("fill", sub.color)
-        .text(sub.glyph)
-        .append("title")
-        .text(sub.label);
-    });
-    if (overflow) {
-      grp.append("text")
-        .attr("class", "subline-glyph subline-glyph-more")
-        .attr("x", rightX - 9 - shown.length * 11)
-        .attr("y", topY)
-        .attr("text-anchor", "middle")
-        .attr("dominant-baseline", "central")
-        .text(`+${overflow}`)
-        .append("title")
-        .text(list.slice(shown.length).map((si) => sublineData.sublines[si]?.label).filter(Boolean).join(", "));
-    }
-  });
-
-  // Legend mapping each glyph to its family name, so the badges are
-  // self-explanatory (mirrors the timeline's lane legend).
+  // Legend mapping each subline color to its family name (mirrors the
+  // timeline's lane legend). Cards carry the colors alone — each card's
+  // <title>/aria already names the person, and the legend names the lines.
   const legendHost = document.querySelector(".tree-container");
   if (legendHost) {
     let legendEl = legendHost.querySelector(".tree-subline-legend");
@@ -1656,7 +1614,7 @@ export function renderTree() {
         .map(
           (sub) =>
             `<span class="tree-subline-legend-item">` +
-            `<span class="tree-subline-legend-glyph" style="color:${sub.color}">${sub.glyph}</span>` +
+            `<span class="tree-subline-legend-dot" style="background:${sub.color}"></span>` +
             `${escapeHtml(sub.label)}</span>`
         )
         .join("");

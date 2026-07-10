@@ -242,11 +242,10 @@ export function autoComputeLanes(centerA, centerB) {
 // themselves): their in-law family cluster shares it and their children
 // inherit it — the "new blood" half of every blended line. Minor lines are
 // kept out of the legend.
-export const SUBLINE_GLYPHS = ["◆", "●", "▲", "■", "✦", "⬢"];
 // Dedicated subline palette (not the gender pink/blue, not the lane vars):
 // validated for lightness, chroma, CVD separation and contrast against both
-// theme surfaces (#f5f0e8 light / #1a1714 dark); the glyph shapes above are
-// the color-independent secondary encoding.
+// theme surfaces (#f5f0e8 light / #1a1714 dark); the legend's labeled dots
+// are the fallback naming when color alone is ambiguous.
 export const SUBLINE_COLORS = [
   "#0f9482", "#b34a32", "#3b74c9", "#b8790f", "#7d5ba6", "#4f9433",
   "#b8478f", "#1990bd", "#c96a2b", "#5f5fd3", "#ad8508", "#a34d7c",
@@ -346,7 +345,6 @@ export function computeSublines(depth = 2) {
     sublines.push({
       label,
       color: SUBLINE_COLORS[idx % SUBLINE_COLORS.length],
-      glyph: SUBLINE_GLYPHS[idx % SUBLINE_GLYPHS.length],
       minor: !!minor,
     });
   };
