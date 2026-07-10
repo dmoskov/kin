@@ -1398,14 +1398,35 @@ export function updateMapForYear(maxYear) {
   const badge = document.getElementById("map-year-badge");
   if (badge) badge.textContent = maxYear;
   const filterPersonId = document.getElementById("map-person-filter").value;
+  const sliderAtMax = maxYear >= MAX_YEAR;
+
+  // Cache birth years so repeated lookups are cheap.
+  const _birthYearCache = {};
+  function personBirthYear(pid) {
+    if (!pid) return null;
+    if (pid in _birthYearCache) return _birthYearCache[pid];
+    const p = S.PEOPLE_MAP[pid];
+    _birthYearCache[pid] = p?.birth_date ? dateYear(p.birth_date) : null;
+    return _birthYearCache[pid];
+  }
+
+  function eventVisibleAtYear(e) {
+    const yearOk = !e.year || e.year <= maxYear;
+    if (!yearOk) return false;
+    const personOk = filterPersonId === "all" || e.personId === filterPersonId;
+    if (!personOk) return false;
+    // Hide events for a person who hasn't been born yet at the slider year.
+    // Birth/death events are exempt — they anchor the person on the map.
+    if (e.type !== "birth" && e.type !== "death" && e.personId) {
+      const born = personBirthYear(e.personId);
+      if (born != null && maxYear < born) return false;
+    }
+    return true;
+  }
 
   // ── Markers: temporal brightness ──
   for (const m of MAP_MARKERS) {
-    const visibleEvents = m.events.filter((e) => {
-      const yearOk = !e.year || e.year <= maxYear;
-      const personOk = filterPersonId === "all" || e.personId === filterPersonId;
-      return yearOk && personOk;
-    });
+    const visibleEvents = m.events.filter(eventVisibleAtYear);
 
     if (visibleEvents.length > 0) {
       // Use the most recent visible event's year for brightness
@@ -1444,7 +1465,9 @@ export function updateMapForYear(maxYear) {
   for (const a of MAP_ARCS) {
     const personOk = filterPersonId === "all" || a.personId === filterPersonId;
     const yearOk = !a.toYear || a.toYear <= maxYear;
-    const visible = personOk && yearOk;
+    const born = a.personId ? personBirthYear(a.personId) : null;
+    const bornOk = born == null || maxYear >= born;
+    const visible = personOk && yearOk && bornOk;
 
     if (visible) {
       const ratio = recencyRatio(a.toYear, maxYear);
@@ -1487,12 +1510,12 @@ export function updateMapForYear(maxYear) {
   }
 
   // ── Photo markers: show/hide based on year + person filter ──
-  // Rebuild photo markers with filtered events
+  // Rebuild photo markers with filtered events.
+  // Undated photos are hidden when the slider is not at max (active filtering).
   const filteredPhotoEvents = MAP_ALL_EVENTS.filter(e => {
     if (e.type !== "photo") return false;
-    const yearOk = !e.year || e.year <= maxYear;
-    const personOk = filterPersonId === "all" || e.personId === filterPersonId;
-    return yearOk && personOk;
+    if (!e.year && !sliderAtMax) return false;
+    return eventVisibleAtYear(e);
   });
   plotPhotoMarkers(filteredPhotoEvents);
 }
