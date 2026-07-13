@@ -311,33 +311,56 @@ export function computeSublines(depth = 2) {
   // pairwise adjacency was checked). Minor lines pick greedily — the unused
   // color farthest in hue from everything assigned so far — so a married-in
   // spouse's new color can't be a near-twin of the blood family they joined
-  // (a coral Joana next to brick-red Hugheses reads as blood).
+  // (a coral Joana next to brick-red Hugheses reads as blood). Hue distance
+  // is measured in OKLCH, not HSL: HSL called grass-green "far" from teal
+  // (80°) and painted Dustin as a Tuna — perceptually both are just green.
   const hueOf = (hex) => {
     const n = parseInt(hex.slice(1), 16);
-    const r = ((n >> 16) & 255) / 255;
-    const g = ((n >> 8) & 255) / 255;
-    const b = (n & 255) / 255;
-    const max = Math.max(r, g, b);
-    const d = max - Math.min(r, g, b);
-    if (!d) return 0;
-    const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
-    return (h * 60 + 360) % 360;
+    const lin = (c) => {
+      const x = c / 255;
+      return x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+    };
+    const r = lin((n >> 16) & 255);
+    const g = lin((n >> 8) & 255);
+    const b = lin(n & 255);
+    const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+    const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+    const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+    const a = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s;
+    const b2 = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s;
+    return ((Math.atan2(b2, a) * 180) / Math.PI + 360) % 360;
   };
   const PALETTE_HUES = SUBLINE_COLORS.map(hueOf);
   const hueDist = (a, b) => {
     const x = Math.abs(a - b) % 360;
     return x > 180 ? 360 - x : x;
   };
+  // A minor line must clear every MAJOR line's hue by a wide margin — that
+  // is the confusion that matters (a married-in resembling the blood family
+  // they render beside). Spacing minors from each other is only secondary:
+  // with many married-ins the wheel fills up, and "farthest from everything"
+  // degenerated into picking greens beside the teal Tuna line.
+  const MAJOR_CLEARANCE = 60;
   const pickMinorColor = () => {
+    const majorHues = sublines.filter((s) => !s.minor).map((s) => hueOf(s.color));
     const usedColors = new Set(sublines.map((s) => s.color));
     const usedHues = sublines.map((s) => hueOf(s.color));
     let candidates = SUBLINE_COLORS.filter((c) => !usedColors.has(c));
     if (!candidates.length) candidates = SUBLINE_COLORS;
-    let best = candidates[0];
-    let bestScore = -1;
-    for (const c of candidates) {
+    const clearOfMajors = candidates.filter((c) => {
       const h = PALETTE_HUES[SUBLINE_COLORS.indexOf(c)];
-      const score = usedHues.length ? Math.min(...usedHues.map((u) => hueDist(u, h))) : 360;
+      return majorHues.every((m) => hueDist(m, h) >= MAJOR_CLEARANCE);
+    });
+    const pool = clearOfMajors.length ? clearOfMajors : candidates;
+    let best = pool[0];
+    let bestScore = -1;
+    for (const c of pool) {
+      const h = PALETTE_HUES[SUBLINE_COLORS.indexOf(c)];
+      // Distance from majors dominates; distance from other assigned colors
+      // only spreads minors within the safe arc.
+      const majorScore = majorHues.length ? Math.min(...majorHues.map((m) => hueDist(m, h))) : 360;
+      const usedScore = usedHues.length ? Math.min(...usedHues.map((u) => hueDist(u, h))) : 360;
+      const score = majorScore * 4 + usedScore;
       if (score > bestScore) {
         bestScore = score;
         best = c;
