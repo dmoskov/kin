@@ -979,7 +979,7 @@ describe("buildButterflyLayout couple orientation", () => {
     mkP("Beatrice", "female"), mkP("Murray", "male"),
     mkP("MorrisM", "male"), mkP("CeliaM", "female"),
     mkP("Milt", "male"), mkP("Dustin", "male"), mkP("Buzz", "male"),
-    mkP("Mona", "female"),
+    mkP("Mona", "female"), mkP("MorrisS", "male"), mkP("SureS", "female"),
   ];
   const relationships = [];
   const kidsOf = (pars, cs) => {
@@ -989,6 +989,7 @@ describe("buildButterflyLayout couple orientation", () => {
   kidsOf(["Abraham", "Ida"], ["Jack", "Lillian", "Rose", "Besse", "Sarah"]);
   kidsOf(["William", "RoseC"], ["Rosalie", "Beatrice", "Murray"]);
   kidsOf(["MorrisM", "CeliaM"], ["Richard"]);
+  kidsOf(["MorrisS", "SureS"], ["Abraham"]);
   kidsOf(["Nancy", "Richard"], ["Dustin"]);
   kidsOf(["Lillian", "Milt"], ["Buzz"]);
   const unions = [
@@ -998,6 +999,7 @@ describe("buildButterflyLayout couple orientation", () => {
     { partner1_id: "William", partner2_id: "RoseC" },
     { partner1_id: "MorrisM", partner2_id: "CeliaM" },
     { partner1_id: "Lillian", partner2_id: "Milt" },
+    { partner1_id: "MorrisS", partner2_id: "SureS" },
   ];
   const data = { people, relationships, unions, events: [] };
 
@@ -1070,13 +1072,19 @@ describe("buildButterflyLayout couple orientation", () => {
     expect(byPerson["Buzz"].length).toBe(2);
   });
 
-  it("computeSublines: deeper root depth splits lines into more sublines", () => {
+  it("computeSublines: deeper root depth splits lines within hue families", () => {
     const deep = computeSublines(3);
-    // Every gen -2 line ends there, so each grandparent roots their own
-    // subline: Abraham, Ida, William, RoseC + MorrisM, CeliaM (+ Milt minor).
-    expect(deep.sublines.filter((s) => !s.minor).length).toBe(6);
-    expect((deep.byPerson["Jack"] || []).length).toBe(2); // Abraham-root + Ida-root
-    expect((deep.byPerson["Dustin"] || []).length).toBe(6); // all six accumulate
+    // Abraham's side continues one generation up, so the Siegel family
+    // splits: MorrisS+SureS root + Ida's own root. Lines that already end
+    // at the grandparents (William+RoseC, MorrisM, CeliaM) stay whole.
+    const majors = deep.sublines.filter((s) => !s.minor);
+    expect(majors.length).toBe(5);
+    const jack = deep.byPerson["Jack"] || [];
+    expect(jack.length).toBe(2); // MorrisS-root (via Abraham) + Ida-root
+    // Both of Jack's lines descend from the same grandparent couple, so
+    // they share a hue family but not a color.
+    expect(deep.sublines[jack[0]].family).toBe(deep.sublines[jack[1]].family);
+    expect(deep.sublines[jack[0]].color).not.toBe(deep.sublines[jack[1]].color);
     expect(deep.sublines[deep.byPerson["Milt"][0]].minor).toBe(true);
   });
 

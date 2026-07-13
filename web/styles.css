@@ -16,6 +16,7 @@
   --border: #3d362c;
   --text: #ece5d8;
   --text-muted: #a09683;
+  --ancestor-fade: #857b6e; /* deep-generation cards mix toward this */
   --accent: #c4956a;
   --accent-hover: #d4aa82;
   --accent-rgb: 196,149,106;
@@ -82,6 +83,7 @@
   --surface-hover: #ede7db;
   --border: #d9d0c1;
   --text: #2c2418;
+  --ancestor-fade: #a89d8b; /* deep-generation cards mix toward this */
   --text-muted: #7a6e5e;
   --accent: #8b6340;
   --accent-hover: #704f30;

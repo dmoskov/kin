@@ -292,29 +292,47 @@ export function computeSublines(depth = 2) {
     for (const par of pars) out.push(...rootsAbove(par, gensUp - 1));
     return out;
   };
+  // Roots are grouped into hue FAMILIES by the grandparent (depth-2) couple
+  // they descend from: the anchor hues spread wide across the wheel (the
+  // variation you see in the recent generations), while deeper sub-roots of
+  // one family take subtle rotations around their family's anchor — wide
+  // variation at the bottom of the tree, related shades at the top.
   const roots = [];
   const seenRoot = new Set();
+  let familyCount = 0;
+  const pushRoot = (root, familyIdx) => {
+    const key = [...root.ids].sort().join("|");
+    if (seenRoot.has(key)) return;
+    seenRoot.add(key);
+    roots.push({ ...root, family: familyIdx });
+  };
+  const targetDepth = Math.max(2, depth);
   for (const centerPid of [S.CENTER_ID_A, S.CENTER_ID_B]) {
     if (!centerPid || !(parentsOf[centerPid] || []).length) continue;
-    for (const root of rootsAbove(centerPid, Math.max(2, depth))) {
-      const key = [...root.ids].sort().join("|");
-      if (seenRoot.has(key)) continue;
-      seenRoot.add(key);
-      roots.push(root);
+    for (const fam of rootsAbove(centerPid, 2)) {
+      const famIdx = familyCount++;
+      if (targetDepth === 2 || fam.ids.every((id) => !(parentsOf[id] || []).length)) {
+        pushRoot(fam, famIdx);
+        continue;
+      }
+      for (const member of fam.ids) {
+        for (const sub of rootsAbove(member, targetDepth - 2)) pushRoot(sub, famIdx);
+      }
     }
   }
 
   const sublines = [];
   const byPerson = {};
+  // Sub-roots of one family take widening rotations around the family's
+  // anchor hue; anchors themselves keep the validated palette's spacing.
+  const FAMILY_SPREAD = [0, 24, -24, 48, -48, 72, -72, 96, -96];
+  const familyVariants = {};
 
-  // Color assignment: major lines take the validated palette in order (its
-  // pairwise adjacency was checked). Minor lines pick greedily — the unused
-  // color farthest in hue from everything assigned so far — so a married-in
-  // spouse's new color can't be a near-twin of the blood family they joined
-  // (a coral Joana next to brick-red Hugheses reads as blood). Hue distance
-  // is measured in OKLCH, not HSL: HSL called grass-green "far" from teal
-  // (80°) and painted Dustin as a Tuna — perceptually both are just green.
-  const hueOf = (hex) => {
+  // ── OKLab color helpers ──
+  // Hue work happens in OKLab/OKLCH, not HSL: HSL called grass-green "far"
+  // from teal (80°) and painted Dustin as a Tuna — perceptually both are
+  // just green.
+  const hexToOklab = (hex) => {
     const n = parseInt(hex.slice(1), 16);
     const lin = (c) => {
       const x = c / 255;
@@ -326,9 +344,47 @@ export function computeSublines(depth = 2) {
     const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
     const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
     const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
-    const a = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s;
-    const b2 = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s;
-    return ((Math.atan2(b2, a) * 180) / Math.PI + 360) % 360;
+    return {
+      L: 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+      a: 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+      b: 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+    };
+  };
+  const oklabToHex = ({ L, a, b }) => {
+    const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
+    const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
+    const s_ = L - 0.0894841775 * a - 1.291485548 * b;
+    const l = l_ ** 3;
+    const m = m_ ** 3;
+    const s = s_ ** 3;
+    const chan = (c) => {
+      const x = Math.min(1, Math.max(0, c));
+      const d = x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055;
+      return Math.round(Math.min(1, Math.max(0, d)) * 255)
+        .toString(16)
+        .padStart(2, "0");
+    };
+    return (
+      "#" +
+      chan(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s) +
+      chan(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s) +
+      chan(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s)
+    );
+  };
+  const hueOf = (hex) => {
+    const { a, b } = hexToOklab(hex);
+    return ((Math.atan2(b, a) * 180) / Math.PI + 360) % 360;
+  };
+  // Rotate a color's hue in the OKLab a/b plane — lightness and chroma stay
+  // put, so rotations of a validated anchor stay inside the validated band.
+  const rotateHue = (hex, deg) => {
+    const { L, a, b } = hexToOklab(hex);
+    const rad = (deg * Math.PI) / 180;
+    return oklabToHex({
+      L,
+      a: a * Math.cos(rad) - b * Math.sin(rad),
+      b: a * Math.sin(rad) + b * Math.cos(rad),
+    });
   };
   const PALETTE_HUES = SUBLINE_COLORS.map(hueOf);
   const hueDist = (a, b) => {
@@ -404,11 +460,25 @@ export function computeSublines(depth = 2) {
       people[0];
     const label = namer?.surname || namer?.given_name || "Family";
 
+    let color;
+    if (minor) {
+      color = pickMinorColor();
+    } else {
+      const anchor = SUBLINE_COLORS[root.family % SUBLINE_COLORS.length];
+      const variant = familyVariants[root.family] || 0;
+      familyVariants[root.family] = variant + 1;
+      const offset =
+        FAMILY_SPREAD[variant % FAMILY_SPREAD.length] +
+        8 * Math.floor(variant / FAMILY_SPREAD.length);
+      color = offset === 0 ? anchor : rotateHue(anchor, offset);
+    }
+
     for (const pid of members) (byPerson[pid] ||= []).push(idx);
     sublines.push({
       label,
-      color: minor ? pickMinorColor() : SUBLINE_COLORS[idx % SUBLINE_COLORS.length],
+      color,
       minor: !!minor,
+      family: minor ? -1 : root.family,
     });
   };
   roots.forEach((root) => addSubline(root, false));

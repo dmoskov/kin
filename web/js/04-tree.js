@@ -1374,17 +1374,23 @@ export function renderTree() {
   const glyphsFor = (d) => sublineData.byPerson[d.id] || [];
   const sublinesActive = sublineData.sublines.length >= 2;
   const tintOf = (color) => `color-mix(in srgb, ${color} 16%, var(--surface))`;
+  // Deep ancestor rows recede toward a warm neutral — wide color variation
+  // belongs to the recent generations at the bottom; a 1700s row doesn't
+  // need to shout its line's hue (and the fade reads as age).
+  const fadeFor = (gen) => (gen >= -2 ? 0 : Math.min(45, (-gen - 2) * 15));
+  const fadedColor = (color, fade) =>
+    fade > 0 ? `color-mix(in oklab, ${color} ${100 - fade}%, var(--ancestor-fade))` : color;
   const gradDefs = g.append("defs");
-  const comboGradients = new Map(); // combo key -> {fill, stroke} gradient ids
-  function comboGradientIds(list) {
-    const key = list.join("-");
+  const comboGradients = new Map(); // combo+fade key -> {fill, stroke} gradient ids
+  function comboGradientIds(list, fade) {
+    const key = `${list.join("-")}-f${fade}`;
     let ids = comboGradients.get(key);
     if (ids) return ids;
     ids = { fill: `subline-fill-${key}`, stroke: `subline-stroke-${key}` };
     for (const [id, full] of [[ids.fill, false], [ids.stroke, true]]) {
       const lg = gradDefs.append("linearGradient").attr("id", id);
       list.forEach((si, k) => {
-        const color = sublineData.sublines[si].color;
+        const color = fadedColor(sublineData.sublines[si].color, fade);
         lg.append("stop")
           .attr("offset", `${(k / (list.length - 1)) * 100}%`)
           .style("stop-color", full ? color : tintOf(color));
@@ -1405,15 +1411,17 @@ export function renderTree() {
     if (!sublinesActive) return genderFill(d);
     const list = glyphsFor(d);
     if (list.length === 0) return "var(--surface)";
-    if (list.length === 1) return tintOf(sublineData.sublines[list[0]].color);
-    return `url(#${comboGradientIds(list).fill})`;
+    const fade = fadeFor(d.gen ?? 0);
+    if (list.length === 1) return tintOf(fadedColor(sublineData.sublines[list[0]].color, fade));
+    return `url(#${comboGradientIds(list, fade).fill})`;
   };
   const cardStroke = (d) => {
     if (!sublinesActive) return genderStroke(d);
     const list = glyphsFor(d);
     if (list.length === 0) return "var(--border)";
-    if (list.length === 1) return sublineData.sublines[list[0]].color;
-    return `url(#${comboGradientIds(list).stroke})`;
+    const fade = fadeFor(d.gen ?? 0);
+    if (list.length === 1) return fadedColor(sublineData.sublines[list[0]].color, fade);
+    return `url(#${comboGradientIds(list, fade).stroke})`;
   };
   // With color carrying family, gender moves into the card's FORM: hard
   // corners for men, soft for women, in between when unknown. The avatar
