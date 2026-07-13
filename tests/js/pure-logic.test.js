@@ -1087,11 +1087,4 @@ describe("buildButterflyLayout couple orientation", () => {
     expect(Math.sign(byId["Jack"].cx - byId["Rosalie"].cx)).toBe(siegelSide);
   });
 
-  it("flanks the center couple with partner A's siblings on the left", () => {
-    // Regression: cx ties in resolveOverlaps used to shove the center couple
-    // to the far left of its own sibling row (Claire-viewing-as bug).
-    const { nodes } = buildButterflyLayout();
-    const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
-    expect(byId["Lynn"].cx).toBeLessThan(byId["Nancy"].cx);
-  });
 });

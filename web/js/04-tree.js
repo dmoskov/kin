@@ -487,12 +487,6 @@ export function buildButterflyLayout() {
 
   const couplePositions = new Map();
 
-  // Pin the center couple only when it has flanked gen-0 siblings: that's
-  // the case where barycenter drift maroons the viewer at the edge of their
-  // own sibling row. Without siblings the unpinned solver's cohesive drift
-  // (center follows its children) gives the better layout.
-  const _pinCenter = couples.some((c) => c.order);
-
   // ── Build natural parent→child trees for ancestor lines ──
 
   function buildNaturalTree(lineIndices) {
@@ -545,27 +539,6 @@ export function buildButterflyLayout() {
     );
     const gapBetween = (a, b) =>
       (coupleWidth(couples[a]) + coupleWidth(couples[b])) / 2 + H_SPACING;
-    // When the center couple has flanked siblings (order hints), it's the
-    // anchor of its row: resolve around it — push right neighbors right,
-    // left neighbors left — instead of the sweep-right-and-recenter used
-    // elsewhere, which let the row's center of mass carry the viewer off to
-    // one edge of their own sibling row.
-    const ai = _pinCenter ? group.indexOf(centerIdx) : -1;
-    if (ai !== -1) {
-      for (let i = ai + 1; i < group.length; i++) {
-        const prev = couplePositions.get(group[i - 1]);
-        const curr = couplePositions.get(group[i]);
-        const minGap = gapBetween(group[i - 1], group[i]);
-        if (curr.cx - prev.cx < minGap) curr.cx = prev.cx + minGap;
-      }
-      for (let i = ai - 1; i >= 0; i--) {
-        const next = couplePositions.get(group[i + 1]);
-        const curr = couplePositions.get(group[i]);
-        const minGap = gapBetween(group[i], group[i + 1]);
-        if (next.cx - curr.cx < minGap) curr.cx = next.cx - minGap;
-      }
-      return;
-    }
     // Remember center of mass before
     const cmBefore = group.reduce((s, i) => s + couplePositions.get(i).cx, 0) / group.length;
     // Push apart
@@ -773,16 +746,11 @@ export function buildButterflyLayout() {
     const refineByGen = {};
     for (const idx of allIdx) (refineByGen[couples[idx].gen] ||= []).push(idx);
     const refineGens = Object.keys(refineByGen).map(Number).sort((a, b) => a - b);
-    // When pinned (center has flanked siblings) the center couple never
-    // moves in this pass: its two natural-parent couples fight over it
-    // top-down and its children drag it bottom-up, and either one maroons
-    // the viewer at the far edge of their own sibling row.
     for (let iter = 0; iter < 3; iter++) {
       // Top-down: each child at its parent's x
       for (let gi = 1; gi < refineGens.length; gi++) {
         const group = refineByGen[refineGens[gi]];
         for (const idx of group) {
-          if (_pinCenter && idx === centerIdx) continue;
           const par = parentIdxOf[idx];
           if (par !== undefined && couplePositions.has(par)) {
             couplePositions.get(idx).cx = couplePositions.get(par).cx;
@@ -794,7 +762,6 @@ export function buildButterflyLayout() {
       for (let gi = refineGens.length - 1; gi >= 0; gi--) {
         const group = refineByGen[refineGens[gi]];
         for (const idx of group) {
-          if (_pinCenter && idx === centerIdx) continue;
           const kids = (natKids[idx] || []).filter((k) => couplePositions.has(k));
           if (kids.length === 0) continue;
           couplePositions.get(idx).cx =
