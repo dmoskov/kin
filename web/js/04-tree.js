@@ -338,11 +338,22 @@ export function buildButterflyLayout() {
         if (kid !== centerPersonId) sibs.add(kid);
       }
     }
-    for (const sid of sibs) {
+    // Oldest first, then alternate sides around the center: own flank for
+    // even ranks, the inner slot of the opposite flank (|order| 1 < 2) for
+    // odd ranks. All-on-one-flank left the viewer dangling at the end of
+    // their own sibling row instead of amid it.
+    const sorted = [...sibs].sort((a, b) => {
+      const ba = S.PEOPLE_MAP[a]?.birth_date || "9999";
+      const bb = S.PEOPLE_MAP[b]?.birth_date || "9999";
+      return ba < bb ? -1 : ba > bb ? 1 : 0;
+    });
+    let rank = 0;
+    for (const sid of sorted) {
       if (placed.has(sid)) continue;
       const partner = (unionPartner[sid] || []).find((p) => !placed.has(p)) || null;
       const idx = addCouple(sid, partner, 0, "center");
-      couples[idx].order = orderSign;
+      couples[idx].order = rank % 2 === 0 ? orderSign : -Math.sign(orderSign);
+      rank++;
     }
   }
   addCenterSiblings(S.CENTER_ID_A, -2);

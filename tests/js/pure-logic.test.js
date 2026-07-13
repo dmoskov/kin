@@ -979,12 +979,13 @@ describe("buildButterflyLayout couple orientation", () => {
     mkP("Beatrice", "female"), mkP("Murray", "male"),
     mkP("MorrisM", "male"), mkP("CeliaM", "female"),
     mkP("Milt", "male"), mkP("Dustin", "male"), mkP("Buzz", "male"),
+    mkP("Mona", "female"),
   ];
   const relationships = [];
   const kidsOf = (pars, cs) => {
     for (const c of cs) for (const p of pars) relationships.push({ parent_id: p, child_id: c });
   };
-  kidsOf(["Jack", "Rosalie"], ["Nancy", "Lynn"]);
+  kidsOf(["Jack", "Rosalie"], ["Nancy", "Lynn", "Mona"]);
   kidsOf(["Abraham", "Ida"], ["Jack", "Lillian", "Rose", "Besse", "Sarah"]);
   kidsOf(["William", "RoseC"], ["Rosalie", "Beatrice", "Murray"]);
   kidsOf(["MorrisM", "CeliaM"], ["Richard"]);
@@ -1077,6 +1078,21 @@ describe("buildButterflyLayout couple orientation", () => {
     expect((deep.byPerson["Jack"] || []).length).toBe(2); // Abraham-root + Ida-root
     expect((deep.byPerson["Dustin"] || []).length).toBe(6); // all six accumulate
     expect(deep.sublines[deep.byPerson["Milt"][0]].minor).toBe(true);
+  });
+
+  it("fans the center's siblings onto both flanks of the center couple", () => {
+    // Regression for the Claire-viewing-as bug: with every sibling hinted to
+    // one flank, the viewer dangled at the end of their own sibling row.
+    // Mirrors the reported case: a childless viewer with married siblings
+    // (a center with descendants is still pulled toward them — known issue).
+    S.CENTER_ID_A = "Lynn";
+    S.CENTER_ID_B = "Lynn"; // no spouse — setCenterPerson mirrors the id
+    const { nodes } = buildButterflyLayout();
+    const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
+    const left = ["Nancy", "Mona"].filter((id) => byId[id].cx < byId["Lynn"].cx).length;
+    const right = ["Nancy", "Mona"].filter((id) => byId[id].cx > byId["Lynn"].cx).length;
+    expect(left).toBe(1);
+    expect(right).toBe(1);
   });
 
   it("puts Jack on the Siegel side and Rosalie on the Kleinberg side", () => {
