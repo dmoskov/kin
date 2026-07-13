@@ -487,6 +487,12 @@ export function buildButterflyLayout() {
 
   const couplePositions = new Map();
 
+  // Pin the center couple only when it has flanked gen-0 siblings: that's
+  // the case where barycenter drift maroons the viewer at the edge of their
+  // own sibling row. Without siblings the unpinned solver's cohesive drift
+  // (center follows its children) gives the better layout.
+  const _pinCenter = couples.some((c) => c.order);
+
   // ── Build natural parent→child trees for ancestor lines ──
 
   function buildNaturalTree(lineIndices) {
@@ -525,14 +531,48 @@ export function buildButterflyLayout() {
   // layered passes and the global refinement pass.
   function resolveOverlaps(group) {
     if (group.length <= 1) return;
-    group.sort((a, b) => couplePositions.get(a).cx - couplePositions.get(b).cx);
+    // cx ties are common (a whole sibling row snaps to its parents' x in the
+    // top-down pass) and the fallback order decides who ends up leftmost.
+    // Breaking ties by the flanking hint keeps partner A's siblings left of
+    // the center couple and partner B's right — without it the center couple
+    // (created first) always won the tie and got shoved to the row's far
+    // left when viewing as someone with several siblings.
+    group.sort(
+      (a, b) =>
+        couplePositions.get(a).cx - couplePositions.get(b).cx ||
+        (couples[a].order || 0) - (couples[b].order || 0) ||
+        a - b
+    );
+    const gapBetween = (a, b) =>
+      (coupleWidth(couples[a]) + coupleWidth(couples[b])) / 2 + H_SPACING;
+    // When the center couple has flanked siblings (order hints), it's the
+    // anchor of its row: resolve around it — push right neighbors right,
+    // left neighbors left — instead of the sweep-right-and-recenter used
+    // elsewhere, which let the row's center of mass carry the viewer off to
+    // one edge of their own sibling row.
+    const ai = _pinCenter ? group.indexOf(centerIdx) : -1;
+    if (ai !== -1) {
+      for (let i = ai + 1; i < group.length; i++) {
+        const prev = couplePositions.get(group[i - 1]);
+        const curr = couplePositions.get(group[i]);
+        const minGap = gapBetween(group[i - 1], group[i]);
+        if (curr.cx - prev.cx < minGap) curr.cx = prev.cx + minGap;
+      }
+      for (let i = ai - 1; i >= 0; i--) {
+        const next = couplePositions.get(group[i + 1]);
+        const curr = couplePositions.get(group[i]);
+        const minGap = gapBetween(group[i], group[i + 1]);
+        if (next.cx - curr.cx < minGap) curr.cx = next.cx - minGap;
+      }
+      return;
+    }
     // Remember center of mass before
     const cmBefore = group.reduce((s, i) => s + couplePositions.get(i).cx, 0) / group.length;
     // Push apart
     for (let i = 1; i < group.length; i++) {
       const prev = couplePositions.get(group[i - 1]);
       const curr = couplePositions.get(group[i]);
-      const minGap = (coupleWidth(couples[group[i - 1]]) + coupleWidth(couples[group[i]])) / 2 + H_SPACING;
+      const minGap = gapBetween(group[i - 1], group[i]);
       if (curr.cx - prev.cx < minGap) {
         curr.cx = prev.cx + minGap;
       }
@@ -733,11 +773,16 @@ export function buildButterflyLayout() {
     const refineByGen = {};
     for (const idx of allIdx) (refineByGen[couples[idx].gen] ||= []).push(idx);
     const refineGens = Object.keys(refineByGen).map(Number).sort((a, b) => a - b);
+    // When pinned (center has flanked siblings) the center couple never
+    // moves in this pass: its two natural-parent couples fight over it
+    // top-down and its children drag it bottom-up, and either one maroons
+    // the viewer at the far edge of their own sibling row.
     for (let iter = 0; iter < 3; iter++) {
       // Top-down: each child at its parent's x
       for (let gi = 1; gi < refineGens.length; gi++) {
         const group = refineByGen[refineGens[gi]];
         for (const idx of group) {
+          if (_pinCenter && idx === centerIdx) continue;
           const par = parentIdxOf[idx];
           if (par !== undefined && couplePositions.has(par)) {
             couplePositions.get(idx).cx = couplePositions.get(par).cx;
@@ -749,6 +794,7 @@ export function buildButterflyLayout() {
       for (let gi = refineGens.length - 1; gi >= 0; gi--) {
         const group = refineByGen[refineGens[gi]];
         for (const idx of group) {
+          if (_pinCenter && idx === centerIdx) continue;
           const kids = (natKids[idx] || []).filter((k) => couplePositions.has(k));
           if (kids.length === 0) continue;
           couplePositions.get(idx).cx =
@@ -1373,31 +1419,20 @@ export function renderTree() {
     d.person.gender === "female" ? "var(--node-female-bg)" : d.person.gender === "other" ? "var(--node-other-bg)" : "var(--node-male-bg)";
   const genderStroke = (d) =>
     d.person.gender === "female" ? "var(--female)" : d.person.gender === "other" ? "var(--other)" : "var(--male)";
-  // A married-in spouse (minor-line-only person) blends their own new color
-  // with the colors they married into — their line's color faces outward,
-  // the spouse's lines face the spouse. Blood members show only their own.
-  const isMinorOnly = (list) =>
-    list.length > 0 && list.every((si) => sublineData.sublines[si]?.minor);
-  const fillListFor = (d) => {
-    const own = glyphsFor(d);
-    if (!isMinorOnly(own)) return own;
-    const couple = layout.couples[d.coupleIdx];
-    if (!couple) return own;
-    const partnerId = couple.primaryId === d.id ? couple.partnerId : couple.primaryId;
-    const partnerList = partnerId ? sublineData.byPerson[partnerId] || [] : [];
-    if (!partnerList.length) return own;
-    return couple.primaryId === d.id ? [...own, ...partnerList] : [...partnerList, ...own];
-  };
+  // Cards show ONLY the lines a person actually belongs to. A married-in
+  // spouse therefore wears just their own minor line's color, solid — one
+  // clean new hue, no borrowed spouse colors, so they never read as blood
+  // of the family they joined (Dustin's feedback after trying the blend).
   const cardFill = (d) => {
     if (!sublinesActive) return genderFill(d);
-    const list = fillListFor(d);
+    const list = glyphsFor(d);
     if (list.length === 0) return "var(--surface)";
     if (list.length === 1) return tintOf(sublineData.sublines[list[0]].color);
     return `url(#${comboGradientIds(list).fill})`;
   };
   const cardStroke = (d) => {
     if (!sublinesActive) return genderStroke(d);
-    const list = fillListFor(d);
+    const list = glyphsFor(d);
     if (list.length === 0) return "var(--border)";
     if (list.length === 1) return sublineData.sublines[list[0]].color;
     return `url(#${comboGradientIds(list).stroke})`;

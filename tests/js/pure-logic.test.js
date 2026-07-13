@@ -1058,6 +1058,10 @@ describe("buildButterflyLayout couple orientation", () => {
     expect((byPerson["Milt"] || []).length).toBe(1);
     expect(sublines[byPerson["Milt"][0]].minor).toBe(true);
     expect(byPerson["Milt"][0]).not.toBe(byPerson["Lillian"][0]);
+    // A minor line's color is never a color a major line already uses —
+    // married-ins must not look like blood of the family they joined.
+    const majorColors = sublines.filter((s) => !s.minor).map((s) => s.color);
+    expect(majorColors).not.toContain(sublines[byPerson["Milt"][0]].color);
     // Their child blends both: mother's major line + father's minor line.
     expect(byPerson["Buzz"]).toEqual(
       expect.arrayContaining([byPerson["Lillian"][0], byPerson["Milt"][0]])
@@ -1081,5 +1085,13 @@ describe("buildButterflyLayout couple orientation", () => {
     const siegelSide = Math.sign(byId["Abraham"].cx - byId["William"].cx);
     expect(siegelSide).not.toBe(0);
     expect(Math.sign(byId["Jack"].cx - byId["Rosalie"].cx)).toBe(siegelSide);
+  });
+
+  it("flanks the center couple with partner A's siblings on the left", () => {
+    // Regression: cx ties in resolveOverlaps used to shove the center couple
+    // to the far left of its own sibling row (Claire-viewing-as bug).
+    const { nodes } = buildButterflyLayout();
+    const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
+    expect(byId["Lynn"].cx).toBeLessThan(byId["Nancy"].cx);
   });
 });
