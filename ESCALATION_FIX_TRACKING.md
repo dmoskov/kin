@@ -34,9 +34,9 @@ by file path, bypassing the package `__init__.py`. Applied to both
 
 ## PRs
 
-- Scaffold PR #381: https://github.com/dmoskov/skof/pull/381
+- Scaffold PR #381: https://github.com/dmoskov/skof/pull/381 — **MERGED** 2026-08-05
   (branch task/1217176582892596 — escalation pipeline + import fix)
-- Scaffold PR #382: https://github.com/dmoskov/skof/pull/382
+- Scaffold PR #382: https://github.com/dmoskov/skof/pull/382 — **MERGED** 2026-08-05
   (branch task/1217176582901797 — internal scanner + import fix)
 
 ## Tests
