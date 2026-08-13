@@ -4,6 +4,10 @@ name: Auto-merge task branches
 # deploy. Uses a direct merge commit (matching this repo's merge style) — no PR
 # required; conflicting branches are left for a human. Deploy is called in this
 # same run because a GITHUB_TOKEN merge would not re-trigger CI/Deploy on main.
+#
+# Auth/credential-tier branches (see governance/auth-tier-allowlist.md) are the
+# one exception: they need a human sign-off entry in that file before this
+# workflow will merge them unattended.
 
 on:
   workflow_run:
@@ -22,8 +26,38 @@ jobs:
     outputs:
       merged: ${{ steps.merge.outputs.merged }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      # See governance/auth-tier-allowlist.md: auth/credential-tier branches
+      # need a human sign-off entry there before this workflow will merge them
+      # unattended. Everything else is unaffected.
+      - name: Check auth-tier sign-off
+        id: authcheck
+        continue-on-error: true
+        env:
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          git fetch origin main "$BRANCH"
+          python3 scripts/check_auth_tier_signoff.py "$BRANCH" origin/main "origin/$BRANCH"
+
+      - name: Warn if blocked on auth-tier review
+        if: steps.authcheck.outcome == 'failure'
+        env:
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          echo "::warning title=Auth-tier review required::'$BRANCH' touches an auth-tier path with no sign-off in governance/auth-tier-allowlist.md — leaving for manual merge."
+
       - id: merge
         name: Merge passing task branch into main
+        if: steps.authcheck.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
