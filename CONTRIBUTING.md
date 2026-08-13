@@ -72,6 +72,17 @@ npm run build   # one-off production bundle (same as scripts/build_js.sh)
 If sign-in gets in your way locally (a config with a `googleClientId` gates the
 API), start the server with `ALLOW_OPEN_ACCESS=1`.
 
+## Auth-tier changes
+
+Changes touching `src/routes/auth.py`, `src/database/`, `src/ratelimit.py`,
+`deploy/`, or `.githooks/` are "auth-tier." `.github/workflows/auto-merge.yml`
+normally merges any `task/**` branch as soon as CI passes, with no content
+review — but it won't do that for an auth-tier branch unless a human reviewer
+has added a sign-off entry for it in
+[`governance/auth-tier-allowlist.md`](governance/auth-tier-allowlist.md). See
+that file for the review criteria and the approvals table. Without an entry,
+the branch is left for someone to review and merge by hand.
+
 ## Pull requests
 
 1. Fork the repo and create a branch off `main` (`feature/...` or `fix/...`).
