@@ -5,9 +5,11 @@ name: Auto-merge task branches
 # required; conflicting branches are left for a human. Deploy is called in this
 # same run because a GITHUB_TOKEN merge would not re-trigger CI/Deploy on main.
 #
-# Auth/credential-tier branches (see governance/auth-tier-allowlist.md) are the
-# one exception: they need a human sign-off entry in that file before this
-# workflow will merge them unattended.
+# Protected-tier branches need a human sign-off entry before this workflow will
+# merge them unattended. Two tiers exist (checked in severity order):
+#   substrate-tier (governance/substrate-tier-policy.md) — Dockerfile, docker-compose,
+#     CI/deploy workflows. Changes here alter the runtime governance runs on.
+#   auth-tier (governance/auth-tier-allowlist.md) — auth/credential/session code.
 
 on:
   workflow_run:
@@ -36,9 +38,9 @@ jobs:
         with:
           python-version: "3.11"
 
-      # See governance/auth-tier-allowlist.md: auth/credential-tier branches
-      # need a human sign-off entry there before this workflow will merge them
-      # unattended. Everything else is unaffected.
+      # See governance/substrate-tier-policy.md and governance/auth-tier-allowlist.md:
+      # protected-tier branches need a human sign-off entry in the relevant
+      # governance file before this workflow will merge them unattended.
       - name: Check auth-tier sign-off
         id: authcheck
         continue-on-error: true
@@ -48,12 +50,12 @@ jobs:
           git fetch origin main "$BRANCH"
           python3 scripts/check_auth_tier_signoff.py "$BRANCH" origin/main "origin/$BRANCH"
 
-      - name: Warn if blocked on auth-tier review
+      - name: Warn if blocked on protected-tier review
         if: steps.authcheck.outcome == 'failure'
         env:
           BRANCH: ${{ github.event.workflow_run.head_branch }}
         run: |
-          echo "::warning title=Auth-tier review required::'$BRANCH' touches an auth-tier path with no sign-off in governance/auth-tier-allowlist.md — leaving for manual merge."
+          echo "::warning title=Protected-tier review required::'$BRANCH' touches a substrate-tier or auth-tier path with no sign-off in the relevant governance file — leaving for manual merge."
 
       - id: merge
         name: Merge passing task branch into main

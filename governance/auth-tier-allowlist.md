@@ -88,14 +88,18 @@ branch name appears in the first column.
    scope for a same-project change (see criteria #2 above).
 2. Once a task/branch exists in *this* repo, `.github/workflows/auto-merge.yml`
    normally auto-merges any branch whose CI passes, with no content review at
-   all. That workflow now runs `scripts/check_auth_tier_signoff.py` first: if
-   the branch touches an auth-tier path and isn't listed in the table above,
-   the merge is skipped and left for a human, with a `::warning` annotation
-   explaining why.
-3. Non-auth-tier branches are unaffected — the check is a no-op for them.
+   all. That workflow now runs `scripts/check_auth_tier_signoff.py` first,
+   which checks two tiers in severity order:
+   - **Substrate-tier** (governance/substrate-tier-policy.md) — server image,
+     container, and CI/deploy workflows. This is the higher-severity tier.
+   - **Auth-tier** (this file) — credential, session, and auth-related code.
+   If the branch touches a protected path and isn't listed in the relevant
+   tier's approvals table, the merge is skipped and left for a human, with a
+   `::warning` annotation explaining why.
+3. Non-protected branches are unaffected — the check is a no-op for them.
 
 This means: the keyword block stays exactly as strict as it is today for
-everyone. The only thing this file adds is a *documented, auditable* way for a
-human who has actually reviewed an auth-tier diff to let that specific,
-already-reviewed branch through this repo's own auto-merge, instead of having
-to merge it by hand outside of CI.
+everyone. The only thing these governance files add is a *documented, auditable*
+way for a human who has actually reviewed a protected-tier diff to let that
+specific, already-reviewed branch through this repo's own auto-merge, instead
+of having to merge it by hand outside of CI.
