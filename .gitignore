@@ -43,6 +43,7 @@ web/photos/
 docs/*
 !docs/TESTING.md
 !docs/TROUBLESHOOTING.md
+!docs/REPO_IDENTITY_AUDIT.md
 
 # Environment
 .env
