@@ -30,7 +30,13 @@ from executor_registry import (
     EXECUTOR_CAPABILITIES,
     is_executor_authoritative,
 )
-from task_dispatcher import dispatch_task, get_capable_repos
+from task_dispatcher import (
+    EXECUTOR_CAPABILITIES as DISPATCHER_CAPABILITIES,
+)
+from task_dispatcher import (
+    dispatch_task,
+    get_capable_repos,
+)
 
 # ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -177,6 +183,26 @@ class TestPositivePath:
         assert result == "kin-ok"
         executor.assert_called_once_with(task)
 
+    def test_pan_task_to_pan_executor(self):
+        """pan tasks should dispatch to the pan executor."""
+        executor = MagicMock(return_value="pan-ok")
+        task = _stub_scan_emit("pan", "src/main.py")
+
+        result = dispatch_task(task, "pan", executor)
+
+        assert result == "pan-ok"
+        executor.assert_called_once_with(task)
+
+    def test_pan_task_blocked_from_family_tree(self):
+        """pan tasks must NOT dispatch to the family-tree executor."""
+        executor = MagicMock()
+        task = _stub_scan_emit("pan", "src/main.py")
+
+        result = dispatch_task(task, "family-tree", executor)
+
+        assert result is None
+        executor.assert_not_called()
+
     def test_positive_path_no_warnings(self, caplog):
         """A correctly-matched dispatch must produce no warnings."""
         executor = MagicMock(return_value="ok")
@@ -223,6 +249,7 @@ class TestEndToEndScanDispatchCycle:
     SCANNED_REPOS = [
         ("family-tree", "src/models/person.py", "family-tree", True),
         ("claude-code-scaffold", "scripts/maintenance/vsm/ops.py", "claude-code-scaffold", True),
+        ("pan", "src/main.py", "pan", True),
         ("analysis-repo", "analysis/build_stocks.py", "claude-code-scaffold", False),
         ("analysis-repo", "analysis/eia_match.py", "family-tree", False),
         ("pan", "src/main.py", "claude-code-scaffold", False),
@@ -248,7 +275,7 @@ class TestEndToEndScanDispatchCycle:
             executor.assert_not_called()
 
     def test_batch_scan_summary(self, caplog):
-        """Simulate a batch scan of 6 repos. Only 2 should dispatch; 4 should
+        """Simulate a batch scan of 7 tasks. 3 should dispatch; 4 should
         be blocked with warnings."""
         dispatched = []
         blocked = []
@@ -264,7 +291,7 @@ class TestEndToEndScanDispatchCycle:
                 else:
                     blocked.append((source_repo, target_executor))
 
-        assert len(dispatched) == 2
+        assert len(dispatched) == 3
         assert len(blocked) == 4
         warning_lines = [r for r in caplog.records if r.levelno >= logging.WARNING]
         assert len(warning_lines) == 4
@@ -300,3 +327,25 @@ class TestRegistryDispatcherAgreement:
                     f"Disagreement for {executor_id}/{repo}: "
                     f"dispatcher={capable}, registry={authoritative}"
                 )
+
+    def test_same_executor_keys(self):
+        """Both modules must register the exact same set of executor IDs."""
+        registry_keys = set(EXECUTOR_CAPABILITIES.keys())
+        dispatcher_keys = set(DISPATCHER_CAPABILITIES.keys())
+        assert registry_keys == dispatcher_keys, (
+            f"Executor key mismatch — "
+            f"only in registry: {registry_keys - dispatcher_keys}, "
+            f"only in dispatcher: {dispatcher_keys - registry_keys}"
+        )
+
+    def test_same_repo_sets_per_executor(self):
+        """For each executor, the dispatcher and registry must agree on
+        the exact set of authoritative repos."""
+        for executor_id, cap in EXECUTOR_CAPABILITIES.items():
+            dispatcher_repos = get_capable_repos(executor_id)
+            registry_repos = cap.authoritative_repos
+            assert dispatcher_repos == registry_repos, (
+                f"Repo set mismatch for {executor_id} — "
+                f"only in registry: {registry_repos - dispatcher_repos}, "
+                f"only in dispatcher: {dispatcher_repos - registry_repos}"
+            )
