@@ -310,8 +310,9 @@ def api_person_summary(person_id):
     Returns 200 with ``{"summary": "..."}`` on success, 404 if the person
     doesn't exist, 503 if the AI service is unavailable.
     """
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
+    from anthropic_client import anthropic_available
+
+    if not anthropic_available():
         return jsonify({"error": "AI service not configured", "code": "unavailable"}), 503
 
     repo = TreeRepository()
@@ -401,9 +402,9 @@ def api_person_summary(person_id):
     )
 
     try:
-        import anthropic
+        from anthropic_client import get_anthropic_client
 
-        client = anthropic.Anthropic(api_key=api_key)
+        client = get_anthropic_client()
         message = client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=300,

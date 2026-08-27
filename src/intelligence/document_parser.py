@@ -87,11 +87,15 @@ def _get_client():
     except ImportError as err:
         raise RuntimeError("anthropic package not installed. Run: pip install anthropic") from err
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY environment variable not set")
+    from anthropic_client import anthropic_available, get_anthropic_client
 
-    return anthropic.Anthropic(api_key=api_key)
+    if not anthropic_available():
+        raise RuntimeError(
+            "No Anthropic credentials configured (ANTHROPIC_API_KEY or "
+            "workload identity federation)"
+        )
+
+    return get_anthropic_client()
 
 
 def _extract_pdf_text(file_path: str) -> str:

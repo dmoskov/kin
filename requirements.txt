@@ -3,7 +3,7 @@ gunicorn==23.*
 google-auth==2.*
 requests>=2.31
 psycopg2-binary==2.9.*
-anthropic>=0.40
+anthropic>=1.1
 pdfplumber>=0.11
 boto3>=1.35
 Pillow>=10.0
