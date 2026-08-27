@@ -54,8 +54,13 @@ EXECUTOR_CAPABILITIES: dict[str, ExecutorCapability] = {
     ),
     "family-tree": ExecutorCapability(
         executor_id="family-tree",
-        authoritative_repos=frozenset({"family-tree"}),
+        authoritative_repos=frozenset({"family-tree", "kin"}),
         description="Family-tree app executor — handles dmoskov/kin.",
+    ),
+    "pan": ExecutorCapability(
+        executor_id="pan",
+        authoritative_repos=frozenset({"pan"}),
+        description="Pan API executor — handles the pan-api-internal service.",
     ),
 }
 
