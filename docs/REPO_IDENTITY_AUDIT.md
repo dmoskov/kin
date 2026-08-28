@@ -30,8 +30,8 @@ like "family-tree", "pan", etc.) are set at construction time.
 ```python
 scanner = InternalScanner(
     lookback_days=lookback_days,
-    repo_path=repo_path,        # <-- cloned repo path, e.g. /tmp/proactive/kin
-    project_id=project_name,    # <-- e.g. "family-tree"
+    repo_path=repo_path,  # <-- cloned repo path, e.g. /tmp/proactive/kin
+    project_id=project_name,  # <-- e.g. "family-tree"
 )
 ```
 

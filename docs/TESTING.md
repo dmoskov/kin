@@ -58,6 +58,7 @@ def db_path(tmp_path):
     init_db(path)
     return path
 
+
 @pytest.fixture
 def repo(db_path):
     return TreeRepository(db_path)
