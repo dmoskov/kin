@@ -10,16 +10,16 @@ This script:
   2. Marks any sync_run that has been 'running' longer than a timeout as 'failed'
   3. Logs what it cleaned up
 
-The same logic is available as the database function
-``cleanup_zombie_sync_runs(max_age_minutes)`` for use by Lambdas and
-other callers that already hold a connection.
+Prefers the database function ``cleanup_zombie_sync_runs(max_age_minutes)``
+when available, but falls back to equivalent SQL when the function has not
+been created yet (e.g. fresh environments, test databases).
 
 Usage::
 
     python scripts/cleanup_zombie_sync_runs.py           # default 60-min timeout
     python scripts/cleanup_zombie_sync_runs.py --timeout 30  # custom timeout
 
-See: Asana task 1217954466850987
+See: Asana task 1217968728475363
 """
 
 from __future__ import annotations
@@ -33,6 +33,17 @@ import sys
 logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT_MINUTES = 60
+
+CLEANUP_SQL = """\
+UPDATE sync_runs
+SET status = 'failed',
+    completed_at = NOW(),
+    error_message = 'Orphaned: process exited without completing the sync run',
+    error_details = 'Detected by cleanup_zombie_sync_runs (timeout=' || %(timeout)s || 'm)'
+WHERE status = 'running'
+  AND started_at < NOW() - MAKE_INTERVAL(mins => %(timeout)s)
+RETURNING id
+"""
 
 
 def _get_family_org_connection():
@@ -78,17 +89,43 @@ def _get_family_org_connection():
     )
 
 
-def cleanup_zombies(timeout_minutes: int = DEFAULT_TIMEOUT_MINUTES) -> int:
-    """Mark zombie sync_runs as failed.  Returns count of cleaned rows."""
-    conn = _get_family_org_connection()
+def _cleanup_via_function(cur, timeout_minutes):
+    """Try the DB function; returns (cleaned_count, ids) or raises."""
+    cur.execute("SELECT * FROM cleanup_zombie_sync_runs(%s)", (timeout_minutes,))
+    row = cur.fetchone()
+    return row["cleaned_count"], row["cleaned_ids"] or []
+
+
+def _cleanup_via_sql(cur, timeout_minutes):
+    """Fallback: run the UPDATE directly and return (count, ids)."""
+    cur.execute(CLEANUP_SQL, {"timeout": timeout_minutes})
+    rows = cur.fetchall()
+    ids = [r["id"] for r in rows]
+    return len(ids), ids
+
+
+def cleanup_zombies(
+    timeout_minutes: int = DEFAULT_TIMEOUT_MINUTES,
+    conn=None,
+) -> int:
+    """Mark zombie sync_runs as failed.  Returns count of cleaned rows.
+
+    If *conn* is provided it is used directly (caller manages lifecycle);
+    otherwise a new connection is opened and closed automatically.
+    """
+    owns_conn = conn is None
+    if owns_conn:
+        conn = _get_family_org_connection()
     try:
         cur = conn.cursor()
-        cur.execute("SELECT * FROM cleanup_zombie_sync_runs(%s)", (timeout_minutes,))
-        result = cur.fetchone()
+        try:
+            cleaned, ids = _cleanup_via_function(cur, timeout_minutes)
+        except Exception:
+            conn.rollback()
+            cur = conn.cursor()
+            cleaned, ids = _cleanup_via_sql(cur, timeout_minutes)
         conn.commit()
 
-        cleaned = result["cleaned_count"]
-        ids = result["cleaned_ids"] or []
         if cleaned:
             logger.info(
                 "Cleaned %d zombie sync_runs (ids=%s, timeout=%dm)",
@@ -100,7 +137,8 @@ def cleanup_zombies(timeout_minutes: int = DEFAULT_TIMEOUT_MINUTES) -> int:
             logger.info("No zombie sync_runs found (timeout=%dm)", timeout_minutes)
         return cleaned
     finally:
-        conn.close()
+        if owns_conn:
+            conn.close()
 
 
 def main():
@@ -109,7 +147,10 @@ def main():
         "--timeout",
         type=int,
         default=DEFAULT_TIMEOUT_MINUTES,
-        help=f"Minutes after which a running sync_run is considered a zombie (default: {DEFAULT_TIMEOUT_MINUTES})",
+        help=(
+            "Minutes after which a running sync_run is considered a zombie"
+            f" (default: {DEFAULT_TIMEOUT_MINUTES})"
+        ),
     )
     parser.add_argument("--verbose", "-v", action="store_true")
     args = parser.parse_args()
