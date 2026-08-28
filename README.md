@@ -105,14 +105,16 @@ from models.tree import FamilyTree
 
 tree = FamilyTree()
 
-tree.add_person(Person(
-    id="grandma-jones",
-    given_name="Margaret",
-    surname="Jones",
-    gender=Gender.FEMALE,
-    birth_date="1935-03-15",
-    birth_place="Chicago, IL",
-))
+tree.add_person(
+    Person(
+        id="grandma-jones",
+        given_name="Margaret",
+        surname="Jones",
+        gender=Gender.FEMALE,
+        birth_date="1935-03-15",
+        birth_place="Chicago, IL",
+    )
+)
 # ... add more people, relationships, unions, events
 ```
 
