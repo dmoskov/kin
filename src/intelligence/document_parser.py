@@ -8,7 +8,6 @@ import base64
 import io
 import json
 import logging
-import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -82,16 +81,15 @@ Return ONLY valid JSON with this exact structure:
 
 def _get_client():
     """Get Anthropic client, importing lazily."""
-    try:
-        import anthropic
-    except ImportError as err:
-        raise RuntimeError("anthropic package not installed. Run: pip install anthropic") from err
+    from anthropic_client import anthropic_available, get_anthropic_client
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY environment variable not set")
+    if not anthropic_available():
+        raise RuntimeError(
+            "No Anthropic credentials configured (ANTHROPIC_API_KEY or "
+            "workload identity federation)"
+        )
 
-    return anthropic.Anthropic(api_key=api_key)
+    return get_anthropic_client()
 
 
 def _extract_pdf_text(file_path: str) -> str:
