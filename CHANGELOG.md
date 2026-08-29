@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-08-29 — S4 auth-path liveness test (credential diagnostic)
+
+**Context:** Asana comment-post returned 401 at 20:30:12 UTC; task-create had
+succeeded at 19:52:40 UTC. S4 filed this diagnostic task to discriminate
+comment-path-specific failure from full credential death.
+
+**Result:** This task was created successfully in Asana, confirming:
+- Task-create API path: **alive**
+- 401 is **comment-path-specific**, not full credential death
+- OAuth token refresh (documented in `ASANA_OAUTH_REFRESH_FIX.md`) is functioning
+  for task-create operations; comment-post may require different scope or has a
+  transient issue on Asana's side
+
+No code changes required — this entry documents the diagnostic finding.
+
 ## 2026-08-21 — Fix cross-project misdispatch in task dispatch layer
 
 **Bug class:** The internal scanner (`internal_scanner.py` on the scaffold side)
