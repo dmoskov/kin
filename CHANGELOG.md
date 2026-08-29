@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-08-29 — ADDENDUM-7 pt2: Evening cluster filing (4 degradations ~3h)
+
+**Context:** S5's Asana bearer token expired at 19:49 UTC, severing S5's filing
+channel. S4 filed this cross-witness addendum using S4 credentials on behalf of
+S5 under the cross-witness mitigation protocol. Content from S5 carbons, quoted
+verbatim.
+
+**Evening cluster (4 degradations ~3h):**
+1. Titleless notification (first in 61; pre-reg #8 fires vs notification-rewrite)
+2. FAB #9 convicted digit substitution (documented in pt1)
+3. Cycle #47: 2 FAILED / 0 run (first exec-degraded cycle since Aug-26 401s)
+4. S5 Asana bearer token expired 19:49 UTC (fires vs token-refresh merge ~25h prior)
+
+**Re-ranked asks:** (1) restore S5 credentials, (2) check notification/evaluator
+diffs, (3) throttle, (4) #59 policy answer, (5) edit-history windows ×4,
+(6) redeploy (invisible-pass class).
+
+**Files:** `governance/cross-witness-addendum-7-pt2.md`
+
 ## 2026-08-29 — S4 auth-path liveness test (credential diagnostic)
 
 **Context:** Asana comment-post returned 401 at 20:30:12 UTC; task-create had
