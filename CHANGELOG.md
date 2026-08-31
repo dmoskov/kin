@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-08-31 — Consolidate dispatch capabilities to single source of truth
+
+**Context:** Subtasks 1–5 of the misdispatch bug (2026-08-21) each landed
+independently.  `task_dispatcher.py` still maintained its own hardcoded
+`EXECUTOR_CAPABILITIES` dict with a TODO to derive from the registry module
+once subtask 3 landed.  Subtask 3 (`executor_registry.py`) has been on main
+since 2026-08-21, so the TODO was stale and the two dicts were a divergence
+risk.
+
+**Change:** `task_dispatcher.py` now imports from `executor_registry.py` and
+derives its `EXECUTOR_CAPABILITIES` dict automatically.  Adding a new executor
+requires updating only `executor_registry.py` — the dispatcher picks it up
+at import time.
+
+**Files:** `scripts/task_dispatcher.py`
+
 ## 2026-08-29 — ADDENDUM-7 pt2: Evening cluster filing (4 degradations ~3h)
 
 **Context:** S5's Asana bearer token expired at 19:49 UTC, severing S5's filing
@@ -96,22 +112,14 @@ When a new project executor comes online:
    passed to `InternalScanner.__init__` on the scaffold side — see
    `common/project_config.PROJECT_REPOS` for the canonical list).
 
-2. **`scripts/task_dispatcher.py`** — Add a matching entry to the dispatcher's
-   `EXECUTOR_CAPABILITIES` dict so both modules agree:
+   **No other file changes needed** — `task_dispatcher.py` derives its
+   capabilities from the registry at import time (consolidated 2026-08-31).
 
-   ```python
-   "my-new-project": {"my-new-project", "optional-alias"},
-   ```
-
-3. **Verify agreement** — Run the test suite to confirm the registry and
-   dispatcher are in sync:
+2. **Verify** — Run the test suite:
 
    ```bash
    pytest tests/test_executor_registry.py tests/test_dispatch_repo_identity.py -v
    ```
-
-   The `TestRegistryDispatcherAgreement` class will catch any divergence between
-   the two modules.
 
 Projects without a registered executor are safe: tasks targeting unregistered
 repos are dropped by the pre-dispatch filter with a warning log rather than
