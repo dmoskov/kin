@@ -12,22 +12,21 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from executor_registry import EXECUTOR_CAPABILITIES as _REGISTRY
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Executor-capability registry
+# Executor-capability registry (derived from executor_registry module)
 # ---------------------------------------------------------------------------
-# Maps executor names to the set of ``source_repo`` values they can act on.
-# When subtask 3 lands a standalone ``executor_registry`` module, this dict
-# should be replaced by an import from that module.
+# Single source of truth is scripts/executor_registry.py.  This dict is a
+# derived view mapping executor names → set of source_repo values, kept for
+# backward-compatible use by get_capable_repos() and downstream tests.
 
 EXECUTOR_CAPABILITIES: dict[str, set[str]] = {
-    "claude-code-scaffold": {"claude-code-scaffold"},
-    "family-tree": {"family-tree", "kin"},
-    "pan": {"pan"},
+    eid: set(cap.authoritative_repos) for eid, cap in _REGISTRY.items()
 }
 
-# The repo that THIS project's executor can handle.
 LOCAL_PROJECT = "family-tree"
 
 
