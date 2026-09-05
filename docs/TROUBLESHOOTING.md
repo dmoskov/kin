@@ -153,17 +153,27 @@ git push --force-with-lease
 
 ## Production / Deployment
 
-### Deploy fails: "DEPLOY_HOST or DEPLOY_SSH_KEY secret not set"
+### Deploy fails assuming the AWS role / "Not authorized to perform sts:AssumeRoleWithWebIdentity"
 
-The deploy workflow requires both as GitHub repo secrets. Add them in
-Settings → Secrets → Actions.
+The deploy workflow has no secrets; it assumes IAM role
+`github-actions-kin-deploy` via GitHub OIDC, and that role trusts only
+`repo:dmoskov/kin:ref:refs/heads/main`. Deploys from any other repo or branch
+are refused by design. If the role is missing, re-run
+`deploy/aws-ssm-deploy-setup.sh` with an admin identity.
+
+### Deploy fails: SSM command times out / instance not found
+
+The SSM agent on the instance must be online (`aws ssm describe-instance-information`).
+It needs the `AmazonSSMManagedInstanceCore` policy on `familytree-ec2-role`
+(also granted by the setup script) and outbound HTTPS. Restart it with
+`sudo systemctl restart amazon-ssm-agent` from a Session Manager shell if needed.
 
 ### Health check fails after deploy
 
 The deploy script polls `/healthz` 10 times (3s apart) after restarting the
 systemd service. If it doesn't come up in 30s:
 
-1. `ssh ec2-user@<host>`
+1. `aws ssm start-session --target <instance-id> --region us-east-1` (there is no open SSH port)
 2. `sudo systemctl status familytree` and `sudo journalctl -u familytree -n 50`
 3. Common causes: missing `.env`, bad `DATABASE_URL`, port 8000 in use.
 

@@ -14,37 +14,51 @@
 #
 # ── AWS EC2 users ─────────────────────────────────────────────────────────
 #
-#  Set USE_INSTANCE_CONNECT=true and fill in INSTANCE_ID / AZ / REGION.
-#  This pushes your SSH key automatically via EC2 Instance Connect so you
-#  never need to manage authorized_keys on the server.
+#  Set USE_SSM=true and fill in INSTANCE_ID / REGION. SSH is tunnelled through
+#  AWS Systems Manager Session Manager, so the instance needs NO inbound port
+#  22 and no public IP. Requires the AWS CLI plus the Session Manager plugin
+#  (https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html)
+#  and an identity allowed ssm:StartSession on the instance. Your public key
+#  must still be in ~/.ssh/authorized_keys on the server (the familytree-ec2
+#  key pair is).
 #
-#  Find your values in the AWS Console → EC2 → Instances, or:
-#    aws ec2 describe-instances --query 'Reservations[].Instances[].[InstanceId,Placement.AvailabilityZone,PublicIpAddress]' --output table
+#  Find your instance id in the AWS Console → EC2 → Instances, or:
+#    aws ec2 describe-instances --query 'Reservations[].Instances[].[InstanceId,Tags[?Key==`Name`]|[0].Value]' --output table
 #
 # ── Plain VPS / non-AWS users ─────────────────────────────────────────────
 #
-#  Set USE_INSTANCE_CONNECT=false. Make sure your SSH public key is already
-#  in ~/.ssh/authorized_keys on the server. INSTANCE_ID / AZ / REGION are
-#  ignored.
+#  Set USE_SSM=false and put the host/IP in SERVER_HOST. Make sure your SSH
+#  public key is already in ~/.ssh/authorized_keys on the server. INSTANCE_ID
+#  / REGION are ignored.
 
 set -euo pipefail
 
 # ── Configuration ─────────────────────────────────────────────────────────
 # Copy this file to private/deploy.sh and fill these in.
 
-SERVER_HOST=""                      # e.g. myserver.example.com or an IP address
+SERVER_HOST=""                      # non-AWS only: myserver.example.com or an IP (ignored if USE_SSM=true)
 SERVER_USER="ec2-user"              # ec2-user (Amazon Linux), ubuntu (Ubuntu), etc.
 SSH_KEY="$HOME/.ssh/my-key"         # path to your private key (without .pub)
 REMOTE_DIR="/home/ec2-user/family-tree"   # where the app lives on the server
 
-USE_INSTANCE_CONNECT=false          # true = AWS EC2 Instance Connect; false = plain SSH
-INSTANCE_ID=""                      # AWS only: i-0abc1234... (ignored if USE_INSTANCE_CONNECT=false)
-AZ=""                               # AWS only: us-east-1a   (ignored if USE_INSTANCE_CONNECT=false)
-REGION=""                           # AWS only: us-east-1    (ignored if USE_INSTANCE_CONNECT=false)
+USE_SSM=false                       # true = SSH over AWS SSM Session Manager (no open port 22); false = plain SSH
+INSTANCE_ID=""                      # AWS only: i-0abc1234... (ignored if USE_SSM=false)
+REGION=""                           # AWS only: us-east-1    (ignored if USE_SSM=false)
 
 # ── Preflight ─────────────────────────────────────────────────────────────
 
-if [[ -z "$SERVER_HOST" ]]; then
+if $USE_SSM; then
+  if [[ -z "$INSTANCE_ID" || -z "$REGION" ]]; then
+    echo "Error: USE_SSM=true requires INSTANCE_ID and REGION." >&2
+    exit 1
+  fi
+  if ! command -v aws &>/dev/null || ! command -v session-manager-plugin &>/dev/null; then
+    echo "Error: USE_SSM=true needs the aws CLI and the Session Manager plugin." >&2
+    exit 1
+  fi
+  # ssh sees the instance id as the hostname; SSM carries the TCP stream.
+  SERVER_HOST="$INSTANCE_ID"
+elif [[ -z "$SERVER_HOST" ]]; then
   echo "Error: SERVER_HOST is not set." >&2
   echo "  Copy this file to private/deploy.sh and fill in the Configuration block." >&2
   exit 1
@@ -55,25 +69,14 @@ if [[ ! -f "$SSH_KEY" ]]; then
   exit 1
 fi
 
-if $USE_INSTANCE_CONNECT && ! command -v aws &>/dev/null; then
-  echo "Error: USE_INSTANCE_CONNECT=true but aws CLI not found." >&2
-  exit 1
-fi
-
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SSH_CMD="ssh -i $SSH_KEY -o StrictHostKeyChecking=no"
 
-# ── Step 1: Auth ──────────────────────────────────────────────────────────
+# ── Step 1: Transport ─────────────────────────────────────────────────────
 
-if $USE_INSTANCE_CONNECT; then
-  echo "Pushing SSH key via EC2 Instance Connect..."
-  aws ec2-instance-connect send-ssh-public-key \
-    --region "$REGION" \
-    --instance-id "$INSTANCE_ID" \
-    --instance-os-user "$SERVER_USER" \
-    --ssh-public-key "file://${SSH_KEY}.pub" \
-    --availability-zone "$AZ" \
-    --no-cli-pager
+if $USE_SSM; then
+  echo "SSH will be tunnelled over SSM Session Manager (no inbound port 22)."
+  SSH_CMD="$SSH_CMD -o ProxyCommand='aws ssm start-session --region $REGION --target %h --document-name AWS-StartSSHSession --parameters portNumber=%p'"
 fi
 
 echo "=== Deploying to $SERVER_USER@$SERVER_HOST ==="

@@ -1,14 +1,29 @@
 name: Deploy (reusable)
 
 # The actual deploy steps, callable from other workflows via `uses:`.
-# Builds the JS bundle, rsyncs web/ + src/, reinstalls deps, restarts the
-# service, and health-checks it. Server identifiers come from repo secrets.
+# Builds the JS bundle, ships web/ + src/ + requirements.txt to the web host
+# through S3 + SSM Run Command, reinstalls deps, restarts the service, and
+# health-checks it. No SSH: the host has no inbound port 22 and the runner
+# authenticates to AWS with the repo's OIDC identity (role
+# github-actions-kin-deploy, trusted for refs/heads/main only).
+#
+# Infrastructure identifiers live in repository *variables* (Settings →
+# Secrets and variables → Actions → Variables), not in this public file:
+#   AWS_REGION, DEPLOY_ROLE_ARN, DEPLOY_BUCKET, DEPLOY_INSTANCE_ID
 
 on:
   workflow_call:
 
 permissions:
   contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  DEPLOY_ROLE_ARN: ${{ vars.DEPLOY_ROLE_ARN }}
+  DEPLOY_BUCKET: ${{ vars.DEPLOY_BUCKET }}
+  INSTANCE_ID: ${{ vars.DEPLOY_INSTANCE_ID }}
+  APP_DIR: /home/ec2-user/family-tree
 
 jobs:
   deploy:
@@ -28,44 +43,70 @@ jobs:
       - name: Build JS bundle
         run: bash scripts/build_js.sh
 
-      - name: Deploy over SSH
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      - name: Check deploy variables
+        run: |
+          for v in AWS_REGION DEPLOY_ROLE_ARN DEPLOY_BUCKET INSTANCE_ID; do
+            [ -n "${!v}" ] || { echo "repository variable for $v is not set"; exit 1; }
+          done
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload release artifact
+        id: artifact
         run: |
           set -euo pipefail
-          test -n "$DEPLOY_HOST" || { echo "DEPLOY_HOST secret not set"; exit 1; }
-          mkdir -p ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          SSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=20"
-          REMOTE="ec2-user@${DEPLOY_HOST}"
-          DIR="/home/ec2-user/family-tree"
+          KEY="releases/${GITHUB_SHA}.tar.gz"
+          tar -czf release.tar.gz \
+            --exclude='__pycache__' --exclude='*.egg-info' \
+            web src requirements.txt
+          aws s3 cp release.tar.gz "s3://${DEPLOY_BUCKET}/${KEY}"
+          echo "key=${KEY}" >> "$GITHUB_OUTPUT"
 
-          echo "Syncing web/ and src/..."
-          rsync -az --delete -e "$SSH" web/ "${REMOTE}:${DIR}/web/"
-          rsync -az --delete --exclude=__pycache__ --exclude='*.egg-info' \
-            -e "$SSH" src/ "${REMOTE}:${DIR}/src/"
-          rsync -az -e "$SSH" requirements.txt "${REMOTE}:${DIR}/requirements.txt"
-
-          echo "Installing deps + restarting service..."
-          $SSH "$REMOTE" \
-            "cd ${DIR} && ./venv/bin/pip install -q -r requirements.txt && sudo systemctl restart familytree"
-
-      - name: Verify service is healthy
+      - name: Deploy via SSM Run Command
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          ARTIFACT_KEY: ${{ steps.artifact.outputs.key }}
         run: |
           set -euo pipefail
-          SSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=20"
-          REMOTE="ec2-user@${DEPLOY_HOST}"
-          for i in $(seq 1 10); do
-            active=$($SSH "$REMOTE" "sudo -n systemctl is-active familytree" 2>/dev/null || true)
-            if [ "$active" = "active" ]; then
-              code=$($SSH "$REMOTE" "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/healthz" 2>/dev/null || true)
-              echo "service active; /healthz -> $code"
-              [ "$code" = "200" ] && exit 0
+          # The remote script runs as root under SSM; everything that touches
+          # the app tree runs as ec2-user so ownership stays unchanged.
+          REMOTE=$(cat <<REMOTE_EOF
+          set -euo pipefail
+          STAGE=\$(mktemp -d /tmp/deploy.XXXXXX)
+          trap 'rm -rf "\$STAGE"' EXIT
+          aws s3 cp "s3://${DEPLOY_BUCKET}/${ARTIFACT_KEY}" "\$STAGE/release.tar.gz" --quiet
+          mkdir "\$STAGE/tree" && tar -xzf "\$STAGE/release.tar.gz" -C "\$STAGE/tree"
+          chown -R ec2-user:ec2-user "\$STAGE"
+          runuser -u ec2-user -- rsync -a --delete "\$STAGE/tree/web/" "${APP_DIR}/web/"
+          runuser -u ec2-user -- rsync -a --delete --exclude=__pycache__ --exclude='*.egg-info' "\$STAGE/tree/src/" "${APP_DIR}/src/"
+          runuser -u ec2-user -- cp "\$STAGE/tree/requirements.txt" "${APP_DIR}/requirements.txt"
+          runuser -u ec2-user -- "${APP_DIR}/venv/bin/pip" install -q -r "${APP_DIR}/requirements.txt"
+          systemctl restart familytree
+          for i in \$(seq 1 10); do
+            if [ "\$(systemctl is-active familytree)" = "active" ]; then
+              code=\$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/healthz || true)
+              echo "service active; /healthz -> \$code"
+              [ "\$code" = "200" ] && exit 0
             fi
             sleep 3
           done
-          echo "Service did not become healthy in time"; exit 1
+          echo "Service did not become healthy in time"; systemctl status familytree --no-pager | tail -20; exit 1
+          REMOTE_EOF
+          )
+          PARAMS=$(jq -cn --arg s "$REMOTE" '{commands: [$s], executionTimeout: ["600"]}')
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "kin deploy ${GITHUB_SHA::12}" \
+            --parameters "$PARAMS" \
+            --query 'Command.CommandId' --output text)
+          echo "SSM command: $CMD_ID"
+          # wait polls until the command leaves Pending/InProgress
+          aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" || true
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query '{Status:Status,Out:StandardOutputContent,Err:StandardErrorContent}' --output json > result.json
+          jq -r '.Out' result.json
+          jq -r '.Err' result.json >&2
+          [ "$(jq -r .Status result.json)" = "Success" ]

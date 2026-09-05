@@ -329,15 +329,17 @@ bash deploy/deploy.sh
 ```
 
 This script:
-1. Pushes your SSH key via EC2 Instance Connect (requires AWS CLI)
+1. Opens SSH through AWS Systems Manager Session Manager (the instance has **no inbound port 22**; the connection is tunnelled over SSM, so `INSTANCE_ID` is the SSH target and no public IP or open port is needed)
 2. `rsync`s `web/`, `src/`, `private/config/`, `private/photos/`, and `requirements.txt` to the server
 3. Installs Python dependencies
 4. Restarts the `familytree` systemd service
 
 **Requirements:**
-- AWS CLI with `ec2-instance-connect` permissions
-- SSH key pair configured in `deploy/deploy.sh`
+- AWS CLI + the [Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html), with an identity allowed `ssm:StartSession` on the instance
+- The `familytree-ec2` SSH key pair configured in `deploy/deploy.sh` (still used for the SSH layer inside the SSM tunnel)
 - `rsync` installed locally
+
+For an interactive shell without SSH at all: `aws ssm start-session --target <instance-id> --region us-east-1`.
 
 **Important notes:**
 - `private/config/family-config.json` is synced local → server on each deploy. Keep the local copy as the source of truth.
@@ -363,9 +365,9 @@ Pushes are validated and shipped automatically:
 
 - **`ci.yml`** runs lint (ruff + mypy), pytest, vitest, and a headless smoke test on every push to `main` and `task/**`, and on PRs to `main`.
 - **`auto-merge.yml`** — when CI passes on a `task/**` branch, it's merged into `main` automatically (a merge commit, no PR) and deployed. Conflicting branches are left for a human.
-- **`deploy.yml` / `deploy-reusable.yml`** — when CI passes on `main` (or via manual `workflow_dispatch`), the bundle is built and `web/` + `src/` are rsynced to the server, deps reinstalled, and the service restarted and health-checked.
+- **`deploy.yml` / `deploy-reusable.yml`** — when CI passes on `main` (or via manual `workflow_dispatch`), the bundle is built, `web/` + `src/` + `requirements.txt` are uploaded as one tarball to a private S3 deploy bucket, and an SSM Run Command on the instance unpacks it, reinstalls deps, restarts the service and health-checks it.
 
-Server identifiers are stored as repo secrets (`DEPLOY_HOST`, `DEPLOY_SSH_KEY`), never committed. `deploy/deploy.sh` remains available for manual/emergency deploys.
+There is no SSH involved and the server has no inbound port 22. The workflow authenticates to AWS with the repo's GitHub OIDC identity (IAM role `github-actions-kin-deploy`, trusted only for `refs/heads/main`); no long-lived secrets are stored in the repo, and the infrastructure identifiers (region, role ARN, bucket, instance id) are repository *variables*. The one-time AWS setup is `deploy/aws-ssm-deploy-setup.sh`. `deploy/deploy.sh` remains available for manual/emergency deploys over SSM (see above).
 
 ### Local (Docker)
 
