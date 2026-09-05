@@ -83,5 +83,8 @@ jobs:
   deploy:
     needs: merge
     if: needs.merge.outputs.merged == 'true'
+    permissions:
+      contents: read
+      id-token: write # OIDC token for the AWS deploy role
     uses: ./.github/workflows/deploy-reusable.yml
     secrets: inherit
