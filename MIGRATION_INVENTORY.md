@@ -195,7 +195,24 @@ or OIDC federation to authenticate to AWS. Deployment works via:
 
 ---
 
-## 6. Readiness Verdict
+## 6. Crucible Executor Identity
+
+Since **2026-09-03**, every remote Crucible task for family-tree runs under a
+dedicated IAM task role:
+
+| Attribute | Value |
+|-----------|-------|
+| **Role ARN** | `arn:aws:iam::181691141781:role/crucible-executor-family-tree` |
+| **Anthropic API access** | Workload identity federation (no API key stored or needed) |
+| **Effective date** | 2026-09-03 |
+
+This is a per-project role in the management account. When family-tree migrates
+to member account 453914762633, an equivalent role must be created there and the
+Anthropic WIF trust policy updated to reference the new account.
+
+---
+
+## 7. Readiness Verdict
 
 ### Ready — with one blocker to resolve first
 
