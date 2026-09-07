@@ -114,9 +114,7 @@ def _iam_auth_token(parts: dict[str, Any]) -> str | None:
         # rds host names look like <id>.<hash>.<region>.rds.amazonaws.com
         m = re.search(r"\.([a-z]{2}-[a-z]+-\d)\.rds\.amazonaws\.com$", host)
         if not m:
-            raise RuntimeError(
-                "Cannot infer the AWS region for RDS IAM auth — set AWS_REGION"
-            )
+            raise RuntimeError("Cannot infer the AWS region for RDS IAM auth — set AWS_REGION")
         region = m.group(1)
     token = boto3.client("rds", region_name=region).generate_db_auth_token(
         DBHostname=host, Port=port, DBUsername=user, Region=region

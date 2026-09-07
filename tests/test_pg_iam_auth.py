@@ -64,8 +64,15 @@ def test_passwordless_dsn_uses_iam_token(monkeypatch, fake_boto3, fake_connect):
     connection._get_pg_connection()
 
     assert fake_boto3 == [
-        ("us-east-1", {"DBHostname": HOST, "Port": 5432,
-                       "DBUsername": "familytree_app", "Region": "us-east-1"})
+        (
+            "us-east-1",
+            {
+                "DBHostname": HOST,
+                "Port": 5432,
+                "DBUsername": "familytree_app",
+                "Region": "us-east-1",
+            },
+        )
     ]
     assert fake_connect["kwargs"]["password"] == "iam-token"
     assert fake_connect["kwargs"]["sslmode"] == "require"
