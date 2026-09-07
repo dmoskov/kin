@@ -352,6 +352,26 @@ For an interactive shell without SSH at all: `aws ssm start-session --target <in
 sudo bash deploy/setup.sh
 ```
 
+### Database authentication
+
+Production uses **RDS IAM authentication — there is no database password**.
+The app role `familytree_app` is a passwordless Postgres role in `rds_iam`, and
+`src/database/connection.py` mints a 15-minute RDS auth token per connection
+with the EC2 instance role whenever `DATABASE_URL` carries no password
+(`deploy/backup.sh` does the same for `pg_dump`). The RDS-managed master
+password is never read at runtime. One-time setup:
+
+1. Enable IAM auth on the instance: `aws rds modify-db-instance --db-instance-identifier <id> --enable-iam-database-authentication --apply-immediately`
+2. Create the role and hand it the schema, as the master user: `psql "$MASTER_DATABASE_URL" -v ON_ERROR_STOP=1 -f deploy/db-iam-setup.sql`
+3. Let the instance role connect as that dbuser (`DbiResourceId` from `describe-db-instances`):
+   ```json
+   {"Effect":"Allow","Action":"rds-db:connect",
+    "Resource":"arn:aws:rds-db:<region>:<account>:dbuser:<DbiResourceId>/familytree_app"}
+   ```
+4. Set `DATABASE_URL=postgresql://familytree_app@<host>:5432/familytree?sslmode=require` in `.env` and restart the service.
+
+A DSN *with* a password (local Postgres, Docker) keeps working unchanged.
+
 ### Backups
 
 `setup.sh` installs a systemd timer that runs `deploy/backup.sh` nightly:
@@ -384,7 +404,7 @@ docker run -p 8000:8000 -v $(pwd)/private:/app/private family-tree
 
 | Variable           | Purpose                                                | Default              |
 | ------------------ | ------------------------------------------------------ | -------------------- |
-| `DATABASE_URL`     | Postgres DSN. If unset, falls back to local SQLite.    | _(SQLite)_           |
+| `DATABASE_URL`     | Postgres DSN. If unset, falls back to local SQLite. A DSN **without a password** authenticates with an RDS IAM token minted from the ambient AWS credentials (see [Database authentication](#database-authentication)). | _(SQLite)_           |
 | `FAMILY_TREE_DB`   | SQLite path override (local dev only).                 | `data/family.db`     |
 | `SECRET_KEY`       | Flask session key — set in production.                 | `dev-secret-...`     |
 | `MAX_PHOTO_BYTES`  | Per-file cap for `/api/photos/upload`.                 | `8388608` (8 MB)     |

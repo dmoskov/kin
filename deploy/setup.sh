@@ -6,6 +6,7 @@
 #   - Amazon Linux 2023 or similar
 #   - RDS PostgreSQL instance already running
 #   - .env file created at /home/ec2-user/family-tree/.env with DATABASE_URL
+#     (passwordless DSN + RDS IAM auth — see README "Database authentication")
 
 set -euo pipefail
 
