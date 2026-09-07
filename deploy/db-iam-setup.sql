@@ -23,8 +23,11 @@ GRANT rds_iam TO familytree_app;
 
 -- Hand every existing table/sequence/etc in this database to the app role so
 -- schema migrations (ALTER TABLE …) keep working without the master user.
--- The master user is a member of the app role afterwards, so it can still
--- administer everything.
-GRANT familytree_app TO CURRENT_USER;
+-- REASSIGN needs the master user to be a member of the app role, but that
+-- membership must NOT be inherited: rds_iam is inherited through it, and RDS
+-- refuses *password* logins for any role that inherits rds_iam — which would
+-- lock the master user out of its own password. INHERIT FALSE keeps the
+-- master user's password auth working while still allowing SET ROLE.
+GRANT familytree_app TO CURRENT_USER WITH INHERIT FALSE;
 REASSIGN OWNED BY CURRENT_USER TO familytree_app;
 GRANT ALL ON SCHEMA public TO familytree_app;
