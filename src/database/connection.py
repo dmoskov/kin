@@ -12,7 +12,9 @@ automatically applied in order.
 import json
 import logging
 import os
+import re
 import sqlite3
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -75,17 +77,72 @@ def _get_sqlite_connection(db_path: str | None = None) -> sqlite3.Connection:
 # ── PostgreSQL helpers ─────────────────────────────────────────────────
 
 
+# Tokens are valid for 15 minutes; reuse one for 10 so the per-request
+# connection setup doesn't pay for a boto3 client + SigV4 signing each time.
+_IAM_TOKEN_TTL_SECONDS = 10 * 60
+_IAM_TOKEN_CACHE: dict[tuple[str, int, str], tuple[str, float]] = {}
+
+
+def _iam_auth_token(parts: dict[str, Any]) -> str | None:
+    """Mint a short-lived RDS IAM auth token for a *passwordless* DSN.
+
+    Production runs with no database password: the app role is a member of
+    ``rds_iam`` and the EC2 instance role holds ``rds-db:connect`` on that one
+    dbuser. When DATABASE_URL carries no password, the token (valid 15 min,
+    used only at connect time) is minted with the ambient AWS credentials.
+    A DSN that includes a password is used as-is (local Postgres, docker).
+    """
+    if parts.get("password") or os.environ.get("PGPASSWORD"):
+        return None
+    host, user = parts.get("host"), parts.get("user")
+    if not host or not user:
+        raise RuntimeError(
+            "DATABASE_URL has no password, so RDS IAM auth is assumed, but it "
+            "lacks a host or user — set postgresql://<user>@<host>/<db>?sslmode=require"
+        )
+    port = int(parts.get("port") or 5432)
+    key = (host, port, user)
+    cached = _IAM_TOKEN_CACHE.get(key)
+    now = time.monotonic()
+    if cached and now < cached[1]:
+        return cached[0]
+
+    import boto3
+
+    region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION")
+    if not region:
+        # rds host names look like <id>.<hash>.<region>.rds.amazonaws.com
+        m = re.search(r"\.([a-z]{2}-[a-z]+-\d)\.rds\.amazonaws\.com$", host)
+        if not m:
+            raise RuntimeError("Cannot infer the AWS region for RDS IAM auth — set AWS_REGION")
+        region = m.group(1)
+    token = boto3.client("rds", region_name=region).generate_db_auth_token(
+        DBHostname=host, Port=port, DBUsername=user, Region=region
+    )
+    _IAM_TOKEN_CACHE[key] = (token, now + _IAM_TOKEN_TTL_SECONDS)
+    return token
+
+
 def _get_pg_connection() -> Any:
     """Create a PostgreSQL connection using DATABASE_URL.
 
     Returns a psycopg2 connection with RealDictCursor as default cursor.
-    Requires psycopg2 to be installed.
+    Requires psycopg2 to be installed. A DSN without a password
+    authenticates with an RDS IAM token (see ``_iam_auth_token``).
     """
     import psycopg2
+    import psycopg2.extensions
     import psycopg2.extras
 
     dsn = os.environ["DATABASE_URL"]
-    conn = psycopg2.connect(dsn, cursor_factory=psycopg2.extras.RealDictCursor)
+    parts = psycopg2.extensions.parse_dsn(dsn)
+    kwargs: dict[str, Any] = {"cursor_factory": psycopg2.extras.RealDictCursor}
+    token = _iam_auth_token(parts)
+    if token:
+        kwargs["password"] = token
+        if "sslmode" not in parts:  # IAM tokens are only accepted over TLS
+            kwargs["sslmode"] = "require"
+    conn = psycopg2.connect(dsn, **kwargs)
     conn.autocommit = False
     return conn
 

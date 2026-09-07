@@ -57,6 +57,25 @@ trap 'rm -f "$TMP"' EXIT
 # ── Dump ──────────────────────────────────────────────────────────────────
 # Custom format (-Fc): compressed, and pg_restore can do partial/reordered
 # restores from it.
+# A DATABASE_URL with no password means RDS IAM auth (the app's normal
+# production setup): mint a 15-minute token with the instance role, exactly
+# as src/database/connection.py does, and hand it to pg_dump via PGPASSWORD.
+if [[ "$DATABASE_URL" =~ ^postgres(ql)?://([^:@/]+)@([^:/?]+)(:([0-9]+))?/ ]]; then
+  DB_USER="${BASH_REMATCH[2]}"
+  DB_HOST="${BASH_REMATCH[3]}"
+  DB_PORT="${BASH_REMATCH[5]:-5432}"
+  REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-}}"
+  if [[ -z "$REGION" ]]; then
+    [[ "$DB_HOST" =~ \.([a-z]{2}-[a-z]+-[0-9])\.rds\.amazonaws\.com$ ]] \
+      || { echo "Error: cannot infer AWS region from $DB_HOST — set AWS_REGION." >&2; exit 1; }
+    REGION="${BASH_REMATCH[1]}"
+  fi
+  echo "Minting RDS IAM token for $DB_USER@$DB_HOST..."
+  PGPASSWORD="$(aws rds generate-db-auth-token --region "$REGION" \
+    --hostname "$DB_HOST" --port "$DB_PORT" --username "$DB_USER")"
+  export PGPASSWORD PGSSLMODE="${PGSSLMODE:-require}"
+fi
+
 echo "Dumping database..."
 pg_dump --format=custom --no-owner --no-privileges \
   --dbname="$DATABASE_URL" --file="$TMP"
