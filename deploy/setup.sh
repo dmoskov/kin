@@ -32,6 +32,19 @@ nginx -t
 systemctl enable nginx
 systemctl restart nginx
 
+echo "=== Creating the familytree service user ==="
+# The app runs as a no-login system user with no sudo; ec2-user stays the
+# deploy user and owns the code. The app only reads the code and only writes
+# private/documents (uploads). .env is read by systemd as root.
+id familytree &>/dev/null || useradd --system --user-group --no-create-home \
+  --home-dir /var/lib/familytree --shell /sbin/nologin familytree
+setfacl -m u:familytree:x /home/ec2-user
+mkdir -p /home/ec2-user/family-tree/private/documents
+chown ec2-user:ec2-user /home/ec2-user/family-tree/private/documents
+setfacl -R -m u:familytree:rwX,d:u:familytree:rwX,d:u:ec2-user:rwX \
+  /home/ec2-user/family-tree/private/documents
+chmod 600 /home/ec2-user/family-tree/.env
+
 echo "=== Configuring systemd service ==="
 cp /home/ec2-user/family-tree/deploy/familytree.service /etc/systemd/system/
 systemctl daemon-reload

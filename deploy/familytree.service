@@ -3,13 +3,39 @@ Description=Family Tree Web Server
 After=network.target
 
 [Service]
-User=ec2-user
-Group=ec2-user
+User=familytree
+Group=familytree
 WorkingDirectory=/home/ec2-user/family-tree/src
 EnvironmentFile=/home/ec2-user/family-tree/.env
+Environment=HOME=/var/lib/familytree PYTHONDONTWRITEBYTECODE=1
+StateDirectory=familytree
 ExecStart=/home/ec2-user/family-tree/venv/bin/gunicorn web_server:app --bind 127.0.0.1:8000 --workers 2 --timeout 120
 Restart=always
 RestartSec=5
+UMask=0007
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/ec2-user/family-tree/private/documents
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
 
 [Install]
 WantedBy=multi-user.target
